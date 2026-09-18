@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Button } from '../components/ui/Button';
 import { CodeEditor } from '../components/editor/CodeEditor';
 import { Console } from '../components/editor/Console';
-import { runCode } from '../lib/runner';
+import { RunBar } from '../components/editor/RunBar';
+import { useRunner } from '../hooks/useRunner';
+import { cn } from '../lib/utils';
 
 type Lang = 'javascript' | 'python';
 
@@ -15,31 +16,12 @@ const STARTERS: Record<Lang, string> = {
 export const Playground: React.FC = () => {
   const [lang, setLang] = useState<Lang>('javascript');
   const [code, setCode] = useState(STARTERS.javascript);
-  const [output, setOutput] = useState('');
-  const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+  const { run, running, output, status, reset } = useRunner();
 
   const switchLang = (next: Lang) => {
     setLang(next);
     setCode(STARTERS[next]);
-    setOutput('');
-    setStatus('idle');
-  };
-
-  const run = async () => {
-    setStatus('running');
-    setOutput('Running...');
-    try {
-      const result = await runCode(lang, code, { timeoutMs: 8000 });
-      const combined =
-        [result.stdout, result.stderr].filter(Boolean).join('\n') || '(no output)';
-      setOutput(combined);
-      setStatus(result.ok ? 'success' : 'error');
-    } catch (err) {
-      setOutput(
-        `Runner error: ${err instanceof Error ? err.message : String(err)}`
-      );
-      setStatus('error');
-    }
+    reset();
   };
 
   return (
@@ -47,26 +29,28 @@ export const Playground: React.FC = () => {
       <PanelGroup direction="horizontal" className="h-full">
         <Panel defaultSize={70}>
           <div className="flex h-full flex-col bg-surface">
-            <div className="flex items-center justify-between border-b border-border bg-surface-secondary px-4 py-2">
-              <div className="flex gap-1">
-                {(['javascript', 'python'] as Lang[]).map((l) => (
-                  <button
-                    key={l}
-                    onClick={() => switchLang(l)}
-                    className={`rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                      lang === l
-                        ? 'bg-brand-500 text-white'
-                        : 'text-text-muted hover:bg-surface-tertiary'
-                    }`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-              <Button size="sm" onClick={run} disabled={status === 'running'}>
-                {status === 'running' ? 'Running...' : '▶ Run'}
-              </Button>
-            </div>
+            <RunBar
+              left={
+                <div className="flex gap-1">
+                  {(['javascript', 'python'] as Lang[]).map((l) => (
+                    <button
+                      key={l}
+                      onClick={() => switchLang(l)}
+                      className={cn(
+                        'rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors',
+                        lang === l
+                          ? 'bg-brand-500 text-white'
+                          : 'text-text-muted hover:bg-surface-tertiary'
+                      )}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              }
+              onRun={() => void run(lang, code)}
+              running={running}
+            />
             <div className="flex-1">
               <CodeEditor language={lang} value={code} onChange={setCode} />
             </div>

@@ -1,6 +1,7 @@
 import { Link, NavLink } from 'react-router-dom';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { Button } from '../ui/Button';
+import { UserMenu } from './UserMenu';
 import { useAuthStore } from '../../store/auth.store';
 import { cn } from '../../lib/utils';
 
@@ -18,9 +19,8 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-surface/90 backdrop-blur">
       <div className="flex h-16 w-full items-center justify-between px-6">
-        {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-500 text-white font-bold">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-500 font-bold text-white">
             K
           </div>
           <span className="text-lg font-bold tracking-tight text-text-primary">
@@ -28,7 +28,6 @@ export const Navbar: React.FC = () => {
           </span>
         </Link>
 
-        {/* Nav */}
         <nav className="hidden items-center gap-1 md:flex">
           {navItems.map((item) => (
             <NavLink
@@ -48,13 +47,10 @@ export const Navbar: React.FC = () => {
           ))}
         </nav>
 
-        {/* Right */}
         <div className="flex items-center gap-2">
           <ThemeToggle />
           {user ? (
-            <Link to="/dashboard">
-              <Button size="sm">Dashboard</Button>
-            </Link>
+            <UserMenu />
           ) : (
             <>
               <Link to="/login">

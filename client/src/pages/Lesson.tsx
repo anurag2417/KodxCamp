@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Play } from 'lucide-react';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useLesson } from '../hooks/useLesson';
 import { useAuthStore } from '../store/auth.store';
@@ -9,8 +9,9 @@ import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 import { CodeEditor } from '../components/editor/CodeEditor';
 import { Console } from '../components/editor/Console';
+import { RunBar } from '../components/editor/RunBar';
 import { LessonSidebar } from '../components/course/LessonSidebar';
-import { runCode } from '../lib/runner';
+import { useRunner } from '../hooks/useRunner';
 
 export const Lesson: React.FC = () => {
   const { courseSlug, lessonSlug } = useParams<{
@@ -21,55 +22,70 @@ export const Lesson: React.FC = () => {
   const user = useAuthStore((s) => s.user);
 
   const [code, setCode] = useState('');
-  const [output, setOutput] = useState('');
-  const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [progress, setProgress] = useState<ApiProgress | null>(null);
   const [completing, setCompleting] = useState(false);
   const [testsPassed, setTestsPassed] = useState<boolean | null>(null);
+  const [testSummary, setTestSummary] = useState<string>('');
+
+  const { run, running, output, status, reset } = useRunner(5000);
 
   useEffect(() => {
     if (data?.lesson) {
       setCode(data.lesson.starterCode || '');
-      setOutput('');
-      setStatus('idle');
+      reset();
       setTestsPassed(null);
+      setTestSummary('');
     }
-  }, [data?.lesson]);
+  }, [data?.lesson, reset]);
 
   useEffect(() => {
     if (!user || !data?.course) return;
     progressApi.getForCourse(data.course._id).then(setProgress).catch(() => {});
   }, [user, data?.course]);
 
-  const handleRunCode = async () => {
+  const handleRun = async () => {
     if (!data) return;
-    setStatus('running');
-    setOutput('');
     setTestsPassed(null);
+    setTestSummary('');
 
-    const result = await runCode(data.lesson.language, code, { timeoutMs: 5000 });
-    const combined =
-      result.stdout + (result.stderr ? `\n${result.stderr}` : '') || '(no output)';
-    setOutput(combined);
-    setStatus(result.ok ? 'success' : 'error');
+    const result = await run(data.lesson.language, code);
 
-    // Compare against the lesson's visible test cases
     const tcs = data.lesson.testCases ?? [];
     if (tcs.length === 0) {
       setTestsPassed(result.ok);
       return;
     }
+
     const normalize = (s: string) =>
       s.trim().replace(/\r\n/g, '\n').replace(/\s+$/g, '');
-    const all = tcs.every((tc) => normalize(result.stdout) === normalize(tc.expectedOutput));
-    setTestsPassed(all);
+
+    let passed = 0;
+    const failures: string[] = [];
+
+    for (let i = 0; i < tcs.length; i++) {
+      const tc = tcs[i];
+      const ok = normalize(result.stdout) === normalize(tc.expectedOutput);
+      if (ok) passed++;
+      else {
+        failures.push(
+          `Test ${i + 1}: expected "${tc.expectedOutput}", got "${
+            result.stdout.trim() || '(no output)'
+          }"`
+        );
+      }
+    }
+
+    const allPassed = passed === tcs.length;
+    setTestsPassed(allPassed);
+    setTestSummary(
+      allPassed
+        ? `✅ ${passed}/${tcs.length} tests passed`
+        : `❌ ${passed}/${tcs.length} tests passed\n\n${failures.slice(0, 3).join('\n')}`
+    );
   };
 
   const markComplete = async () => {
-    if (!user) {
-      setOutput('Please log in to save your progress.');
-      return;
-    }
+    if (!user) return;
     if (!data?.course || !data?.lesson) return;
     setCompleting(true);
     try {
@@ -92,7 +108,10 @@ export const Lesson: React.FC = () => {
     return (
       <div className="w-full p-8">
         <p className="text-[var(--color-error)]">{error ?? 'Lesson not found'}</p>
-        <Link to="/courses" className="mt-4 inline-block text-brand-500 hover:underline">
+        <Link
+          to="/courses"
+          className="mt-4 inline-block text-brand-500 hover:underline"
+        >
           ← Back to courses
         </Link>
       </div>
@@ -103,6 +122,10 @@ export const Lesson: React.FC = () => {
   const isCompleted = progress?.completedLessons.includes(lesson._id) ?? false;
   const hasTests = (lesson.testCases ?? []).length > 0;
   const canComplete = !hasTests || testsPassed === true;
+
+  const combinedOutput = testSummary
+    ? `${output}${output ? '\n\n' : ''}${testSummary}`
+    : output;
 
   return (
     <div className="flex h-[calc(100vh-64px)] w-full">
@@ -144,7 +167,9 @@ export const Lesson: React.FC = () => {
 
             {hasTests && (
               <div className="mt-6">
-                <h3 className="text-sm font-semibold text-text-primary">Test Cases</h3>
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Test Cases
+                </h3>
                 <div className="mt-2 flex flex-col gap-2">
                   {lesson.testCases.map((tc, i) => (
                     <div
@@ -222,19 +247,15 @@ export const Lesson: React.FC = () => {
           <PanelGroup direction="vertical">
             <Panel defaultSize={65}>
               <div className="flex h-full flex-col bg-surface">
-                <div className="flex items-center justify-between border-b border-border bg-surface-secondary px-4 py-2">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
-                    {getFileName(lesson.language)}
-                  </span>
-                  <Button
-                    size="sm"
-                    onClick={handleRunCode}
-                    disabled={status === 'running'}
-                  >
-                    <Play size={14} />
-                    {status === 'running' ? 'Running...' : 'Run Code'}
-                  </Button>
-                </div>
+                <RunBar
+                  left={
+                    <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
+                      {getFileName(lesson.language)}
+                    </span>
+                  }
+                  onRun={handleRun}
+                  running={running}
+                />
                 <div className="flex-1">
                   <CodeEditor
                     language={toMonacoLanguage(lesson.language)}
@@ -248,7 +269,7 @@ export const Lesson: React.FC = () => {
             <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-brand-500" />
 
             <Panel defaultSize={35}>
-              <Console output={output} status={status} />
+              <Console output={combinedOutput} status={status} />
             </Panel>
           </PanelGroup>
         </Panel>

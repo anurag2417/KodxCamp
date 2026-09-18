@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Play, Send } from 'lucide-react';
+import { ArrowLeft, Send } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useProblem } from '../hooks/useProblem';
 import { runTests } from '../lib/runner/testHarness';
@@ -10,6 +10,7 @@ import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 import { CodeEditor } from '../components/editor/CodeEditor';
 import { Console } from '../components/editor/Console';
+import { RunBar } from '../components/editor/RunBar';
 import { DifficultyBadge } from '../components/problem/DifficultyBadge';
 import { TestCaseList } from '../components/problem/TestCaseList';
 import { SubmissionsList } from '../components/problem/SubmissionsList';
@@ -46,7 +47,6 @@ export const ProblemDetail: React.FC = () => {
     problemsApi.submissions(problem._id).then(setSubmissions).catch(() => {});
   }, [user, problem]);
 
-  // Only run visible tests client-side. Hidden tests are not shipped.
   const visibleTests = useMemo(
     () => (problem?.testCases ?? []).filter((tc) => !tc.isHidden),
     [problem]
@@ -101,8 +101,6 @@ export const ProblemDetail: React.FC = () => {
 
     if (isSubmit) {
       try {
-        // Report visible pass count. Server clamps against its own totals
-        // and decides the final status. Hidden tests are not run here.
         await problemsApi.submit({
           problemId: problem._id,
           language,
@@ -231,41 +229,37 @@ export const ProblemDetail: React.FC = () => {
           <PanelGroup direction="vertical">
             <Panel defaultSize={65}>
               <div className="flex h-full flex-col bg-surface">
-                <div className="flex items-center justify-between border-b border-border bg-surface-secondary px-4 py-2">
-                  <div className="flex gap-1">
-                    {availableLanguages.map((l) => (
-                      <button
-                        key={l}
-                        onClick={() => setLanguage(l)}
-                        className={cn(
-                          'rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors',
-                          language === l
-                            ? 'bg-brand-500 text-white'
-                            : 'text-text-muted hover:bg-surface-tertiary'
-                        )}
-                      >
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
+                <RunBar
+                  left={
+                    <div className="flex gap-1">
+                      {availableLanguages.map((l) => (
+                        <button
+                          key={l}
+                          onClick={() => setLanguage(l)}
+                          className={cn(
+                            'rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors',
+                            language === l
+                              ? 'bg-brand-500 text-white'
+                              : 'text-text-muted hover:bg-surface-tertiary'
+                          )}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                  right={
                     <Button
                       size="sm"
-                      variant="secondary"
-                      onClick={() => runAllTests(false)}
-                      disabled={busy}
-                    >
-                      <Play size={14} /> Run
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => runAllTests(true)}
+                      onClick={() => void runAllTests(true)}
                       disabled={busy || !user}
                     >
                       <Send size={14} /> Submit
                     </Button>
-                  </div>
-                </div>
+                  }
+                  onRun={() => void runAllTests(false)}
+                  running={busy}
+                />
                 <div className="flex-1">
                   <CodeEditor language={language} value={code} onChange={setCode} />
                 </div>
