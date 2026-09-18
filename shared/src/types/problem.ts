@@ -1,5 +1,10 @@
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
+export interface IProblemTestCase {
+  input: string;
+  expectedOutput: string;
+}
+
 export interface IProblem {
   _id: string;
   title: string;
@@ -11,12 +16,6 @@ export interface IProblem {
   testCases: IProblemTestCase[];
   createdAt: Date;
   updatedAt: Date;
-}
-
-export interface IProblemTestCase {
-  input: string;
-  expectedOutput: string;
-  isHidden: boolean;
 }
 
 export interface ISubmission {

@@ -9,6 +9,11 @@ export type CourseLanguage =
   | 'dsa-python'
   | 'dsa-javascript';
 
+export interface ITestCase {
+  input: string;
+  expectedOutput: string;
+}
+
 export interface ILesson {
   _id: string;
   courseId: string;
@@ -35,10 +40,4 @@ export interface ICourse {
   totalLessons: number;
   createdAt: Date;
   updatedAt: Date;
-}
-
-export interface ITestCase {
-  input: string;
-  expectedOutput: string;
-  isHidden: boolean;
 }

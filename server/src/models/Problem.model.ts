@@ -1,5 +1,19 @@
 import mongoose, { Schema, type Document } from 'mongoose';
-import type { IProblem, Difficulty } from '../../../shared/src';
+type Difficulty = 'easy' | 'medium' | 'hard';
+
+interface IProblem {
+  _id: unknown;
+  title: string;
+  slug: string;
+  difficulty: Difficulty;
+  topics: string[];
+  statement: string;
+  starterCode: Record<string, string>;
+  testCases: Array<{
+    input: string;
+    expectedOutput: string;
+  }>;
+}
 
 export interface ProblemDocument extends Omit<IProblem, '_id'>, Document {}
 
@@ -7,7 +21,6 @@ const testCaseSchema = new Schema(
   {
     input: { type: String, default: '' },
     expectedOutput: { type: String, required: true },
-    isHidden: { type: Boolean, default: false },
   },
   { _id: false }
 );

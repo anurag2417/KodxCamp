@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Plus, Edit, Trash2 } from 'lucide-react';
+import axios from 'axios';
 import { adminApi, type AdminProblem } from '../../lib/admin.api';
 import { api } from '../../lib/api';
 import { Spinner } from '../../components/ui/Spinner';
@@ -10,7 +10,10 @@ import { Input } from '../../components/ui/Input';
 import { AdminTable } from '../../components/admin/AdminTable';
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog';
 import { DifficultyBadge } from '../../components/problem/DifficultyBadge';
-import { TestCaseEditor, type EditableTestCase } from '../../components/admin/TestCaseEditor';
+import {
+  TestCaseEditor,
+  type EditableTestCase,
+} from '../../components/admin/TestCaseEditor';
 
 const emptyProblem = {
   title: '',
@@ -21,6 +24,25 @@ const emptyProblem = {
   starterCode: { javascript: '', python: '' },
   testCases: [] as EditableTestCase[],
 };
+
+/** Extract a useful error message + field details from an axios error. */
+function extractError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const body = err.response?.data as
+      | { message?: string; details?: { path: string; message: string }[] }
+      | undefined;
+
+    if (body?.details?.length) {
+      return body.details
+        .map((d) => `• ${d.path}: ${d.message}`)
+        .join('\n');
+    }
+    if (body?.message) return body.message;
+    return `Request failed (${err.response?.status ?? 'network'})`;
+  }
+  if (err instanceof Error) return err.message;
+  return 'Failed to save';
+}
 
 export const AdminProblems: React.FC = () => {
   const [problems, setProblems] = useState<AdminProblem[]>([]);
@@ -35,20 +57,31 @@ export const AdminProblems: React.FC = () => {
 
   const reload = async () => {
     setLoading(true);
-    const { data } = await api.get('/problems');
-    setProblems(data.data);
-    setLoading(false);
+    try {
+      const { data } = await api.get('/problems');
+      setProblems(data.data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    reload();
+    void reload();
   }, []);
 
   const autoSlug = (val: string) =>
-    val.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+    val
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-');
 
   const openCreate = () => {
-    setEditing({ ...emptyProblem, starterCode: { javascript: '', python: '' } });
+    setEditing({
+      ...emptyProblem,
+      starterCode: { javascript: '', python: '' },
+      testCases: [],
+    });
     setTopicsText('');
     setStarterCodeText(JSON.stringify({ javascript: '', python: '' }, null, 2));
     setOriginalSlug(null);
@@ -79,26 +112,52 @@ export const AdminProblems: React.FC = () => {
     if (!editing) return;
     setBusy(true);
     setError('');
+
+    let starterCode: Record<string, string> = {};
     try {
-      let starterCode: Record<string, string> = {};
-      try {
-        starterCode = JSON.parse(starterCodeText);
-      } catch {
-        setError('Starter code must be valid JSON');
-        setBusy(false);
-        return;
-      }
+      starterCode = JSON.parse(starterCodeText);
+    } catch (e) {
+      setError(`Starter code must be valid JSON: ${e instanceof Error ? e.message : ''}`);
+      setBusy(false);
+      return;
+    }
 
-      const payload = {
-        title: editing.title,
-        slug: editing.slug,
-        difficulty: editing.difficulty,
-        topics: topicsText.split(',').map((t) => t.trim()).filter(Boolean),
-        statement: editing.statement,
-        starterCode,
-        testCases: editing.testCases,
-      };
+    // Client-side pre-validation — surface obvious errors before the request
+    const problems: string[] = [];
+    if (!editing.title || editing.title.length < 2) problems.push('Title is too short');
+    if (!editing.slug || editing.slug.length < 2) problems.push('Slug is too short');
+    if (!/^[a-z0-9-]+$/.test(editing.slug ?? ''))
+      problems.push('Slug can only contain lowercase letters, numbers, and dashes');
+    if (!editing.statement || editing.statement.length < 10)
+      problems.push('Statement must be at least 10 chars');
 
+    const emptyExpected = editing.testCases.findIndex(
+      (tc) => !tc.expectedOutput || tc.expectedOutput.length === 0
+    );
+    if (emptyExpected !== -1) {
+      problems.push(`Test #${emptyExpected + 1} is missing its expected output`);
+    }
+
+    if (problems.length) {
+      setError(problems.map((p) => `• ${p}`).join('\n'));
+      setBusy(false);
+      return;
+    }
+
+    const payload = {
+      title: editing.title,
+      slug: editing.slug,
+      difficulty: editing.difficulty,
+      topics: topicsText
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      statement: editing.statement,
+      starterCode,
+      testCases: editing.testCases,
+    };
+
+    try {
       if (originalSlug) {
         await adminApi.updateProblem(originalSlug, payload);
       } else {
@@ -108,8 +167,8 @@ export const AdminProblems: React.FC = () => {
       await reload();
       setEditing(null);
       setOriginalSlug(null);
-    } catch {
-      setError('Failed to save');
+    } catch (err) {
+      setError(extractError(err));
     } finally {
       setBusy(false);
     }
@@ -127,9 +186,7 @@ export const AdminProblems: React.FC = () => {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-text-primary">Problems</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Manage DSA practice problems.
-          </p>
+          <p className="mt-1 text-sm text-text-muted">Manage DSA practice problems.</p>
         </div>
         <Button onClick={openCreate}>
           <Plus size={16} /> New Problem
@@ -150,14 +207,16 @@ export const AdminProblems: React.FC = () => {
                 setEditing({
                   ...editing,
                   title: e.target.value,
-                  slug: autoSlug(e.target.value),
+                  slug: originalSlug ? editing.slug : autoSlug(e.target.value),
                 })
               }
             />
             <Input
-              placeholder="Slug"
+              placeholder="Slug (lowercase, dashes)"
               value={editing.slug}
-              onChange={(e) => setEditing({ ...editing, slug: autoSlug(e.target.value) })}
+              onChange={(e) =>
+                setEditing({ ...editing, slug: autoSlug(e.target.value) })
+              }
             />
             <select
               value={editing.difficulty}
@@ -211,7 +270,11 @@ export const AdminProblems: React.FC = () => {
             />
           </div>
 
-          {error && <p className="mt-3 text-xs text-[var(--color-error)]">{error}</p>}
+          {error && (
+            <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-3 text-xs text-[var(--color-error)]">
+              {error}
+            </pre>
+          )}
 
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setEditing(null)}>

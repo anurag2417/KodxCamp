@@ -17,7 +17,6 @@ export const errorHandler = (
   const statusCode = isApiError ? err.statusCode : 500;
   const message = err.message || 'Internal server error';
 
-  // Log appropriately
   if (statusCode >= 500) {
     logger.error('Server error', {
       method: req.method,
@@ -36,12 +35,18 @@ export const errorHandler = (
 
   const body: Record<string, unknown> = {
     success: false,
-    message: env.NODE_ENV === 'production' && statusCode >= 500
-      ? 'Internal server error'
-      : message,
+    message:
+      env.NODE_ENV === 'production' && statusCode >= 500
+        ? 'Internal server error'
+        : message,
   };
 
-  // Only include stack in dev
+  // Include field-level validation details when present
+  const details = (err as ApiError & { details?: unknown }).details;
+  if (details !== undefined) {
+    body.details = details;
+  }
+
   if (env.NODE_ENV === 'development' && statusCode >= 500) {
     body.stack = err.stack;
   }

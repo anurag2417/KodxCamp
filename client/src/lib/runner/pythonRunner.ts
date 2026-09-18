@@ -6,16 +6,37 @@ interface PyodideInstance {
   setStderr: (opts: { batched: (s: string) => void }) => void;
 }
 
+const PYODIDE_VERSION = '0.26.2';
+const PYODIDE_BASE = `/pyodide/v${PYODIDE_VERSION}/`;
+
 let pyodidePromise: Promise<PyodideInstance> | null = null;
 
 async function getPyodide(): Promise<PyodideInstance> {
   if (!pyodidePromise) {
     pyodidePromise = (async () => {
-      const mod = await import('pyodide');
-      const py = await mod.loadPyodide({
-        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.2/full/',
+      // Load the runtime script from our own origin (public/pyodide/v0.26.2/)
+      // Vite serves it with correct MIME in dev; Express serves it in prod.
+      await new Promise<void>((resolve, reject) => {
+        if ((window as unknown as { loadPyodide?: unknown }).loadPyodide) {
+          resolve();
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = `${PYODIDE_BASE}pyodide.js`;
+        script.onload = () => resolve();
+        script.onerror = () =>
+          reject(new Error('Failed to load Pyodide runtime script'));
+        document.head.appendChild(script);
       });
-      return py as unknown as PyodideInstance;
+
+      const loadPyodide = (
+        window as unknown as {
+          loadPyodide: (opts: { indexURL: string }) => Promise<PyodideInstance>;
+        }
+      ).loadPyodide;
+
+      const py = await loadPyodide({ indexURL: PYODIDE_BASE });
+      return py;
     })();
   }
   return pyodidePromise;
@@ -36,7 +57,6 @@ export async function runPython(
   py.setStdout({ batched: (s) => stdoutChunks.push(s) });
   py.setStderr({ batched: (s) => stderrChunks.push(s) });
 
-  // Pyodide doesn't have a native timeout — race it
   const timeoutPromise = new Promise<'__timeout__'>((resolve) =>
     setTimeout(() => resolve('__timeout__'), timeoutMs)
   );

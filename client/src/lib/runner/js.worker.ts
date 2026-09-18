@@ -2,21 +2,18 @@
 
 /**
  * JavaScript sandbox worker.
- *
- * Runs user code in a fresh scope. Captures console output.
- * Any uncaught error or timeout kills the worker (see jsRunner.ts).
+ * Runs user code in a fresh scope, captures console output.
  */
 
 type InMsg = { type: 'run'; code: string };
 type OutMsg =
   | { type: 'stdout'; text: string }
-  | { type: 'stderr'; text: string }
   | { type: 'done'; runtimeMs: number }
-  | { type: 'error'; text: string; runtimeMs: number };
+  | { type: 'error'; text: string; kind: 'runtime' | 'syntax'; runtimeMs: number };
 
 const post = (msg: OutMsg) => (self as unknown as Worker).postMessage(msg);
 
-self.onmessage = (e: MessageEvent<InMsg>) => {
+self.onmessage = async (e: MessageEvent<InMsg>) => {
   if (e.data.type !== 'run') return;
 
   const start = performance.now();
@@ -37,7 +34,6 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
   const capture = (prefix: string) => (...args: unknown[]) =>
     lines.push(prefix + args.map(stringify).join(' '));
 
-  // Override console inside the worker
   const sandboxConsole = {
     log: capture(''),
     info: capture('[info] '),
@@ -46,10 +42,32 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
     debug: capture('[debug] '),
   };
 
+  // ─── Compile ────────────────────────────────────────
+  // Wrap in an async IIFE so top-level `await` works.
+  let fn: (console: typeof sandboxConsole) => Promise<unknown>;
   try {
-    // Wrap in a function so top-level `var`/`let`/`const` stay scoped
-    const fn = new Function('console', `"use strict";\n${e.data.code}\n`);
-    const returnValue = fn(sandboxConsole);
+    fn = new Function(
+      'console',
+      `"use strict";
+       return (async () => {
+         ${e.data.code}
+       })();`
+    ) as typeof fn;
+  } catch (err) {
+    const msg =
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    post({
+      type: 'error',
+      text: msg,
+      kind: 'syntax',
+      runtimeMs: Math.round(performance.now() - start),
+    });
+    return;
+  }
+
+  // ─── Execute ────────────────────────────────────────
+  try {
+    const returnValue = await fn(sandboxConsole);
 
     if (returnValue !== undefined) {
       lines.push(stringify(returnValue));
@@ -61,13 +79,15 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
 
     post({ type: 'done', runtimeMs: Math.round(performance.now() - start) });
   } catch (err) {
-    const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    const msg =
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     if (lines.length > 0) {
       post({ type: 'stdout', text: lines.join('\n') });
     }
     post({
       type: 'error',
       text: msg,
+      kind: 'runtime',
       runtimeMs: Math.round(performance.now() - start),
     });
   }

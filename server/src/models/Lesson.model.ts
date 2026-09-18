@@ -1,13 +1,31 @@
 import mongoose, { Schema, type Document } from 'mongoose';
-import type { ILesson, CourseLanguage } from '../../../shared/src/index.js';
+type CourseLanguage =
+  | 'html-css'
+  | 'javascript'
+  | 'typescript'
+  | 'python'
+  | 'sql'
+  | 'react'
+  | 'tailwind'
+  | 'dsa-python'
+  | 'dsa-javascript';
 
-export interface LessonDocument extends Omit<ILesson, '_id'>, Document {}
+export interface LessonDocument extends Document {
+  courseId: string;
+  title: string;
+  slug: string;
+  order: number;
+  content: string;
+  starterCode: string;
+  solution: string;
+  language: CourseLanguage;
+  testCases: Array<{ input: string; expectedOutput: string }>;
+}
 
 const testCaseSchema = new Schema(
   {
     input: { type: String, default: '' },
     expectedOutput: { type: String, required: true },
-    isHidden: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -24,8 +42,15 @@ const lessonSchema = new Schema<LessonDocument>(
     language: {
       type: String,
       enum: [
-        'html-css', 'javascript', 'typescript', 'python',
-        'sql', 'react', 'tailwind', 'dsa-python', 'dsa-javascript',
+        'html-css',
+        'javascript',
+        'typescript',
+        'python',
+        'sql',
+        'react',
+        'tailwind',
+        'dsa-python',
+        'dsa-javascript',
       ] as CourseLanguage[],
       required: true,
     },

@@ -36,8 +36,6 @@ export async function runJavaScript(
       const msg = e.data;
       if (msg.type === 'stdout') {
         stdout += (stdout ? '\n' : '') + msg.text;
-      } else if (msg.type === 'stderr') {
-        stderr += (stderr ? '\n' : '') + msg.text;
       } else if (msg.type === 'done') {
         clearTimeout(timer);
         finish({
@@ -49,11 +47,12 @@ export async function runJavaScript(
         });
       } else if (msg.type === 'error') {
         clearTimeout(timer);
+        const verdict = msg.kind === 'syntax' ? 'compile_error' : 'runtime_error';
         finish({
           ok: false,
           stdout,
           stderr: msg.text,
-          verdict: 'runtime_error',
+          verdict,
           runtimeMs: msg.runtimeMs,
         });
       }

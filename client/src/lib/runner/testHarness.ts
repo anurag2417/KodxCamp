@@ -25,12 +25,15 @@ export interface TestRunSummary {
 }
 
 /**
- * For languages where each test case needs a *fresh run* of the program,
- * we wrap the student's code with an input-injection preamble.
- * For now, this is only used for JavaScript/Python where inputs are expressions.
+ * Runs all test cases for a submission.
  *
- * In our current lesson set, most tests pass inputs as "no input + check stdout",
- * so we just execute the code once per test with a small preamble.
+ * Input handling:
+ *  - If `tc.input` is empty → code runs as-is.
+ *  - If `tc.input` is valid JSON → it is injected as the parsed value
+ *    (numbers, strings, arrays, objects all supported).
+ *  - If `tc.input` is NOT valid JSON → it is injected as a **string literal**.
+ *    This makes "hello world" work as a string input even if the admin
+ *    forgot to add quotes.
  */
 export async function runTests(
   language: string,
@@ -48,7 +51,8 @@ export async function runTests(
 
     totalRuntimeMs += result.runtimeMs;
 
-    const passed = result.ok && normalize(result.stdout) === normalize(tc.expectedOutput);
+    const passed =
+      result.ok && normalize(result.stdout) === normalize(tc.expectedOutput);
 
     results.push({
       index: tc.index,
@@ -77,19 +81,73 @@ function normalize(s: string): string {
 }
 
 /**
- * Inject test case input into code as a variable or stdin substitute.
- * JS: prepend `const __input__ = <input>;` — the student code can read it.
- * Python: prepend `__input__ = <input>`.
+ * Parse an input string into a proper value.
+ *
+ * Tries JSON first. If that fails, treats the whole thing as a raw string.
+ * This is forgiving: `[2,3]` → array, `2` → number, `"hi"` → string,
+ * `hello` → string "hello" (not a syntax error).
+ */
+function parseInput(raw: string): { value: unknown; isJson: boolean } {
+  const trimmed = raw.trim();
+  if (trimmed === '') return { value: undefined, isJson: false };
+
+  try {
+    return { value: JSON.parse(trimmed), isJson: true };
+  } catch {
+    return { value: trimmed, isJson: false };
+  }
+}
+
+/**
+ * Serialize a parsed value into a literal expression for the target language.
+ */
+function serializeFor(language: string, value: unknown): string {
+  const isPython = language === 'python' || language === 'dsa-python';
+  const json = JSON.stringify(value);
+
+  if (isPython) {
+    // JSON is mostly compatible with Python literals for our supported types:
+    // numbers, strings, booleans, null → None, arrays → lists, objects → dicts.
+    return json
+      .replace(/\btrue\b/g, 'True')
+      .replace(/\bfalse\b/g, 'False')
+      .replace(/\bnull\b/g, 'None');
+  }
+  return json; // JS accepts JSON as-is
+}
+
+/**
+ * Inject test case input into code.
+ *
+ * JS:     `const __input__ = <value>;` prepended
+ * Python: `__input__ = <value>` prepended
+ *
+ * The student's code can read `__input__`. If the value is an array, the
+ * student can destructure it: `const [a, b] = __input__;` / `a, b = __input__`.
  */
 function wrapWithInput(language: string, code: string, input: string): string {
+  const { value, isJson } = parseInput(input);
+
+  // Empty input → run code as-is
   if (!input || input.trim() === '') return code;
 
+  // Not-JSON input that isn't a valid literal → treat as a string.
+  // But if the user typed something that IS valid JSON, we already have it.
+  // If they typed `hello` (no quotes), we wrap it as `"hello"`.
+  let serialized: string;
+  if (isJson) {
+    serialized = serializeFor(language, value);
+  } else {
+    // Non-JSON: treat as a plain string
+    serialized = serializeFor(language, String(value));
+  }
+
   if (language === 'javascript' || language === 'typescript' || language === 'dsa-javascript') {
-    return `const __input__ = ${input};\n${code}\n`;
+    return `const __input__ = ${serialized};\n${code}\n`;
   }
   if (language === 'python' || language === 'dsa-python') {
-    return `__input__ = ${input}\n${code}\n`;
+    return `__input__ = ${serialized}\n${code}\n`;
   }
-  // SQL and HTML don't take input this way
+  // SQL / HTML don't take input this way
   return code;
 }
