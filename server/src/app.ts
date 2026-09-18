@@ -6,6 +6,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { env } from './config/env.js';
 import routes from './routes/index.js';
 import { errorHandler, notFound } from './middleware/error.middleware.js';
@@ -15,32 +16,49 @@ import { logger } from './utils/logger.js';
 export function createApp() {
   const app = express();
 
-  // Behind Render/Vercel/nginx — trust the proxy so rate-limit + secure cookies work
+  // Trust Render / Vercel / nginx proxy
   app.set('trust proxy', 1);
 
-  // Security headers
+  // ─── Request ID ─────────────────────────────────────────────
+  app.use((req, res, next) => {
+    const incoming = req.headers['x-request-id'];
+    const id = typeof incoming === 'string' && incoming.length > 0
+      ? incoming
+      : crypto.randomUUID();
+    (req as express.Request & { id: string }).id = id;
+    res.setHeader('X-Request-Id', id);
+    next();
+  });
+
+  // ─── Security headers ───────────────────────────────────────
   app.use(
     helmet({
-      crossOriginResourcePolicy: { policy: 'cross-origin' },
-      contentSecurityPolicy: false, // client is served by Vercel; CSP managed there
+      crossOriginResourcePolicy: { policy: 'cross-origin' }, // for /uploads/video
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+        },
+      },
     })
   );
 
-  // CORS — allow the configured client origin + cookies
+  // ─── CORS ────────────────────────────────────────────────────
   app.use(
     cors({
-      origin: env.CLIENT_URL.split(',').map((s) => s.trim()),
+      origin: env.CLIENT_URL,
       credentials: true,
+      maxAge: 86400, // cache preflight for 24h
     })
   );
 
-  // Body parsers
+  // ─── Body parsers ────────────────────────────────────────────
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true, limit: '2mb' }));
   app.use(cookieParser());
   app.use(compression());
 
-  // HTTP logging
+  // ─── HTTP logging ────────────────────────────────────────────
   if (env.NODE_ENV === 'development') {
     app.use(morgan('dev'));
   } else {
@@ -52,39 +70,47 @@ export function createApp() {
     );
   }
 
-  // Static uploads (dev only — production uses Cloudinary/external storage)
+  // ─── Static uploads ─────────────────────────────────────────
+  // Always ensure the directory exists AND always register the middleware.
+  // (Previously gated on existsSync at boot, which broke after a fresh deploy.)
   const uploadsDir = path.resolve(process.cwd(), 'uploads');
-  if (fs.existsSync(uploadsDir)) {
-    app.use(
-      '/uploads',
-      express.static(uploadsDir, {
-        maxAge: '1h',
-        setHeaders: (res) => {
-          res.setHeader('Accept-Ranges', 'bytes');
-        },
-      })
-    );
-  }
+  fs.mkdirSync(path.join(uploadsDir, 'recordings'), { recursive: true });
 
-  // Rate limiting
+  app.use(
+    '/uploads',
+    express.static(uploadsDir, {
+      maxAge: '1h',
+      setHeaders: (res) => {
+        res.setHeader('Accept-Ranges', 'bytes');
+      },
+    })
+  );
+
+  // ─── Rate limiting ──────────────────────────────────────────
   app.use('/api', globalLimiter);
 
-  // Routes
+  // ─── API routes ─────────────────────────────────────────────
   app.use('/api', routes);
 
-  // In production, optionally serve the built client (monolith mode)
+  // API 404 — returns JSON, not index.html
+  app.use('/api', notFound);
+
+  // ─── (Optional) serve built client in monolith mode ─────────
   if (env.NODE_ENV === 'production') {
     const clientDist = path.resolve(process.cwd(), '..', 'client', 'dist');
     if (fs.existsSync(clientDist)) {
       app.use(express.static(clientDist));
-      // SPA fallback: serve index.html for any non-API route
-      app.get(/^\/(?!api|uploads).*/, (_req, res) => {
+      // SPA fallback for non-API routes only
+      app.get('*', (_req, res) => {
         res.sendFile(path.join(clientDist, 'index.html'));
       });
     }
   }
 
+  // Catch-all 404 (dev only — production has SPA fallback above)
   app.use(notFound);
+
+  // Error handler — must be last
   app.use(errorHandler);
 
   return app;

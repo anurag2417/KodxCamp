@@ -1,8 +1,11 @@
 import type { Response } from 'express';
 import { z } from 'zod';
 import { courseService } from '../services/course.service.js';
+import { Course } from '../models/Course.model.js';
+import { Lesson } from '../models/Lesson.model.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { ApiError } from '../utils/ApiError.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 const testCaseSchema = z.object({
@@ -37,6 +40,10 @@ export const lessonSlugSchema = z.object({
     courseSlug: z.string().min(1),
     lessonSlug: z.string().min(1),
   }),
+});
+
+export const courseSlugOnlySchema = z.object({
+  params: z.object({ slug: z.string().min(1) }),
 });
 
 export const createLessonSchema = z.object({
@@ -76,28 +83,40 @@ export const adminCourseController = {
     return ApiResponse.success(res, created, 'Course created', 201);
   }),
 
+  /**
+   * Admin view of a single course — includes the FULL lesson documents
+   * (starterCode, solution, testCases). This is what the admin editor uses.
+   */
+  getFull: asyncHandler(async (req: AuthRequest, res: Response) => {
+    const course = await Course.findOne({ slug: req.params.slug }).lean();
+    if (!course) throw new ApiError(404, 'Course not found');
+
+    const lessons = await Lesson.find({ courseId: course._id.toString() })
+      .sort({ order: 1 })
+      .lean();
+
+    return ApiResponse.success(res, { ...course, lessons });
+  }),
+
   update: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const updated = await courseService.updateCourse(req.params.slug, req.body);
+    const updated = await courseService.updateCourse(req.params.slug as string, req.body);
     return ApiResponse.success(res, updated, 'Course updated');
   }),
 
   remove: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const result = await courseService.deleteCourse(req.params.slug);
+    const result = await courseService.deleteCourse(req.params.slug as string);
     return ApiResponse.success(res, result, 'Course deleted');
   }),
 
   createLesson: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const created = await courseService.createLesson(
-      req.params.courseSlug,
-      req.body
-    );
+    const created = await courseService.createLesson(req.params.courseSlug as string, req.body);
     return ApiResponse.success(res, created, 'Lesson created', 201);
   }),
 
   updateLesson: asyncHandler(async (req: AuthRequest, res: Response) => {
     const updated = await courseService.updateLesson(
-      req.params.courseSlug,
-      req.params.lessonSlug,
+      req.params.courseSlug as string,
+      req.params.lessonSlug as string,
       req.body
     );
     return ApiResponse.success(res, updated, 'Lesson updated');
@@ -105,8 +124,8 @@ export const adminCourseController = {
 
   removeLesson: asyncHandler(async (req: AuthRequest, res: Response) => {
     const result = await courseService.deleteLesson(
-      req.params.courseSlug,
-      req.params.lessonSlug
+      req.params.courseSlug as string,
+      req.params.lessonSlug as string
     );
     return ApiResponse.success(res, result, 'Lesson deleted');
   }),

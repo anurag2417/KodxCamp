@@ -3,34 +3,41 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Button } from '../components/ui/Button';
 import { CodeEditor } from '../components/editor/CodeEditor';
 import { Console } from '../components/editor/Console';
+import { runCode } from '../lib/runner';
 
 type Lang = 'javascript' | 'python';
 
+const STARTERS: Record<Lang, string> = {
+  javascript: '// Write your code here\nconsole.log("Hello, KodxCamp!");\n',
+  python: 'print("Hello, KodxCamp!")\n',
+};
+
 export const Playground: React.FC = () => {
   const [lang, setLang] = useState<Lang>('javascript');
-  const [code, setCode] = useState('// Write your code here\nconsole.log("Hello!");');
+  const [code, setCode] = useState(STARTERS.javascript);
   const [output, setOutput] = useState('');
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
 
-  const runCode = () => {
-    if (lang !== 'javascript') {
-      setOutput('Python execution via Pyodide — coming in a later part.');
-      setStatus('idle');
-      return;
-    }
+  const switchLang = (next: Lang) => {
+    setLang(next);
+    setCode(STARTERS[next]);
+    setOutput('');
+    setStatus('idle');
+  };
+
+  const run = async () => {
     setStatus('running');
-    const logs: string[] = [];
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => logs.push(args.map(String).join(' '));
+    setOutput('Running...');
     try {
-      // eslint-disable-next-line no-new-func
-      new Function(code)();
-      console.log = originalLog;
-      setOutput(logs.join('\n') || '(no output)');
-      setStatus('success');
+      const result = await runCode(lang, code, { timeoutMs: 8000 });
+      const combined =
+        [result.stdout, result.stderr].filter(Boolean).join('\n') || '(no output)';
+      setOutput(combined);
+      setStatus(result.ok ? 'success' : 'error');
     } catch (err) {
-      console.log = originalLog;
-      setOutput(String(err));
+      setOutput(
+        `Runner error: ${err instanceof Error ? err.message : String(err)}`
+      );
       setStatus('error');
     }
   };
@@ -45,7 +52,7 @@ export const Playground: React.FC = () => {
                 {(['javascript', 'python'] as Lang[]).map((l) => (
                   <button
                     key={l}
-                    onClick={() => setLang(l)}
+                    onClick={() => switchLang(l)}
                     className={`rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-colors ${
                       lang === l
                         ? 'bg-brand-500 text-white'
@@ -56,8 +63,8 @@ export const Playground: React.FC = () => {
                   </button>
                 ))}
               </div>
-              <Button size="sm" onClick={runCode}>
-                ▶ Run
+              <Button size="sm" onClick={run} disabled={status === 'running'}>
+                {status === 'running' ? 'Running...' : '▶ Run'}
               </Button>
             </div>
             <div className="flex-1">

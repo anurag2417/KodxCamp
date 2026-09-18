@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { classesApi, type ApiChapter } from '../../lib/classes.api';
+import type { ApiChapter } from '../../lib/classes.api';
 import { cn } from '../../lib/utils';
 
 interface Props {
@@ -13,21 +13,59 @@ interface Props {
 }
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+const SPEED_KEY = 'kodxcamp-player-speed';
 
 export const RecordingPlayer: React.FC<Props> = ({
-  classSlug,
   src,
   chapters = [],
   initialSeconds = 0,
   onProgress,
 }) => {
   const ref = useRef<HTMLVideoElement>(null);
+  const onProgressRef = useRef(onProgress);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState<number>(() => {
+    const s = Number(localStorage.getItem(SPEED_KEY));
+    return SPEEDS.includes(s) ? s : 1;
+  });
   const [current, setCurrent] = useState(initialSeconds);
   const [duration, setDuration] = useState(0);
 
-  // Restore position on metadata load
+  // Keep the ref in sync so the interval closure sees the latest callback
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+  }, [onProgress]);
+
+  // Restore playback rate when speed changes
+  useEffect(() => {
+    if (ref.current) ref.current.playbackRate = speed;
+    localStorage.setItem(SPEED_KEY, String(speed));
+  }, [speed]);
+
+  // Interval — never depends on onProgress (that was the bug)
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const v = ref.current;
+      if (!v || !v.duration || v.paused) return;
+      onProgressRef.current?.(Math.floor(v.currentTime), Math.floor(v.duration));
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Save final progress on unmount
+  useEffect(() => {
+    const video = ref.current;
+    return () => {
+      if (!video) return;
+      if (video.duration > 0) {
+        onProgressRef.current?.(
+          Math.floor(video.currentTime),
+          Math.floor(video.duration)
+        );
+      }
+    };
+  }, []);
+
   const handleLoadedMetadata = () => {
     const v = ref.current;
     if (!v) return;
@@ -35,17 +73,8 @@ export const RecordingPlayer: React.FC<Props> = ({
     if (initialSeconds > 0 && initialSeconds < (v.duration || Infinity)) {
       v.currentTime = initialSeconds;
     }
+    v.playbackRate = speed;
   };
-
-  // Report watch progress every 5 seconds
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      const v = ref.current;
-      if (!v || !v.duration || v.paused) return;
-      onProgress?.(Math.floor(v.currentTime), Math.floor(v.duration));
-    }, 5000);
-    return () => window.clearInterval(id);
-  }, [onProgress]);
 
   const toggle = () => {
     const v = ref.current;
@@ -56,6 +85,10 @@ export const RecordingPlayer: React.FC<Props> = ({
     } else {
       v.pause();
       setPlaying(false);
+      // Save on pause
+      if (v.duration > 0) {
+        onProgressRef.current?.(Math.floor(v.currentTime), Math.floor(v.duration));
+      }
     }
   };
 
@@ -66,11 +99,9 @@ export const RecordingPlayer: React.FC<Props> = ({
     setCurrent(sec);
   };
 
-  const changeSpeed = () => {
+  const cycleSpeed = () => {
     const idx = SPEEDS.indexOf(speed);
-    const next = SPEEDS[(idx + 1) % SPEEDS.length];
-    setSpeed(next);
-    if (ref.current) ref.current.playbackRate = next;
+    setSpeed(SPEEDS[(idx + 1) % SPEEDS.length]);
   };
 
   const fmt = (s: number) => {
@@ -88,8 +119,19 @@ export const RecordingPlayer: React.FC<Props> = ({
           src={src}
           className="h-full w-full"
           onLoadedMetadata={handleLoadedMetadata}
-          onTimeUpdate={(e) => setCurrent((e.target as HTMLVideoElement).currentTime)}
-          onEnded={() => setPlaying(false)}
+          onTimeUpdate={(e) =>
+            setCurrent((e.target as HTMLVideoElement).currentTime)
+          }
+          onEnded={() => {
+            setPlaying(false);
+            const v = ref.current;
+            if (v && v.duration > 0) {
+              onProgressRef.current?.(
+                Math.floor(v.duration),
+                Math.floor(v.duration)
+              );
+            }
+          }}
         />
       </div>
 
@@ -104,18 +146,13 @@ export const RecordingPlayer: React.FC<Props> = ({
           </div>
 
           <button
-            onClick={changeSpeed}
+            onClick={cycleSpeed}
             className="ml-auto rounded-md bg-[#0D3032] px-3 py-1 text-xs font-medium text-[#8BBB92] hover:bg-[#12544F]"
           >
             {speed}×
           </button>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => jumpTo(0)}
-            title="Restart"
-          >
+          <Button size="sm" variant="ghost" onClick={() => jumpTo(0)} title="Restart">
             <RotateCcw size={14} />
           </Button>
         </div>

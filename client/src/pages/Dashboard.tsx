@@ -3,32 +3,66 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, PlayCircle, Calendar } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { Spinner } from '../components/ui/Spinner';
 import { useAuthStore } from '../store/auth.store';
+import { useProgressOverview } from '../hooks/useProgressOverview';
 import { classesApi, type ApiMyRecording, type ApiClass } from '../lib/classes.api';
 
-const stats = [
-  { label: 'Lessons Completed', value: '12' },
-  { label: 'Problems Solved', value: '38' },
-  { label: 'Day Streak', value: '7' },
-  { label: 'XP Earned', value: '2,450' },
-];
+function greetingForNow(): string {
+  const h = new Date().getHours();
+  if (h < 5) return 'Still up';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  if (h < 21) return 'Good evening';
+  return 'Good night';
+}
 
 export const Dashboard: React.FC = () => {
   const user = useAuthStore((s) => s.user);
+  const { overview, courses, loading: progressLoading } = useProgressOverview();
   const [catchUp, setCatchUp] = useState<ApiMyRecording[]>([]);
   const [upcoming, setUpcoming] = useState<ApiClass[]>([]);
 
   useEffect(() => {
     if (!user) return;
-    classesApi.myRecordings().then((rows) => setCatchUp(rows.slice(0, 3))).catch(() => {});
-    classesApi.list('upcoming').then((rows) => setUpcoming(rows.slice(0, 3))).catch(() => {});
+    classesApi
+      .myRecordings()
+      .then((rows) => setCatchUp(rows.slice(0, 3)))
+      .catch(() => {});
+    classesApi
+      .list('upcoming')
+      .then((rows) => setUpcoming(rows.slice(0, 3)))
+      .catch(() => {});
   }, [user]);
+
+  // Most recently updated in-progress course, else first completed
+  const continueCourse =
+    courses.find((c) => c.percentage > 0 && c.percentage < 100) ?? courses[0];
+
+  const statItems = [
+    {
+      label: 'Lessons Completed',
+      value: overview?.lessonsCompleted ?? 0,
+    },
+    {
+      label: 'Problems Solved',
+      value: overview?.problemsSolved ?? 0,
+    },
+    {
+      label: 'Day Streak',
+      value: user?.streak ?? 0,
+    },
+    {
+      label: 'XP Earned',
+      value: (overview?.totalXp ?? user?.xp ?? 0).toLocaleString(),
+    },
+  ];
 
   return (
     <div className="w-full p-6 lg:p-8">
       {/* Hero */}
       <div className="w-full rounded-2xl bg-gradient-to-br from-brand-900 to-brand-700 p-8 text-white">
-        <p className="text-sm text-[#C7D8D1]">Good evening 👋</p>
+        <p className="text-sm text-[#C7D8D1]">{greetingForNow()} 👋</p>
         <h1 className="mt-1 text-2xl font-bold md:text-3xl">
           Welcome back, {user?.name ?? 'Learner'}
         </h1>
@@ -44,42 +78,72 @@ export const Dashboard: React.FC = () => {
 
       {/* Stats */}
       <div className="mt-6 grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s) => (
+        {statItems.map((s) => (
           <Card key={s.label} className="p-5">
-            <p className="text-3xl font-bold text-brand-500">{s.value}</p>
+            {progressLoading ? (
+              <div className="h-9 w-20 animate-pulse rounded bg-surface-tertiary" />
+            ) : (
+              <p className="text-3xl font-bold text-brand-500">{s.value}</p>
+            )}
             <p className="mt-1 text-sm text-text-muted">{s.label}</p>
           </Card>
         ))}
       </div>
 
-      {/* Two-column layout */}
+      {/* Two-column */}
       <div className="mt-6 grid w-full gap-4 lg:grid-cols-3">
         {/* Continue Course */}
         <Card className="p-6 lg:col-span-2">
           <h2 className="text-lg font-semibold text-text-primary">Continue Course</h2>
-          <p className="mt-1 text-sm text-text-muted">JavaScript Fundamentals</p>
-          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-surface-tertiary">
-            <div className="h-full w-[68%] rounded-full bg-brand-500" />
-          </div>
-          <p className="mt-2 text-xs text-text-muted">12 / 18 lessons</p>
+          {continueCourse ? (
+            <>
+              <p className="mt-1 text-sm text-text-muted">{continueCourse.title}</p>
+              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-surface-tertiary">
+                <div
+                  className="h-full rounded-full bg-brand-500 transition-all"
+                  style={{ width: `${continueCourse.percentage}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-text-muted">
+                {continueCourse.completedLessons} / {continueCourse.totalLessons} lessons
+              </p>
+              <div className="mt-4">
+                <Link to={`/courses/${continueCourse.slug}`}>
+                  <Button size="sm">Resume</Button>
+                </Link>
+              </div>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-text-muted">
+              <Link to="/courses" className="text-brand-500 hover:underline">
+                Pick a course
+              </Link>{' '}
+              to start learning.
+            </p>
+          )}
         </Card>
 
-        {/* Daily Goal */}
+        {/* Daily Goal (personal-tracking only, no server model for this yet) */}
         <Card className="p-6">
-          <h2 className="text-lg font-semibold text-text-primary">Daily Goal</h2>
-          <p className="mt-1 text-sm text-text-muted">Solve 2 DSA problems</p>
+          <h2 className="text-lg font-semibold text-text-primary">Today</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            {overview?.activeDays30
+              ? `Active ${overview.activeDays30} of the last 30 days`
+              : 'Show up and make it count.'}
+          </p>
           <div className="mt-4 flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-full bg-surface-tertiary text-brand-500 font-bold">
-              1/2
+            <div className="grid h-12 w-12 place-items-center rounded-full bg-surface-tertiary font-bold text-brand-500">
+              🔥
             </div>
-            <span className="text-sm text-text-secondary">Almost there!</span>
+            <span className="text-sm text-text-secondary">
+              {user?.streak ?? 0} day streak
+            </span>
           </div>
         </Card>
       </div>
 
       {/* Catch Up + Upcoming */}
       <div className="mt-6 grid w-full gap-4 lg:grid-cols-2">
-        {/* Catch Up */}
         <Card className="p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text-primary">Catch Up</h2>
@@ -122,10 +186,11 @@ export const Dashboard: React.FC = () => {
           </div>
         </Card>
 
-        {/* Upcoming */}
         <Card className="p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-text-primary">Upcoming Classes</h2>
+            <h2 className="text-lg font-semibold text-text-primary">
+              Upcoming Classes
+            </h2>
             <Link
               to="/classes"
               className="flex items-center gap-1 text-xs text-brand-500 hover:underline"

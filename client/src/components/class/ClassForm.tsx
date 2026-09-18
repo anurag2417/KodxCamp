@@ -19,15 +19,29 @@ export const ClassForm: React.FC<Props> = ({ onCreated, onCancel }) => {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    setBusy(true);
     setError('');
+
+    if (!meetLink || !/^https:\/\/meet\.google\.com\//.test(meetLink)) {
+      setError('Please provide a valid Google Meet link (https://meet.google.com/…)');
+      return;
+    }
+    if (!scheduledAt || isNaN(new Date(scheduledAt).getTime())) {
+      setError('Please pick a valid date and time.');
+      return;
+    }
+    if (new Date(scheduledAt) < new Date()) {
+      setError('Scheduled time must be in the future.');
+      return;
+    }
+
+    setBusy(true);
     try {
       const created = await classesApi.create({
         title,
         description,
         scheduledAt: new Date(scheduledAt).toISOString(),
         durationMinutes,
-        meetLink: meetLink || undefined,
+        meetLink,
       });
       onCreated(created);
       setTitle('');
@@ -75,10 +89,14 @@ export const ClassForm: React.FC<Props> = ({ onCreated, onCancel }) => {
         />
       </div>
       <Input
-        placeholder="Google Meet link (optional — we'll generate one)"
+        placeholder="Google Meet link (required)"
         value={meetLink}
         onChange={(e) => setMeetLink(e.target.value)}
+        required
       />
+      <p className="text-xs text-text-muted">
+        Open Google Meet, click "New meeting", and paste the link here.
+      </p>
       {error && <p className="text-xs text-[var(--color-error)]">{error}</p>}
       <div className="flex justify-end gap-2">
         {onCancel && (

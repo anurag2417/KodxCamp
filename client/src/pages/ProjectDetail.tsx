@@ -1,9 +1,7 @@
-import { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useProject } from '../hooks/useProject';
-import { projectsApi } from '../lib/projects.api';
 import { useAuthStore } from '../store/auth.store';
 import { Spinner } from '../components/ui/Spinner';
 import { Button } from '../components/ui/Button';
@@ -16,13 +14,6 @@ export const ProjectDetail: React.FC = () => {
   const user = useAuthStore((s) => s.user);
 
   // If logged in but project not started, start it (auto-clone on first visit)
-  useEffect(() => {
-    if (!slug || !project || userProject || !user) return;
-    projectsApi
-      .start(slug)
-      .then((r) => setUserProject(r.userProject))
-      .catch(() => {});
-  }, [slug, project, userProject, user, setUserProject]);
 
   if (loading) {
     return (

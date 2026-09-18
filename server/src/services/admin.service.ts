@@ -8,6 +8,9 @@ import { UserProject } from '../models/UserProject.model.js';
 import { Class as ClassModel } from '../models/Class.model.js';
 import { Enrollment } from '../models/Enrollment.model.js';
 import { Activity } from '../models/Activity.model.js';
+import { Progress } from '../models/Progress.model.js';
+import { UserAchievement } from '../models/UserAchievement.model.js';
+import { ApiError } from '../utils/ApiError.js';
 
 export const adminService = {
   /**
@@ -132,6 +135,17 @@ export const adminService = {
   },
 
   async setUserRole(userId: string, role: 'student' | 'instructor' | 'admin') {
+    const target = await User.findById(userId).lean();
+    if (!target) throw new ApiError(404, 'User not found');
+
+    // Prevent demoting the last admin
+    if (target.role === 'admin' && role !== 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        throw new ApiError(400, 'Cannot demote the last admin.');
+      }
+    }
+
     const updated = await User.findByIdAndUpdate(
       userId,
       { role },
@@ -142,15 +156,31 @@ export const adminService = {
     return updated;
   },
 
-  async deleteUser(userId: string) {
+  async deleteUser(userId: string, actorId: string) {
+    if (userId === actorId) {
+      throw new ApiError(400, 'You cannot delete your own account.');
+    }
+
+    const target = await User.findById(userId).lean();
+    if (!target) throw new ApiError(404, 'User not found');
+
+    if (target.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        throw new ApiError(400, 'Cannot delete the last admin.');
+      }
+    }
+
     await User.findByIdAndDelete(userId);
-    // Clean up their data — optional; comment out if you prefer soft-delete
     await Promise.all([
       Submission.deleteMany({ userId }),
       UserProject.deleteMany({ userId }),
       Enrollment.deleteMany({ userId }),
       Activity.deleteMany({ userId }),
+      Progress.deleteMany({ userId }),
+      UserAchievement.deleteMany({ userId }),
     ]);
+
     return { ok: true };
-  },
+  }
 };

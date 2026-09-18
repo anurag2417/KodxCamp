@@ -22,7 +22,8 @@ export const createClassSchema = z.object({
     description: z.string().max(2000).default(''),
     scheduledAt: z.string().min(1),
     durationMinutes: z.number().int().min(5).max(480).default(60),
-    meetLink: z.string().url().optional().or(z.literal('')),
+    // REQUIRED — no auto-generated fake links
+    meetLink: z.string().url('A valid Google Meet URL is required'),
     courseId: z.string().optional(),
   }),
 });
@@ -42,8 +43,9 @@ export const updateClassSchema = z.object({
 export const watchProgressSchema = z.object({
   params: z.object({ slug: z.string().min(1) }),
   body: z.object({
-    watchedSeconds: z.number().min(0),
-    durationSec: z.number().min(0),
+    // Cap to 24 hours — sanity bound against client bugs
+    watchedSeconds: z.number().min(0).max(86400),
+    durationSec: z.number().min(0).max(86400),
   }),
 });
 
@@ -57,7 +59,7 @@ export const classController = {
 
   getBySlug: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?._id.toString();
-    const data = await classService.getBySlug(req.params.slug, userId);
+    const data = await classService.getBySlug(req.params.slug as string, userId);
     return ApiResponse.success(res, data);
   }),
 
@@ -76,7 +78,7 @@ export const classController = {
   update: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
     const updated = await classService.update(
-      req.params.slug,
+      req.params.slug as string,
       user._id.toString(),
       req.body
     );
@@ -85,19 +87,19 @@ export const classController = {
 
   enroll: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
-    const result = await classService.enroll(req.params.slug, user._id.toString());
+    const result = await classService.enroll(req.params.slug as string, user._id.toString());
     return ApiResponse.success(res, result, 'Enrolled');
   }),
 
   unenroll: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
-    const result = await classService.unenroll(req.params.slug, user._id.toString());
+    const result = await classService.unenroll(req.params.slug as string, user._id.toString());
     return ApiResponse.success(res, result, 'Left class');
   }),
 
   attend: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
-    const result = await classService.markAttended(req.params.slug, user._id.toString());
+    const result = await classService.markAttended(req.params.slug as string, user._id.toString());
     return ApiResponse.success(res, result, 'Attendance recorded');
   }),
 
@@ -105,7 +107,7 @@ export const classController = {
     const user = req.user!;
     const { watchedSeconds, durationSec } = req.body;
     const result = await classService.updateWatchProgress(
-      req.params.slug,
+      req.params.slug as string,
       user._id.toString(),
       watchedSeconds,
       durationSec
@@ -119,10 +121,6 @@ export const classController = {
     return ApiResponse.success(res, list);
   }),
 
-  /**
-   * Upload a recording file (multipart).
-   * Expects `req.file` set by multer middleware.
-   */
   uploadRecording: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
     if (user.role !== 'instructor' && user.role !== 'admin') {
@@ -130,7 +128,7 @@ export const classController = {
     }
     if (!req.file) throw new ApiError(400, 'No file uploaded');
 
-    const { slug } = req.params;
+    const slug = req.params.slug as string;
     const durationSec = Number(req.body.durationSec ?? 0);
     const url = `/uploads/recordings/${req.file.filename}`;
 

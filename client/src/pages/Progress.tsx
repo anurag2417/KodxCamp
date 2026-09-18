@@ -10,8 +10,10 @@ import { XPBar } from '../components/progress/XPBar';
 import { StreakFlame } from '../components/progress/StreakFlame';
 import { ActivityHeatmap } from '../components/progress/ActivityHeatmap';
 import { ProgressRing } from '../components/progress/ProgressRing';
+import { useAuthStore } from '../store/auth.store';
 
 export const Progress: React.FC = () => {
+  const user = useAuthStore((state) => state.user);
   const { overview, courses, difficulty, weekly, heatmap, activity, loading, error } =
     useProgressOverview();
 
@@ -50,7 +52,7 @@ export const Progress: React.FC = () => {
           <XPBar xp={overview.totalXp} />
         </Card>
         <Card className="flex items-center justify-center p-6">
-          <StreakFlame streak={0} />
+          <StreakFlame streak={user?.streak ?? 0} />
         </Card>
       </div>
 
@@ -125,7 +127,10 @@ export const Progress: React.FC = () => {
             <p className="text-sm text-text-muted">Solve problems to see stats.</p>
           ) : (
             <div className="flex flex-col items-center gap-6">
-              <ProgressRing value={100} size={100} label={`${totalSolved} solved`} />
+              <div className="flex flex-col items-center">
+                <span className="text-4xl font-bold text-brand-500">{totalSolved}</span>
+                <span className="mt-1 text-xs text-text-muted">solved</span>
+              </div>
               <div className="w-full space-y-3">
                 {[
                   { label: 'Easy', value: difficulty?.easy ?? 0, color: '#2A835F' },

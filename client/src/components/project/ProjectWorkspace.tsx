@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Save, CheckCircle2 } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Button } from '../ui/Button';
 import { CodeEditor } from '../editor/CodeEditor';
 import { FileTabs } from './FileTabs';
 import { PreviewPane } from './PreviewPane';
-import { projectsApi, type ApiProjectFile, type ApiUserProject, type PreviewMode } from '../../lib/projects.api';
+import {
+  projectsApi,
+  type ApiProjectFile,
+  type ApiUserProject,
+  type PreviewMode,
+} from '../../lib/projects.api';
 import { useAuthStore } from '../../store/auth.store';
 
 interface Props {
@@ -44,13 +49,28 @@ export const ProjectWorkspace: React.FC<Props> = ({
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [dirty, setDirty] = useState(false);
 
-  // If userProject loads after mount, adopt its files
+  // Adopt the user's saved files ONCE per userProject id — not on every change.
+  const adoptedIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (userProject?.files?.length) {
-      setFiles(userProject.files);
-      setDirty(false);
-    }
+    if (!userProject) return;
+    if (adoptedIdRef.current === userProject._id) return;
+    if (!userProject.files?.length) return;
+    setFiles(userProject.files);
+    setActiveIndex(Math.max(0, userProject.files.findIndex((f) => f.isEntry)));
+    setDirty(false);
+    adoptedIdRef.current = userProject._id;
   }, [userProject]);
+
+  // Warn on navigation away with unsaved changes
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   const activeFile = files[activeIndex];
 
@@ -76,7 +96,13 @@ export const ProjectWorkspace: React.FC<Props> = ({
 
   const complete = async () => {
     if (!user) return;
+    if (dirty && !confirm('You have unsaved changes. Save before completing?')) {
+      return;
+    }
     try {
+      if (dirty) {
+        await save();
+      }
       await projectsApi.complete(projectSlug);
       onCompleted?.();
     } catch {
@@ -85,26 +111,37 @@ export const ProjectWorkspace: React.FC<Props> = ({
   };
 
   const editorLanguage = useMemo(
-    () => (activeFile ? monacoLangByFile[activeFile.language] ?? 'plaintext' : 'plaintext'),
+    () =>
+      activeFile
+        ? monacoLangByFile[activeFile.language] ?? 'plaintext'
+        : 'plaintext',
     [activeFile]
   );
 
   return (
     <div className="flex h-[calc(100vh-64px)] w-full flex-col">
       <PanelGroup direction="horizontal" className="flex-1">
-        {/* Editor */}
         <Panel defaultSize={55} minSize={30}>
           <div className="flex h-full flex-col bg-surface">
             <div className="flex items-center justify-between border-b border-border bg-surface-secondary px-4 py-2">
-              <FileTabs files={files} activeIndex={activeIndex} onChange={setActiveIndex} />
+              <FileTabs
+                files={files}
+                activeIndex={activeIndex}
+                onChange={setActiveIndex}
+              />
               <div className="flex items-center gap-2">
                 {savedAt && !dirty && (
                   <span className="hidden items-center gap-1 text-xs text-text-muted sm:inline-flex">
-                    <CheckCircle2 size={12} className="text-[var(--color-success)]" />
+                    <CheckCircle2
+                      size={12}
+                      className="text-[var(--color-success)]"
+                    />
                     Saved
                   </span>
                 )}
-                {dirty && <span className="text-xs text-[var(--color-warning)]">Unsaved</span>}
+                {dirty && (
+                  <span className="text-xs text-[var(--color-warning)]">Unsaved</span>
+                )}
                 <Button size="sm" variant="secondary" onClick={complete}>
                   <CheckCircle2 size={14} /> Complete
                 </Button>
@@ -127,7 +164,6 @@ export const ProjectWorkspace: React.FC<Props> = ({
 
         <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
 
-        {/* Preview */}
         <Panel defaultSize={45} minSize={25}>
           <PreviewPane files={files} previewMode={previewMode} />
         </Panel>

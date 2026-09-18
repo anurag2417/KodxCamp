@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { adminApi, type AdminCourse } from '../../lib/admin.api';
+import { coursesApi } from '../../lib/courses.api';
 import { Spinner } from '../../components/ui/Spinner';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -10,8 +11,15 @@ import { AdminTable } from '../../components/admin/AdminTable';
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog';
 
 const LANGUAGES = [
-  'html-css', 'javascript', 'typescript', 'python',
-  'sql', 'react', 'tailwind', 'dsa-python', 'dsa-javascript',
+  'html-css',
+  'javascript',
+  'typescript',
+  'python',
+  'sql',
+  'react',
+  'tailwind',
+  'dsa-python',
+  'dsa-javascript',
 ];
 
 export const AdminCourses: React.FC = () => {
@@ -20,22 +28,26 @@ export const AdminCourses: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState<AdminCourse | null>(null);
 
-  // Form state
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
   const [language, setLanguage] = useState(LANGUAGES[0]);
   const [error, setError] = useState('');
 
-  const reload = () => {
+  const reload = async () => {
     setLoading(true);
-    fetch(`${import.meta.env.VITE_API ?? ''}/api/courses`)
-      .then((r) => r.json())
-      .then((d) => setCourses(d.data ?? []))
-      .finally(() => setLoading(false));
+    try {
+      // Public catalog returns everything the admin table needs.
+      const data = await coursesApi.list();
+      setCourses(data.map((course) => ({ ...course, createdAt: '' })));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(reload, []);
+  useEffect(() => {
+    void reload();
+  }, []);
 
   const handleCreate = async () => {
     setError('');
@@ -64,16 +76,18 @@ export const AdminCourses: React.FC = () => {
   };
 
   const autoSlug = (val: string) =>
-    val.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+    val
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-');
 
   return (
     <div className="w-full p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-text-primary">Courses</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Manage courses and lessons.
-          </p>
+          <p className="mt-1 text-sm text-text-muted">Manage courses and lessons.</p>
         </div>
         <Button onClick={() => setShowForm((v) => !v)}>
           <Plus size={16} /> {showForm ? 'Close' : 'New Course'}

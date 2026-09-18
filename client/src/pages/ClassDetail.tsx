@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Upload, Video } from 'lucide-react';
 import { useClass } from '../hooks/useClass';
@@ -10,16 +10,43 @@ import { Card } from '../components/ui/Card';
 import { ClassStatusBadge } from '../components/class/ClassStatusBadge';
 import { RecordingPlayer } from '../components/class/RecordingPlayer';
 
-const API_ORIGIN = ''; // served from same origin via proxy in dev
+/** Absolute origin for media. Falls back to same-origin if VITE_API_URL unset. */
+const API_ORIGIN = (() => {
+  const base = import.meta.env.VITE_API_URL as string | undefined;
+  if (!base) return '';
+  // Strip trailing /api
+  return base.replace(/\/api\/?$/, '');
+})();
 
 export const ClassDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
-  const { cls, enrollment, setEnrollment, attendeeCount, loading, error, reload } = useClass(slug);
+  const { cls, enrollment, setEnrollment, attendeeCount, loading, error, reload } =
+    useClass(slug);
   const user = useAuthStore((s) => s.user);
   const [busy, setBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [durationSec, setDurationSec] = useState(0);
+
+  // Track last-sent watch position so we don't spam the server
+  const lastSentRef = useRef(0);
+
+  // Save on unmount via sendBeacon (bypasses CORS preflight + survives unload)
+  useEffect(() => {
+    return () => {
+      const e = enrollment;
+      if (!e || lastSentRef.current <= 0) return;
+      const url = `${API_ORIGIN}/api/classes/${slug}/watch`;
+      const body = JSON.stringify({
+        watchedSeconds: lastSentRef.current,
+        durationSec: e.watchedSeconds ?? 0, // server clamps anyway
+      });
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' });
+        navigator.sendBeacon(url, blob);
+      }
+    };
+  }, [enrollment, slug]);
 
   if (loading) {
     return (
@@ -66,10 +93,15 @@ export const ClassDetail: React.FC = () => {
     }
   };
 
-  const handleJoin = async () => {
-    await classesApi.attend(cls.slug);
-    window.open(cls.meetLink, '_blank', 'noopener,noreferrer');
-    reload();
+  const handleJoin = () => {
+    // Open the meeting synchronously so popup blockers allow it
+    if (cls.meetLink) {
+      window.open(cls.meetLink, '_blank', 'noopener,noreferrer');
+    }
+    // Fire-and-forget attendance
+    classesApi.attend(cls.slug).catch(() => {});
+    // Optimistically refresh after a beat
+    setTimeout(() => reload(), 500);
   };
 
   const handleUpload = async () => {
@@ -117,7 +149,6 @@ export const ClassDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* Action buttons */}
       <Card className="mb-6 flex flex-wrap items-center gap-3 p-5">
         {!user && (
           <p className="text-sm text-text-muted">
@@ -164,7 +195,6 @@ export const ClassDetail: React.FC = () => {
         )}
       </Card>
 
-      {/* Recording */}
       {cls.recording ? (
         <div className="mb-6">
           <h2 className="mb-3 text-lg font-semibold text-text-primary">Recording</h2>
@@ -172,14 +202,21 @@ export const ClassDetail: React.FC = () => {
             <div className="h-[480px]">
               <RecordingPlayer
                 classSlug={cls.slug}
-                src={`${API_ORIGIN}${cls.recording.url}`}
+                src={
+                  cls.recording.url.startsWith('http')
+                    ? cls.recording.url
+                    : `${API_ORIGIN}${cls.recording.url}`
+                }
                 chapters={cls.recording.chapters}
                 initialSeconds={enrollment?.watchedSeconds ?? 0}
-                onProgress={(watched, duration) => {
-                  // Fire and forget
-                  if (isEnrolled) {
-                    classesApi.watch(cls.slug, watched, duration).catch(() => {});
-                  }
+                onProgress={(watched) => {
+                  if (!isEnrolled) return;
+                  // Throttle: only send if advanced by 10+ seconds
+                  if (Math.abs(watched - lastSentRef.current) < 10) return;
+                  lastSentRef.current = watched;
+                  classesApi
+                    .watch(cls.slug, watched, cls.recording?.durationSec ?? 0)
+                    .catch(() => {});
                 }}
               />
             </div>
@@ -194,7 +231,6 @@ export const ClassDetail: React.FC = () => {
         </Card>
       )}
 
-      {/* Instructor upload */}
       {isInstructor && !cls.recording && (
         <Card className="p-6">
           <h2 className="mb-3 text-sm font-semibold text-text-primary">
@@ -208,7 +244,6 @@ export const ClassDetail: React.FC = () => {
                 const f = e.target.files?.[0];
                 if (!f) return;
                 setFile(f);
-                // Try to detect duration via a temp video element
                 const url = URL.createObjectURL(f);
                 const v = document.createElement('video');
                 v.preload = 'metadata';

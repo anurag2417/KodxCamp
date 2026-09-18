@@ -1,7 +1,11 @@
 import { api } from './api';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
-export type SubmissionStatus = 'accepted' | 'wrong_answer' | 'runtime_error' | 'compile_error';
+export type SubmissionStatus =
+  | 'accepted'
+  | 'wrong_answer'
+  | 'runtime_error'
+  | 'compile_error';
 
 export interface ApiProblemSummary {
   _id: string;
@@ -28,7 +32,6 @@ export interface ApiProblemFull {
   statement: string;
   starterCode: Record<string, string>;
   testCases: ApiProblemTestCase[];
-  hiddenSignature: string;
   solved?: boolean;
 }
 
@@ -58,7 +61,6 @@ export const problemsApi = {
 
   validate: async (input: {
     problemId: string;
-    hiddenSignature: string;
     reportedResults: { index: number; passed: boolean }[];
   }): Promise<{ status: SubmissionStatus; passedCount: number; totalTests: number }> => {
     const { data } = await api.post('/problems/validate', input);

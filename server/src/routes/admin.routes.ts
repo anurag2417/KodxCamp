@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import type { Request, Response, NextFunction } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 import { validate } from '../middleware/validate.middleware.js';
@@ -12,6 +11,7 @@ import {
   createLessonSchema,
   updateLessonSchema,
   lessonSlugSchema,
+  courseSlugOnlySchema,
 } from '../controllers/admin.course.controller.js';
 import {
   adminProblemController,
@@ -30,7 +30,6 @@ import {
 
 const router = Router();
 
-// Every admin route requires auth + admin role
 router.use(requireAuth, requireAdmin);
 
 // ─── Stats ─────────────────────────────────────
@@ -43,6 +42,11 @@ router.delete('/users/:userId', adminStatsController.deleteUser);
 
 // ─── Courses ───────────────────────────────────
 router.post('/courses', validate(createCourseSchema), adminCourseController.create);
+router.get(
+  '/courses/:slug',
+  validate(courseSlugOnlySchema),
+  adminCourseController.getFull
+);
 router.patch(
   '/courses/:slug',
   validate(updateCourseSchema),
@@ -99,9 +103,5 @@ router.patch(
   adminClassController.update
 );
 router.delete('/classes/:slug', adminClassController.remove);
-
-// Silence unused-import warnings for TS
-void ((_: Request) => {} as unknown as NextFunction);
-void Response;
 
 export default router;

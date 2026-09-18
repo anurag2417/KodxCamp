@@ -32,7 +32,6 @@ export const ProblemDetail: React.FC = () => {
   const [tab, setTab] = useState<'tests' | 'submissions'>('tests');
   const [busy, setBusy] = useState(false);
 
-  // Initialize code from starter
   useEffect(() => {
     if (!problem) return;
     const starter = problem.starterCode?.[language] ?? '';
@@ -42,13 +41,20 @@ export const ProblemDetail: React.FC = () => {
     setStatus('idle');
   }, [problem, language]);
 
-  // Load submissions for logged-in users
   useEffect(() => {
     if (!user || !problem) return;
     problemsApi.submissions(problem._id).then(setSubmissions).catch(() => {});
   }, [user, problem]);
 
-  const visibleTests = useMemo(() => problem?.testCases ?? [], [problem]);
+  // Only run visible tests client-side. Hidden tests are not shipped.
+  const visibleTests = useMemo(
+    () => (problem?.testCases ?? []).filter((tc) => !tc.isHidden),
+    [problem]
+  );
+  const hiddenCount = useMemo(
+    () => (problem?.testCases ?? []).filter((tc) => tc.isHidden).length,
+    [problem]
+  );
 
   async function runAllTests(isSubmit: boolean) {
     if (!problem) return;
@@ -62,22 +68,25 @@ export const ProblemDetail: React.FC = () => {
     setResults(undefined);
     setOutput('Running tests...');
 
-    const summary = await runTests(language, code, problem.testCases);
+    const summary = await runTests(language, code, visibleTests);
 
-    // Update per-test result display
     setResults(summary.results.map((r) => ({ passed: r.passed, isHidden: r.isHidden })));
 
+    const totalVisible = summary.totalTests;
     const summaryLine = summary.allPassed
-      ? `✅ All ${summary.totalTests} test cases passed (${summary.totalRuntimeMs}ms).`
-      : `❌ ${summary.passedTests}/${summary.totalTests} test cases passed.`;
+      ? `✅ All ${totalVisible} visible test${totalVisible === 1 ? '' : 's'} passed (${summary.totalRuntimeMs}ms).`
+      : `❌ ${summary.passedTests}/${totalVisible} visible tests passed.`;
+
+    const hiddenLine =
+      hiddenCount > 0
+        ? `\n\nℹ️ ${hiddenCount} hidden test case${hiddenCount === 1 ? '' : 's'} will be checked when you submit.`
+        : '';
 
     const failures = summary.results
       .filter((r) => !r.passed)
       .slice(0, 3)
       .map((r) => {
-        const header = r.isHidden
-          ? `Test #${r.index + 1} (hidden) — Failed`
-          : `Test #${r.index + 1} — Failed`;
+        const header = `Test #${r.index + 1} — Failed`;
         const detail = r.stderr
           ? `\n  Error: ${r.stderr}`
           : r.actualOutput !== undefined
@@ -88,27 +97,19 @@ export const ProblemDetail: React.FC = () => {
       .join('\n');
 
     setStatus(summary.allPassed ? 'success' : 'error');
-    setOutput(summaryLine + (failures ? `\n\n${failures}` : ''));
+    setOutput(summaryLine + hiddenLine + (failures ? `\n\n${failures}` : ''));
 
     if (isSubmit) {
       try {
-        // Validate on the server first (HMAC-signed hidden test check)
-        await problemsApi.validate({
-          problemId: problem._id,
-          hiddenSignature: problem.hiddenSignature,
-          reportedResults: summary.results.map((r) => ({
-            index: r.index,
-            passed: r.passed,
-          })),
-        });
-
+        // Report visible pass count. Server clamps against its own totals
+        // and decides the final status. Hidden tests are not run here.
         await problemsApi.submit({
           problemId: problem._id,
           language,
           code,
           status: summary.allPassed ? 'accepted' : 'wrong_answer',
           passedTests: summary.passedTests,
-          totalTests: summary.totalTests,
+          totalTests: totalVisible + hiddenCount,
           runtimeMs: summary.totalRuntimeMs,
         });
 
@@ -150,7 +151,6 @@ export const ProblemDetail: React.FC = () => {
   return (
     <div className="flex h-[calc(100vh-64px)] w-full">
       <PanelGroup direction="horizontal" className="h-full flex-1">
-        {/* Left: problem statement */}
         <Panel defaultSize={40} minSize={25}>
           <div className="h-full overflow-auto bg-bg p-6">
             <Link
@@ -209,7 +209,15 @@ export const ProblemDetail: React.FC = () => {
 
             <div className="mt-4">
               {tab === 'tests' ? (
-                <TestCaseList testCases={visibleTests} results={results} />
+                <>
+                  <TestCaseList testCases={problem.testCases} results={results} />
+                  {hiddenCount > 0 && (
+                    <p className="mt-3 text-xs text-text-muted">
+                      ℹ️ {hiddenCount} additional test case
+                      {hiddenCount === 1 ? '' : 's'} will be checked on submit.
+                    </p>
+                  )}
+                </>
               ) : (
                 <SubmissionsList submissions={submissions} />
               )}
@@ -219,7 +227,6 @@ export const ProblemDetail: React.FC = () => {
 
         <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
 
-        {/* Right: editor + console */}
         <Panel defaultSize={60}>
           <PanelGroup direction="vertical">
             <Panel defaultSize={65}>

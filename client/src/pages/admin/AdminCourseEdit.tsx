@@ -8,7 +8,10 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { ConfirmDialog } from '../../components/admin/ConfirmDialog';
-import { TestCaseEditor, type EditableTestCase } from '../../components/admin/TestCaseEditor';
+import {
+  TestCaseEditor,
+  type EditableTestCase,
+} from '../../components/admin/TestCaseEditor';
 
 interface CourseData {
   _id: string;
@@ -42,13 +45,17 @@ export const AdminCourseEdit: React.FC = () => {
   const reload = async () => {
     if (!slug) return;
     setLoading(true);
-    const { data } = await api.get(`/courses/${slug}`);
-    setCourse(data.data);
-    setLoading(false);
+    try {
+      // ADMIN endpoint — returns full lesson docs (starterCode, solution, testCases)
+      const { data } = await api.get(`/admin/courses/${slug}`);
+      setCourse(data.data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    reload();
+    void reload();
   }, [slug]);
 
   const openCreate = () => {
@@ -65,7 +72,11 @@ export const AdminCourseEdit: React.FC = () => {
   };
 
   const autoSlug = (val: string) =>
-    val.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+    val
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-');
 
   const handleSave = async () => {
     if (!course || !editing) return;
@@ -133,7 +144,6 @@ export const AdminCourseEdit: React.FC = () => {
         </Button>
       </div>
 
-      {/* Lesson editor */}
       {editing && (
         <Card className="mb-6 p-6">
           <div className="mb-4 flex items-center justify-between">
@@ -196,15 +206,15 @@ export const AdminCourseEdit: React.FC = () => {
               placeholder="Solution (hidden from students)"
               rows={5}
               value={editing.solution ?? ''}
-              onChange={(e) =>
-                setEditing({ ...editing, solution: e.target.value })
-              }
+              onChange={(e) => setEditing({ ...editing, solution: e.target.value })}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
             />
           </div>
 
           <div className="mt-4">
-            <p className="mb-2 text-xs font-semibold text-text-secondary">Test Cases</p>
+            <p className="mb-2 text-xs font-semibold text-text-secondary">
+              Test Cases
+            </p>
             <TestCaseEditor testCases={testCases} onChange={setTestCases} />
           </div>
 
@@ -216,7 +226,6 @@ export const AdminCourseEdit: React.FC = () => {
         </Card>
       )}
 
-      {/* Lessons list */}
       <div className="flex flex-col gap-2">
         {course.lessons.map((l) => (
           <Card key={l._id} className="flex items-center justify-between gap-4 p-4">

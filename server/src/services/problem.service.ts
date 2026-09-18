@@ -1,7 +1,6 @@
 import { Problem } from '../models/Problem.model.js';
 import { judgeService } from './judge.service.js';
 import { ApiError } from '../utils/ApiError.js';
-import { sign } from '../utils/hmac.js';
 
 interface ProblemInput {
   title: string;
@@ -11,6 +10,21 @@ interface ProblemInput {
   statement: string;
   starterCode: Record<string, string>;
   testCases: { input: string; expectedOutput: string; isHidden: boolean }[];
+}
+
+interface PublicTestCase {
+  index: number;
+  input: string;
+  expectedOutput: string;
+  isHidden: boolean;
+}
+
+interface PublicVisibleTestCase extends PublicTestCase {
+  isHidden: false;
+}
+
+interface PublicHiddenTestCase extends PublicTestCase {
+  isHidden: true;
 }
 
 export const problemService = {
@@ -28,45 +42,54 @@ export const problemService = {
     }));
   },
 
+  /**
+   * Public problem payload.
+   *
+   * SECURITY: We only ship `input` and `expectedOutput` for VISIBLE test cases.
+   * Hidden cases are returned as placeholders `{ index, isHidden: true }` with
+   * empty input/output. The client should run only the visible ones.
+   *
+   * Real judging against hidden cases must happen server-side. Until that
+   * exists, hidden tests are labeled honestly in the UI as "additional tests
+   * checked on submit" — but the client CANNOT see them.
+   */
   async getBySlug(slug: string, userId?: string) {
     const problem = await Problem.findOne({ slug }).lean();
     if (!problem) throw new ApiError(404, 'Problem not found');
 
-    const visible = problem.testCases
-      .filter((tc) => !tc.isHidden)
-      .map((tc, i) => ({
-        index: i,
-        input: tc.input,
-        expectedOutput: tc.expectedOutput,
-        isHidden: false,
-      }));
-
-    const hiddenInputs = problem.testCases
-      .map((tc, i) => ({ index: i, input: tc.input, isHidden: tc.isHidden }))
-      .filter((t) => t.isHidden);
-
-    const hiddenSignature = sign(hiddenInputs);
-
-    const allTests = problem.testCases.map((tc, i) => ({
-      index: i,
-      input: tc.input,
-      expectedOutput: tc.isHidden ? '' : tc.expectedOutput,
-      isHidden: tc.isHidden,
-    }));
-
-    void visible;
+    const testCases: PublicTestCase[] = problem.testCases.map(
+      (tc: ProblemInput['testCases'][number], i: number): PublicVisibleTestCase | PublicHiddenTestCase =>
+        tc.isHidden
+          ? {
+              index: i,
+              input: '',
+              expectedOutput: '',
+              isHidden: true,
+            }
+          : {
+              index: i,
+              input: tc.input,
+              expectedOutput: tc.expectedOutput,
+              isHidden: false,
+            }
+    );
 
     const solvedIds = userId ? await judgeService.getSolvedProblemIds(userId) : [];
 
     return {
-      ...problem,
-      testCases: allTests,
-      hiddenSignature,
+      _id: problem._id,
+      title: problem.title,
+      slug: problem.slug,
+      difficulty: problem.difficulty,
+      topics: problem.topics,
+      statement: problem.statement,
+      starterCode: problem.starterCode,
+      testCases,
       solved: solvedIds.includes(problem._id.toString()),
     };
   },
 
-  // ─── Admin: full problem (with hidden data) ─────
+  // ─── Admin ────────────────────────────────────────
   async getFullBySlug(slug: string) {
     const problem = await Problem.findOne({ slug }).lean();
     if (!problem) throw new ApiError(404, 'Problem not found');
@@ -81,6 +104,11 @@ export const problemService = {
   },
 
   async updateProblem(slug: string, patch: Partial<ProblemInput>) {
+    if (patch.slug && patch.slug !== slug) {
+      const collision = await Problem.findOne({ slug: patch.slug }).lean();
+      if (collision) throw new ApiError(409, 'Slug already exists');
+    }
+
     const updated = await Problem.findOneAndUpdate({ slug }, patch, {
       new: true,
       runValidators: true,

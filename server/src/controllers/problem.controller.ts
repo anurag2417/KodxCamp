@@ -25,7 +25,6 @@ export const submitSchema = z.object({
 export const validateResultsSchema = z.object({
   body: z.object({
     problemId: z.string().min(1),
-    hiddenSignature: z.string().min(1),
     reportedResults: z
       .array(
         z.object({
@@ -46,7 +45,8 @@ export const problemController = {
 
   getBySlug: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?._id.toString();
-    const problem = await problemService.getBySlug(req.params.slug, userId);
+    const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
+    const problem = await problemService.getBySlug(slug, userId);
     return ApiResponse.success(res, problem);
   }),
 
@@ -66,7 +66,9 @@ export const problemController = {
 
   submissions: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();
-    const { problemId } = req.params;
+    const problemId = Array.isArray(req.params.problemId)
+      ? req.params.problemId[0]
+      : req.params.problemId;
     const list = await judgeService.listForUser(userId, problemId);
     return ApiResponse.success(res, list);
   }),

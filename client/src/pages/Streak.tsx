@@ -34,7 +34,7 @@ export const Streak: React.FC = () => {
       </p>
 
       <Card className="mt-6 flex flex-col items-center gap-6 p-8 sm:flex-row sm:justify-around">
-        <StreakFlame streak={0} />
+        <StreakFlame streak={user?.streak ?? 0} />
         <div className="text-center sm:text-left">
           <p className="text-sm text-text-muted">Active days (30d)</p>
           <p className="mt-1 text-3xl font-bold text-brand-500">
