@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   KodxCamp Design Tokens — Light Theme (default)
+   ============================================================ */
+:root {
+  --color-primary-900: #092328;
+  --color-primary-700: #12544f;
+  --color-primary-500: #2a835f;
+  --color-primary-300: #8bbb92;
+
+  --color-background: #f7faf8;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f0f6f2;
+  --color-surface-tertiary: #e4f0e8;
+
+  --color-border: #d4e2d8;
+
+  --color-text-primary: #092328;
+  --color-text-secondary: #29403b;
+  --color-text-muted: #60736d;
+
+  --color-success: #2a835f;
+  --color-error: #c65353;
+  --color-warning: #c58a24;
+}
+
+/* ============================================================
+   Dark Theme
+   ============================================================ */
+.dark {
+  --color-primary-900: #092328;
+  --color-primary-700: #12544f;
+  --color-primary-500: #2a835f;
+  --color-primary-300: #8bbb92;
+
+  --color-background: #06191d;
+  --color-surface: #092328;
+  --color-surface-secondary: #0d3032;
+  --color-surface-tertiary: #12544f;
+
+  --color-border: #1b4844;
+
+  --color-text-primary: #f2f8f4;
+  --color-text-secondary: #c7d8d1;
+  --color-text-muted: #88a39a;
+
+  --color-success: #8bbb92;
+  --color-error: #f07178;
+  --color-warning: #ebcb7a;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Full-width app containers */
+.app-full {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface-secondary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-500);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-primary-300);
+  color: var(--color-primary-900);
+}
