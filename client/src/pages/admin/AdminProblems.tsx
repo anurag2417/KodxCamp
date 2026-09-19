@@ -15,14 +15,22 @@ import {
   type EditableTestCase,
 } from '../../components/admin/TestCaseEditor';
 
-const emptyProblem = {
+interface ProblemEditorState {
+  title: string;
+  slug: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  statement: string;
+  starterCode: Record<string, string>;
+  testCases: EditableTestCase[];
+}
+
+const emptyProblem: ProblemEditorState = {
   title: '',
   slug: '',
-  difficulty: 'easy' as 'easy' | 'medium' | 'hard',
-  topics: [] as string[],
+  difficulty: 'easy',
   statement: '',
   starterCode: { javascript: '', python: '' },
-  testCases: [] as EditableTestCase[],
+  testCases: [],
 };
 
 /** Extract a useful error message + field details from an axios error. */
@@ -33,9 +41,7 @@ function extractError(err: unknown): string {
       | undefined;
 
     if (body?.details?.length) {
-      return body.details
-        .map((d) => `• ${d.path}: ${d.message}`)
-        .join('\n');
+      return body.details.map((d) => `• ${d.path}: ${d.message}`).join('\n');
     }
     if (body?.message) return body.message;
     return `Request failed (${err.response?.status ?? 'network'})`;
@@ -47,10 +53,12 @@ function extractError(err: unknown): string {
 export const AdminProblems: React.FC = () => {
   const [problems, setProblems] = useState<AdminProblem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<typeof emptyProblem | null>(null);
+
+  const [editing, setEditing] = useState<ProblemEditorState | null>(null);
+  const [originalSlug, setOriginalSlug] = useState<string | null>(null);
   const [topicsText, setTopicsText] = useState('');
   const [starterCodeText, setStarterCodeText] = useState('{}');
-  const [originalSlug, setOriginalSlug] = useState<string | null>(null);
+
   const [deleting, setDeleting] = useState<AdminProblem | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -74,14 +82,11 @@ export const AdminProblems: React.FC = () => {
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-');
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
 
   const openCreate = () => {
-    setEditing({
-      ...emptyProblem,
-      starterCode: { javascript: '', python: '' },
-      testCases: [],
-    });
+    setEditing({ ...emptyProblem, starterCode: { javascript: '', python: '' } });
     setTopicsText('');
     setStarterCodeText(JSON.stringify({ javascript: '', python: '' }, null, 2));
     setOriginalSlug(null);
@@ -94,17 +99,25 @@ export const AdminProblems: React.FC = () => {
       title: full.title,
       slug: full.slug,
       difficulty: full.difficulty,
-      topics: full.topics,
       statement: full.statement,
       starterCode: {
         javascript: full.starterCode.javascript ?? '',
         python: full.starterCode.python ?? '',
       },
-      testCases: full.testCases,
+      testCases: full.testCases.map((tc) => ({
+        input: tc.input,
+        expectedOutput: tc.expectedOutput,
+      })),
     });
     setTopicsText(full.topics.join(', '));
     setStarterCodeText(JSON.stringify(full.starterCode, null, 2));
     setOriginalSlug(full.slug);
+    setError('');
+  };
+
+  const closeEditor = () => {
+    setEditing(null);
+    setOriginalSlug(null);
     setError('');
   };
 
@@ -113,33 +126,61 @@ export const AdminProblems: React.FC = () => {
     setBusy(true);
     setError('');
 
+    // Parse starterCode JSON
     let starterCode: Record<string, string> = {};
     try {
-      starterCode = JSON.parse(starterCodeText);
+      const parsed = JSON.parse(starterCodeText);
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
+        throw new Error('must be a JSON object');
+      }
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v !== 'string') {
+          throw new Error(`key "${k}" must map to a string`);
+        }
+      }
+      starterCode = parsed as Record<string, string>;
     } catch (e) {
-      setError(`Starter code must be valid JSON: ${e instanceof Error ? e.message : ''}`);
+      setError(
+        `Starter code must be a JSON object like {"javascript": "...", "python": "..."}.\n${e instanceof Error ? e.message : ''}`
+      );
       setBusy(false);
       return;
     }
 
-    // Client-side pre-validation — surface obvious errors before the request
-    const problems: string[] = [];
-    if (!editing.title || editing.title.length < 2) problems.push('Title is too short');
-    if (!editing.slug || editing.slug.length < 2) problems.push('Slug is too short');
-    if (!/^[a-z0-9-]+$/.test(editing.slug ?? ''))
-      problems.push('Slug can only contain lowercase letters, numbers, and dashes');
-    if (!editing.statement || editing.statement.length < 10)
-      problems.push('Statement must be at least 10 chars');
-
+    // Client-side pre-validation — surface obvious issues before the request
+    const validationIssues: string[] = [];
+    if (!editing.title || editing.title.length < 2) {
+      validationIssues.push('Title must be at least 2 characters');
+    }
+    if (!editing.slug || editing.slug.length < 2) {
+      validationIssues.push('Slug must be at least 2 characters');
+    }
+    if (!/^[a-z0-9-]+$/.test(editing.slug)) {
+      validationIssues.push(
+        'Slug can only contain lowercase letters, numbers, and dashes'
+      );
+    }
+    if (!editing.statement || editing.statement.length < 10) {
+      validationIssues.push('Statement must be at least 10 characters');
+    }
+    if (editing.testCases.length === 0) {
+      validationIssues.push('At least one test case is required');
+    }
     const emptyExpected = editing.testCases.findIndex(
       (tc) => !tc.expectedOutput || tc.expectedOutput.length === 0
     );
     if (emptyExpected !== -1) {
-      problems.push(`Test #${emptyExpected + 1} is missing its expected output`);
+      validationIssues.push(
+        `Test #${emptyExpected + 1} is missing its expected output`
+      );
     }
 
-    if (problems.length) {
-      setError(problems.map((p) => `• ${p}`).join('\n'));
+    if (validationIssues.length) {
+      setError(validationIssues.map((p) => `• ${p}`).join('\n'));
       setBusy(false);
       return;
     }
@@ -165,8 +206,7 @@ export const AdminProblems: React.FC = () => {
       }
 
       await reload();
-      setEditing(null);
-      setOriginalSlug(null);
+      closeEditor();
     } catch (err) {
       setError(extractError(err));
     } finally {
@@ -176,9 +216,14 @@ export const AdminProblems: React.FC = () => {
 
   const handleDelete = async () => {
     if (!deleting) return;
-    await adminApi.deleteProblem(deleting.slug);
-    await reload();
-    setDeleting(null);
+    try {
+      await adminApi.deleteProblem(deleting.slug);
+      await reload();
+      setDeleting(null);
+    } catch (err) {
+      setError(extractError(err));
+      setDeleting(null);
+    }
   };
 
   return (
@@ -186,7 +231,15 @@ export const AdminProblems: React.FC = () => {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-text-primary">Problems</h1>
-          <p className="mt-1 text-sm text-text-muted">Manage DSA practice problems.</p>
+          <p className="mt-1 text-sm text-text-muted">
+            Manage DSA practice problems. Need to add many at once?{' '}
+            <a
+              href="/admin/bulk-import"
+              className="text-brand-500 hover:underline"
+            >
+              Use bulk import →
+            </a>
+          </p>
         </div>
         <Button onClick={openCreate}>
           <Plus size={16} /> New Problem
@@ -195,9 +248,14 @@ export const AdminProblems: React.FC = () => {
 
       {editing && (
         <Card className="mb-6 p-6">
-          <h2 className="mb-4 text-sm font-semibold text-text-primary">
-            {originalSlug ? 'Edit problem' : 'New problem'}
-          </h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text-primary">
+              {originalSlug ? 'Edit problem' : 'New problem'}
+            </h2>
+            <Button variant="ghost" size="sm" onClick={closeEditor}>
+              Cancel
+            </Button>
+          </div>
 
           <div className="grid gap-3 md:grid-cols-2">
             <Input
@@ -207,6 +265,7 @@ export const AdminProblems: React.FC = () => {
                 setEditing({
                   ...editing,
                   title: e.target.value,
+                  // Only auto-slug on create — don't rename existing URLs
                   slug: originalSlug ? editing.slug : autoSlug(e.target.value),
                 })
               }
@@ -252,18 +311,23 @@ export const AdminProblems: React.FC = () => {
               Starter code (JSON)
             </label>
             <textarea
-              rows={5}
+              rows={6}
               value={starterCodeText}
               onChange={(e) => setStarterCodeText(e.target.value)}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
             />
             <p className="mt-1 text-[10px] text-text-muted">
-              Example: {'{ "javascript": "function solve() {}", "python": "def solve(): pass" }'}
+              Example:{' '}
+              <code>
+                {`{"javascript":"function solve() {}","python":"def solve(): pass"}`}
+              </code>
             </p>
           </div>
 
           <div className="mt-4">
-            <p className="mb-2 text-xs font-semibold text-text-secondary">Test Cases</p>
+            <p className="mb-2 text-xs font-semibold text-text-secondary">
+              Test Cases
+            </p>
             <TestCaseEditor
               testCases={editing.testCases}
               onChange={(tcs) => setEditing({ ...editing, testCases: tcs })}
@@ -277,7 +341,7 @@ export const AdminProblems: React.FC = () => {
           )}
 
           <div className="mt-4 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setEditing(null)}>
+            <Button variant="ghost" onClick={closeEditor}>
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={busy}>
@@ -322,13 +386,20 @@ export const AdminProblems: React.FC = () => {
               </td>
             </tr>
           ))}
+          {problems.length === 0 && (
+            <tr>
+              <td colSpan={4} className="px-4 py-10 text-center text-text-muted">
+                No problems yet. Add your first one.
+              </td>
+            </tr>
+          )}
         </AdminTable>
       )}
 
       <ConfirmDialog
         open={!!deleting}
         title="Delete problem?"
-        message={`This will permanently delete "${deleting?.title}".`}
+        message={`This will permanently delete "${deleting?.title}". Existing submissions from users will remain but the problem will disappear.`}
         confirmLabel="Delete"
         danger
         onConfirm={handleDelete}

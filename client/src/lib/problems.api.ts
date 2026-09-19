@@ -20,7 +20,6 @@ export interface ApiProblemTestCase {
   index: number;
   input: string;
   expectedOutput: string;
-  isHidden: boolean;
 }
 
 export interface ApiProblemFull {

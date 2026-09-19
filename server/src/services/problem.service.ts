@@ -9,22 +9,7 @@ interface ProblemInput {
   topics: string[];
   statement: string;
   starterCode: Record<string, string>;
-  testCases: { input: string; expectedOutput: string; isHidden: boolean }[];
-}
-
-interface PublicTestCase {
-  index: number;
-  input: string;
-  expectedOutput: string;
-  isHidden: boolean;
-}
-
-interface PublicVisibleTestCase extends PublicTestCase {
-  isHidden: false;
-}
-
-interface PublicHiddenTestCase extends PublicTestCase {
-  isHidden: true;
+  testCases: { input: string; expectedOutput: string }[];
 }
 
 export const problemService = {
@@ -42,37 +27,15 @@ export const problemService = {
     }));
   },
 
-  /**
-   * Public problem payload.
-   *
-   * SECURITY: We only ship `input` and `expectedOutput` for VISIBLE test cases.
-   * Hidden cases are returned as placeholders `{ index, isHidden: true }` with
-   * empty input/output. The client should run only the visible ones.
-   *
-   * Real judging against hidden cases must happen server-side. Until that
-   * exists, hidden tests are labeled honestly in the UI as "additional tests
-   * checked on submit" — but the client CANNOT see them.
-   */
   async getBySlug(slug: string, userId?: string) {
     const problem = await Problem.findOne({ slug }).lean();
     if (!problem) throw new ApiError(404, 'Problem not found');
 
-    const testCases: PublicTestCase[] = problem.testCases.map(
-      (tc: ProblemInput['testCases'][number], i: number): PublicVisibleTestCase | PublicHiddenTestCase =>
-        tc.isHidden
-          ? {
-              index: i,
-              input: '',
-              expectedOutput: '',
-              isHidden: true,
-            }
-          : {
-              index: i,
-              input: tc.input,
-              expectedOutput: tc.expectedOutput,
-              isHidden: false,
-            }
-    );
+    const testCases = problem.testCases.map((tc, i) => ({
+      index: i,
+      input: tc.input,
+      expectedOutput: tc.expectedOutput,
+    }));
 
     const solvedIds = userId ? await judgeService.getSolvedProblemIds(userId) : [];
 
@@ -89,7 +52,6 @@ export const problemService = {
     };
   },
 
-  // ─── Admin ────────────────────────────────────────
   async getFullBySlug(slug: string) {
     const problem = await Problem.findOne({ slug }).lean();
     if (!problem) throw new ApiError(404, 'Problem not found');

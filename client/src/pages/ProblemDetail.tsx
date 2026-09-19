@@ -28,7 +28,7 @@ export const ProblemDetail: React.FC = () => {
   const [code, setCode] = useState('');
   const [output, setOutput] = useState('');
   const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
-  const [results, setResults] = useState<{ passed: boolean; isHidden: boolean }[]>();
+  const [results, setResults] = useState<{ passed: boolean }[]>();
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
   const [tab, setTab] = useState<'tests' | 'submissions'>('tests');
   const [busy, setBusy] = useState(false);
@@ -47,14 +47,7 @@ export const ProblemDetail: React.FC = () => {
     problemsApi.submissions(problem._id).then(setSubmissions).catch(() => {});
   }, [user, problem]);
 
-  const visibleTests = useMemo(
-    () => (problem?.testCases ?? []).filter((tc) => !tc.isHidden),
-    [problem]
-  );
-  const hiddenCount = useMemo(
-    () => (problem?.testCases ?? []).filter((tc) => tc.isHidden).length,
-    [problem]
-  );
+  const testCases = useMemo(() => problem?.testCases ?? [], [problem]);
 
   async function runAllTests(isSubmit: boolean) {
     if (!problem) return;
@@ -68,36 +61,29 @@ export const ProblemDetail: React.FC = () => {
     setResults(undefined);
     setOutput('Running tests...');
 
-    const summary = await runTests(language, code, visibleTests);
+    const summary = await runTests(language, code, testCases);
 
-    setResults(summary.results.map((r) => ({ passed: r.passed, isHidden: r.isHidden })));
+    setResults(summary.results.map((r) => ({ passed: r.passed })));
 
-    const totalVisible = summary.totalTests;
     const summaryLine = summary.allPassed
-      ? `✅ All ${totalVisible} visible test${totalVisible === 1 ? '' : 's'} passed (${summary.totalRuntimeMs}ms).`
-      : `❌ ${summary.passedTests}/${totalVisible} visible tests passed.`;
-
-    const hiddenLine =
-      hiddenCount > 0
-        ? `\n\nℹ️ ${hiddenCount} hidden test case${hiddenCount === 1 ? '' : 's'} will be checked when you submit.`
-        : '';
+      ? `✅ All ${summary.totalTests} test${summary.totalTests === 1 ? '' : 's'} passed (${summary.totalRuntimeMs}ms).`
+      : `❌ ${summary.passedTests}/${summary.totalTests} tests passed.`;
 
     const failures = summary.results
       .filter((r) => !r.passed)
       .slice(0, 3)
       .map((r) => {
-        const header = `Test #${r.index + 1} — Failed`;
         const detail = r.stderr
           ? `\n  Error: ${r.stderr}`
           : r.actualOutput !== undefined
             ? `\n  Got: ${r.actualOutput || '(no output)'}`
             : '';
-        return header + detail;
+        return `Test #${r.index + 1} — Failed${detail}`;
       })
       .join('\n');
 
     setStatus(summary.allPassed ? 'success' : 'error');
-    setOutput(summaryLine + hiddenLine + (failures ? `\n\n${failures}` : ''));
+    setOutput(summaryLine + (failures ? `\n\n${failures}` : ''));
 
     if (isSubmit) {
       try {
@@ -107,7 +93,7 @@ export const ProblemDetail: React.FC = () => {
           code,
           status: summary.allPassed ? 'accepted' : 'wrong_answer',
           passedTests: summary.passedTests,
-          totalTests: totalVisible + hiddenCount,
+          totalTests: summary.totalTests,
           runtimeMs: summary.totalRuntimeMs,
         });
 
@@ -207,15 +193,7 @@ export const ProblemDetail: React.FC = () => {
 
             <div className="mt-4">
               {tab === 'tests' ? (
-                <>
-                  <TestCaseList testCases={problem.testCases} results={results} />
-                  {hiddenCount > 0 && (
-                    <p className="mt-3 text-xs text-text-muted">
-                      ℹ️ {hiddenCount} additional test case
-                      {hiddenCount === 1 ? '' : 's'} will be checked on submit.
-                    </p>
-                  )}
-                </>
+                <TestCaseList testCases={testCases} results={results} />
               ) : (
                 <SubmissionsList submissions={submissions} />
               )}

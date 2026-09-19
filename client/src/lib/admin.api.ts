@@ -61,7 +61,7 @@ export interface AdminLesson {
   starterCode: string;
   solution: string;
   language: string;
-  testCases: { input: string; expectedOutput: string; isHidden: boolean }[];
+  testCases: { input: string; expectedOutput: string }[];
 }
 
 export interface AdminProblem {
@@ -72,7 +72,7 @@ export interface AdminProblem {
   topics: string[];
   statement: string;
   starterCode: Record<string, string>;
-  testCases: { input: string; expectedOutput: string; isHidden: boolean }[];
+  testCases: { input: string; expectedOutput: string }[];
   createdAt: string;
 }
 

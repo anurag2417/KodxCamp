@@ -27,7 +27,7 @@ export interface ApiLessonFull {
   content: string;
   starterCode: string;
   language: string;
-  testCases: { input: string; expectedOutput: string; isHidden: boolean }[];
+  testCases: { input: string; expectedOutput: string }[];
 }
 
 export const coursesApi = {
@@ -36,7 +36,9 @@ export const coursesApi = {
     return data.data;
   },
 
-  getBySlug: async (slug: string): Promise<ApiCourse & { lessons: ApiLessonSummary[] }> => {
+  getBySlug: async (
+    slug: string
+  ): Promise<ApiCourse & { lessons: ApiLessonSummary[] }> => {
     const { data } = await api.get(`/courses/${slug}`);
     return data.data;
   },

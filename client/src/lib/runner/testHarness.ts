@@ -4,13 +4,11 @@ export interface TestCase {
   index: number;
   input: string;
   expectedOutput: string;
-  isHidden: boolean;
 }
 
 export interface TestResult {
   index: number;
   passed: boolean;
-  isHidden: boolean;
   actualOutput?: string;
   stderr?: string;
   runtimeMs: number;
@@ -57,7 +55,6 @@ export async function runTests(
     results.push({
       index: tc.index,
       passed,
-      isHidden: tc.isHidden,
       actualOutput: result.stdout,
       stderr: result.stderr,
       runtimeMs: result.runtimeMs,

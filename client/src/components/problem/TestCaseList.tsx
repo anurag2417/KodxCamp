@@ -1,10 +1,10 @@
-import { CheckCircle2, XCircle, Lock } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { ApiProblemTestCase } from '../../lib/problems.api';
 
 interface Props {
   testCases: ApiProblemTestCase[];
-  results?: { passed: boolean; isHidden: boolean }[];
+  results?: { passed: boolean }[];
 }
 
 export const TestCaseList: React.FC<Props> = ({ testCases, results }) => (
@@ -26,15 +26,9 @@ export const TestCaseList: React.FC<Props> = ({ testCases, results }) => (
           )}
         >
           <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {tc.isHidden ? (
-                <Lock size={12} className="text-text-muted" />
-              ) : null}
-              <span className="font-semibold text-text-primary">
-                Test {i + 1}
-                {tc.isHidden ? ' (hidden)' : ''}
-              </span>
-            </div>
+            <span className="font-semibold text-text-primary">
+              Test {i + 1}
+            </span>
             {result && (
               <span
                 className={cn(
@@ -48,22 +42,20 @@ export const TestCaseList: React.FC<Props> = ({ testCases, results }) => (
             )}
           </div>
 
-          {!tc.isHidden && (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-text-muted">Input</div>
-                <code className="mt-0.5 block break-all font-mono text-text-primary">
-                  {tc.input || '(none)'}
-                </code>
-              </div>
-              <div>
-                <div className="text-text-muted">Expected</div>
-                <code className="mt-0.5 block break-all font-mono text-text-primary">
-                  {tc.expectedOutput}
-                </code>
-              </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="text-text-muted">Input</div>
+              <code className="mt-0.5 block break-all font-mono text-text-primary">
+                {tc.input || '(none)'}
+              </code>
             </div>
-          )}
+            <div>
+              <div className="text-text-muted">Expected</div>
+              <code className="mt-0.5 block break-all font-mono text-text-primary">
+                {tc.expectedOutput}
+              </code>
+            </div>
+          </div>
         </div>
       );
     })}

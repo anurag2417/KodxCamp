@@ -10,8 +10,7 @@ import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 const testCaseSchema = z.object({
   input: z.string().default(''),
-  expectedOutput: z.string(),
-  isHidden: z.boolean().default(false),
+  expectedOutput: z.string().min(1, 'Expected output is required'),
 });
 
 export const createCourseSchema = z.object({

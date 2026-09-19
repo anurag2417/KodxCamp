@@ -1,11 +1,10 @@
-import { Plus, Trash2, EyeOff, Eye } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
 export interface EditableTestCase {
   input: string;
   expectedOutput: string;
-  isHidden: boolean;
 }
 
 interface Props {
@@ -19,22 +18,18 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
   };
 
   const add = () => {
-    onChange([...testCases, { input: '', expectedOutput: '', isHidden: false }]);
+    onChange([...testCases, { input: '', expectedOutput: '' }]);
   };
 
   const remove = (i: number) => {
     onChange(testCases.filter((_, idx) => idx !== i));
   };
 
-  const visible = testCases.filter((t) => !t.isHidden).length;
-  const hidden = testCases.filter((t) => t.isHidden).length;
-
   return (
     <div className="flex flex-col gap-3">
-      {/* Header + Add button */}
       <div className="flex items-center justify-between">
         <p className="text-xs text-text-muted">
-          {visible} visible · {hidden} hidden
+          {testCases.length} test case{testCases.length === 1 ? '' : 's'}
         </p>
         <Button type="button" size="sm" variant="secondary" onClick={add}>
           <Plus size={14} /> Add Test Case
@@ -56,9 +51,7 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
           </li>
           <li>
             Array of strings:{' '}
-            <code className="font-mono text-text-primary">
-              {'["a","b","c"]'}
-            </code>
+            <code className="font-mono text-text-primary">{'["a","b","c"]'}</code>
           </li>
           <li>
             Object:{' '}
@@ -66,23 +59,24 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
               {'{"name":"Ada","age":36}'}
             </code>
           </li>
+          <li>
+            Empty (no input): leave blank
+          </li>
         </ul>
         <p className="mt-2">
           The student's code reads it via{' '}
-          <code className="font-mono text-text-primary">__input__</code>. If
-          the input is an array like <code className="font-mono">[2, 3]</code>,
-          the student can destructure it:{' '}
+          <code className="font-mono text-text-primary">__input__</code>. Arrays
+          are destructurable:{' '}
           <code className="font-mono text-text-primary">
             const [a, b] = __input__;
           </code>
         </p>
         <p className="mt-2 text-[var(--color-warning)]">
-          ⚠️ Hidden test cases are not yet supported by the runner — keep all
-          tests visible until the server-side judge is live.
+          💡 Cover edge cases with your test cases: empty input, negative
+          numbers, large values, unexpected types.
         </p>
       </div>
 
-      {/* Test cases */}
       {testCases.map((tc, i) => (
         <div
           key={i}
@@ -92,24 +86,14 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
             <span className="text-xs font-semibold text-text-secondary">
               Test #{i + 1}
             </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => update(i, { isHidden: !tc.isHidden })}
-                className="rounded p-1 text-text-muted hover:bg-surface-tertiary hover:text-text-secondary"
-                title={tc.isHidden ? 'Make visible' : 'Hide test'}
-              >
-                {tc.isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                className="rounded p-1 text-[var(--color-error)] hover:bg-[var(--color-error)]/10"
-                title="Delete"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="rounded p-1 text-[var(--color-error)] hover:bg-[var(--color-error)]/10"
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
 
           <div className="grid gap-2 md:grid-cols-2">
@@ -125,27 +109,19 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
             />
           </div>
 
-          {/* Live input validation */}
-          {tc.input.trim() !== '' && (
-            <InputFormatHint input={tc.input} />
-          )}
+          {tc.input.trim() !== '' && <InputFormatHint input={tc.input} />}
         </div>
       ))}
 
       {testCases.length === 0 && (
         <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-text-muted">
-          No test cases yet. Add one above.
+          No test cases yet. Add at least one.
         </p>
       )}
     </div>
   );
 };
 
-/**
- * Show whether the input parses as valid JSON, and what value it will become.
- * This prevents the #1 admin mistake: typing `2 3` (which becomes a string)
- * instead of `[2, 3]` (which becomes a two-element array).
- */
 const InputFormatHint: React.FC<{ input: string }> = ({ input }) => {
   const trimmed = input.trim();
   let parsed: unknown;
@@ -167,7 +143,6 @@ const InputFormatHint: React.FC<{ input: string }> = ({ input }) => {
     );
   }
 
-  // Identify type
   let kind = 'value';
   if (Array.isArray(parsed)) kind = `array of ${parsed.length}`;
   else if (parsed === null) kind = 'null';
@@ -179,9 +154,6 @@ const InputFormatHint: React.FC<{ input: string }> = ({ input }) => {
   return (
     <p className="mt-2 text-[10px] text-[var(--color-success)]">
       ✓ Valid JSON — will be injected as a {kind}
-      {Array.isArray(parsed) && parsed.length > 1 && (
-        <> (destructurable: <code className="font-mono">const [a, b] = __input__;</code>)</>
-      )}
     </p>
   );
 };
