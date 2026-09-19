@@ -5,16 +5,23 @@ import { User } from '../models/User.model.js';
 import { Submission } from '../models/Submission.model.js';
 import { UserProject } from '../models/UserProject.model.js';
 import { Progress } from '../models/Progress.model.js';
+import { Problem } from '../models/Problem.model.js';
+import { logger } from '../utils/logger.js';
 
 export interface AchievementDefinition {
   key: string;
   title: string;
   description: string;
-  category: 'learning' | 'practice' | 'projects' | 'classes' | 'streak' | 'milestones';
+  category:
+    | 'learning'
+    | 'practice'
+    | 'projects'
+    | 'classes'
+    | 'streak'
+    | 'milestones';
   icon: string;
   xpReward: number;
   secret: boolean;
-  /** Predicate evaluated against a stats snapshot */
   predicate: (s: StatsSnapshot) => boolean;
 }
 
@@ -34,7 +41,7 @@ interface StatsSnapshot {
 }
 
 const DEFS: AchievementDefinition[] = [
-  // ─── Milestones ────────────────────────────────────
+  // Milestones
   {
     key: 'welcome',
     title: 'Welcome Aboard',
@@ -45,6 +52,7 @@ const DEFS: AchievementDefinition[] = [
     secret: false,
     predicate: () => true,
   },
+  // Learning
   {
     key: 'first_lesson',
     title: 'First Steps',
@@ -75,8 +83,7 @@ const DEFS: AchievementDefinition[] = [
     secret: false,
     predicate: (s) => s.lessonsCompleted >= 50,
   },
-
-  // ─── Practice ──────────────────────────────────────
+  // Practice
   {
     key: 'first_problem',
     title: 'First Solve',
@@ -127,8 +134,7 @@ const DEFS: AchievementDefinition[] = [
     secret: false,
     predicate: (s) => s.difficultySolved.hard >= 1,
   },
-
-  // ─── Projects ──────────────────────────────────────
+  // Projects
   {
     key: 'first_project',
     title: 'Builder',
@@ -159,8 +165,7 @@ const DEFS: AchievementDefinition[] = [
     secret: false,
     predicate: (s) => s.projectsCompleted >= 3,
   },
-
-  // ─── Classes ───────────────────────────────────────
+  // Classes
   {
     key: 'first_class',
     title: 'Class Act',
@@ -181,8 +186,7 @@ const DEFS: AchievementDefinition[] = [
     secret: false,
     predicate: (s) => s.recordingsWatched >= 3,
   },
-
-  // ─── Streaks ───────────────────────────────────────
+  // Streak
   {
     key: 'streak_3',
     title: 'On a Roll',
@@ -213,8 +217,7 @@ const DEFS: AchievementDefinition[] = [
     secret: false,
     predicate: (s) => s.streak >= 30,
   },
-
-  // ─── Secret ────────────────────────────────────────
+  // Milestones
   {
     key: 'xp_1000',
     title: 'Four Digits',
@@ -251,30 +254,36 @@ const DEFS: AchievementDefinition[] = [
 ];
 
 async function buildStats(userId: string): Promise<StatsSnapshot> {
-  const [user, lessonsCompletedAgg, problemsSolvedDistinct, problemsAttempted, projectsStarted, projectsCompleted, classesAttended, recordingsWatched, activityRows] =
-    await Promise.all([
-      User.findById(userId).lean(),
-      Progress.find({ userId }).lean(),
-      Submission.distinct('problemId', { userId, status: 'accepted' }),
-      Submission.distinct('problemId', { userId }),
-      UserProject.countDocuments({ userId }),
-      UserProject.countDocuments({ userId, status: 'completed' }),
-      Activity.countDocuments({ userId, type: 'class_attended' }),
-      Activity.countDocuments({ userId, type: 'recording_watched' }),
-      Activity.find({ userId }).lean(),
-    ]);
+  const [
+    user,
+    progresses,
+    problemsSolvedDistinct,
+    problemsAttempted,
+    projectsStarted,
+    projectsCompleted,
+    classesAttended,
+    recordingsWatched,
+    activityRows,
+  ] = await Promise.all([
+    User.findById(userId).lean(),
+    Progress.find({ userId }).lean(),
+    Submission.distinct('problemId', { userId, status: 'accepted' }),
+    Submission.distinct('problemId', { userId }),
+    UserProject.countDocuments({ userId }),
+    UserProject.countDocuments({ userId, status: 'completed' }),
+    Activity.countDocuments({ userId, type: 'class_attended' }),
+    Activity.countDocuments({ userId, type: 'recording_watched' }),
+    Activity.find({ userId }).select('day').lean(),
+  ]);
 
-  const lessonsCompleted = lessonsCompletedAgg.reduce(
+  const lessonsCompleted = progresses.reduce(
     (sum, p) => sum + (p.completedLessons?.length ?? 0),
     0
   );
-  const differentCourses = lessonsCompletedAgg.filter((p) => (p.completedLessons?.length ?? 0) > 0).length;
+  const differentCourses = progresses.filter(
+    (p) => (p.completedLessons?.length ?? 0) > 0
+  ).length;
 
-  const problemsSolved = problemsSolvedDistinct.length;
-  const problemsAttemptedCount = problemsAttempted.length;
-
-  // Solve by difficulty (requires joining problems)
-  const { Problem } = await import('../models/Problem.model.js');
   const solvedProblems = await Problem.find({ _id: { $in: problemsSolvedDistinct } })
     .select('difficulty')
     .lean();
@@ -283,7 +292,6 @@ async function buildStats(userId: string): Promise<StatsSnapshot> {
     difficultySolved[p.difficulty as 'easy' | 'medium' | 'hard']++;
   }
 
-  // Active days in last 30
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
   const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
@@ -295,8 +303,8 @@ async function buildStats(userId: string): Promise<StatsSnapshot> {
     xp: user?.xp ?? 0,
     streak: user?.streak ?? 0,
     lessonsCompleted,
-    problemsSolved,
-    problemsAttempted: problemsAttemptedCount,
+    problemsSolved: problemsSolvedDistinct.length,
+    problemsAttempted: problemsAttempted.length,
     projectsStarted,
     projectsCompleted,
     classesAttended,
@@ -309,12 +317,12 @@ async function buildStats(userId: string): Promise<StatsSnapshot> {
 
 export const achievementService = {
   /**
-   * Evaluate all achievement definitions against current stats.
-   * Unlock any new ones. Award their XP.
-   * Returns the array of newly-unlocked keys.
+   * Evaluate all achievements for a user. Idempotent — uses a unique index
+   * on {userId, achievementKey} so concurrent calls can't double-award XP.
    */
   async evaluate(userId: string): Promise<string[]> {
     const stats = await buildStats(userId);
+
     const existing = await UserAchievement.find({ userId }).lean();
     const existingSet = new Set(existing.map((e) => e.achievementKey));
 
@@ -323,45 +331,83 @@ export const achievementService = {
 
     for (const def of DEFS) {
       if (existingSet.has(def.key)) continue;
+
+      let passed: boolean;
       try {
-        if (def.predicate(stats)) {
-          await UserAchievement.create({
-            userId,
-            achievementKey: def.key,
-          });
-          newlyUnlocked.push(def.key);
-          totalBonusXp += def.xpReward;
-        }
+        passed = def.predicate(stats);
       } catch (err) {
-        // Likely duplicate key — safe to ignore
+        logger.warn('Achievement predicate threw', {
+          key: def.key,
+          userId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        continue;
+      }
+
+      if (!passed) continue;
+
+      try {
+        await UserAchievement.create({
+          userId,
+          achievementKey: def.key,
+        });
+        newlyUnlocked.push(def.key);
+        totalBonusXp += def.xpReward;
+      } catch (err) {
+        // Duplicate key = another request already unlocked it. Ignore.
+        if (
+          typeof err === 'object' &&
+          err !== null &&
+          'code' in err &&
+          (err as { code?: number }).code === 11000
+        ) {
+          continue;
+        }
+        // Real error — log and continue
+        logger.warn('UserAchievement.create failed', {
+          userId,
+          key: def.key,
+          err: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
     if (totalBonusXp > 0) {
-      await User.findByIdAndUpdate(userId, { $inc: { xp: totalBonusXp } });
+      await User.updateOne({ _id: userId }, { $inc: { xp: totalBonusXp } });
+
+      // Also create Activity rows for the bonus XP so analytics stays in sync
+      // with User.xp. Fire-and-forget.
+      void Promise.all(
+        newlyUnlocked.map((key) =>
+          Activity.create({
+            userId,
+            type: 'project_completed' as never, // fallback
+            refId: key,
+            xp:
+              DEFS.find((d) => d.key === key)?.xpReward ?? 0,
+            day: new Date().toISOString().slice(0, 10),
+          })
+        )
+      ).catch(() => {
+        /* best-effort; ignore */
+      });
     }
 
     return newlyUnlocked;
   },
 
-  /** Ensure achievement definitions exist in DB (idempotent). */
   async seedDefinitions(): Promise<void> {
     for (const def of DEFS) {
       const { predicate, ...rest } = def;
-      await Achievement.updateOne(
-        { key: def.key },
-        { $set: rest },
-        { upsert: true }
-      );
+      void predicate;
+      await Achievement.updateOne({ key: def.key }, { $set: rest }, { upsert: true });
     }
   },
 
-  /** All definitions (for the client). */
   async listDefinitions() {
     return Achievement.find().sort({ category: 1, key: 1 }).lean();
   },
 
-  /** All unlocked achievements for a user. */
   async listUnlocked(userId: string) {
     return UserAchievement.find({ userId }).sort({ unlockedAt: -1 }).lean();
   },

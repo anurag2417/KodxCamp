@@ -21,14 +21,14 @@ export const adminStatsController = {
   }),
 
   setUserRole: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const userId = req.params.userId as string;
+    const { userId } = req.params;
     const { role } = req.body;
     const updated = await adminService.setUserRole(userId, role);
     return ApiResponse.success(res, updated, 'Role updated');
   }),
 
   deleteUser: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const userId = req.params.userId as string;
+    const { userId } = req.params;
     const actorId = req.user!._id.toString();
     const result = await adminService.deleteUser(userId, actorId);
     return ApiResponse.success(res, result, 'User deleted');

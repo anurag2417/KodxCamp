@@ -13,9 +13,6 @@ import { UserAchievement } from '../models/UserAchievement.model.js';
 import { ApiError } from '../utils/ApiError.js';
 
 export const adminService = {
-  /**
-   * Top-level platform stats for the admin dashboard.
-   */
   async platformStats() {
     const since7d = new Date();
     since7d.setDate(since7d.getDate() - 7);
@@ -53,24 +50,20 @@ export const adminService = {
       ClassModel.countDocuments({ status: 'scheduled' }),
       ClassModel.countDocuments({ status: 'ended' }),
       Enrollment.countDocuments({}),
-      Activity.countDocuments({ day: { $gte: since7d.toISOString().slice(0, 10) } }),
+      Activity.countDocuments({
+        day: { $gte: since7d.toISOString().slice(0, 10) },
+      }),
     ]);
 
-    // Daily activity for last 30 days — for the chart
     const activityRows = await Activity.aggregate<{
       _id: string;
       count: number;
     }>([
-      {
-        $match: {
-          day: { $gte: since30d.toISOString().slice(0, 10) },
-        },
-      },
+      { $match: { day: { $gte: since30d.toISOString().slice(0, 10) } } },
       { $group: { _id: '$day', count: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]);
 
-    // Fill gaps
     const dailyActivity: { day: string; count: number }[] = [];
     for (let i = 0; i < 30; i++) {
       const d = new Date(since30d);
@@ -99,7 +92,9 @@ export const adminService = {
         submissions,
         submissionsAccepted,
         acceptanceRate:
-          submissions > 0 ? Math.round((submissionsAccepted / submissions) * 100) : 0,
+          submissions > 0
+            ? Math.round((submissionsAccepted / submissions) * 100)
+            : 0,
         userProjects,
         enrollments,
         activitiesLast7d: activities7d,
@@ -108,16 +103,24 @@ export const adminService = {
     };
   },
 
-  async listUsers(query: { search?: string; role?: string; page?: number; limit?: number }) {
+  async listUsers(query: {
+    search?: string;
+    role?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const { search, role, page = 1, limit = 20 } = query;
     const filter: Record<string, unknown> = {};
+
     if (role && ['student', 'instructor', 'admin'].includes(role)) {
       filter.role = role;
     }
     if (search) {
+      // Escape regex specials to prevent ReDoS
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
+        { name: { $regex: escaped, $options: 'i' } },
+        { email: { $regex: escaped, $options: 'i' } },
       ];
     }
 
@@ -138,7 +141,6 @@ export const adminService = {
     const target = await User.findById(userId).lean();
     if (!target) throw new ApiError(404, 'User not found');
 
-    // Prevent demoting the last admin
     if (target.role === 'admin' && role !== 'admin') {
       const adminCount = await User.countDocuments({ role: 'admin' });
       if (adminCount <= 1) {
@@ -182,5 +184,5 @@ export const adminService = {
     ]);
 
     return { ok: true };
-  }
+  },
 };

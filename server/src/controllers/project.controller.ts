@@ -38,7 +38,10 @@ export const projectController = {
 
   start: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();
-    const result = await projectService.startOrGetUserProject(userId, req.params.slug);
+    const result = await projectService.startOrGetUserProject(
+      userId,
+      req.params.slug
+    );
     return ApiResponse.success(res, result);
   }),
 
@@ -54,7 +57,10 @@ export const projectController = {
 
   complete: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();
-    const result = await projectService.completeUserProject(userId, req.params.slug);
+    const result = await projectService.completeUserProject(
+      userId,
+      req.params.slug
+    );
     return ApiResponse.success(res, result, 'Project completed');
   }),
 

@@ -8,12 +8,20 @@ import classRoutes from './class.routes.js';
 import achievementRoutes from './achievement.routes.js';
 import analyticsRoutes from './analytics.routes.js';
 import adminRoutes from './admin.routes.js';
+import { csrfMiddleware } from '../middleware/csrf.middleware.js';
 
 const router = Router();
 
 router.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'kodxcamp-api', time: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    service: 'kodxcamp-api',
+    time: new Date().toISOString(),
+  });
 });
+
+// CSRF protection for every state-changing request below this line
+router.use(csrfMiddleware);
 
 router.use('/auth', authRoutes);
 router.use('/courses', courseRoutes);

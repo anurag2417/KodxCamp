@@ -1,6 +1,7 @@
 import { Activity, type ActivityType } from '../models/Activity.model.js';
 import { User } from '../models/User.model.js';
 import { achievementService } from './achievement.service.js';
+import { logger } from '../utils/logger.js';
 
 interface RecordInput {
   userId: string;
@@ -26,18 +27,11 @@ function dayDiff(a: string, b: string): number {
 }
 
 export const activityService = {
-  /**
-   * Log an activity. Updates:
-   * - Activity collection (for heatmap, analytics)
-   * - User.xp (increment)
-   * - User.streak (increment if new day, reset if gap)
-   * - Achievement unlocks (delegated)
-   */
   async record(input: RecordInput) {
     const day = todayKey();
     const xp = input.xp ?? 0;
 
-    // 1. Log the activity
+    // 1. Log the activity first (so we never lose the event)
     await Activity.create({
       userId: input.userId,
       type: input.type,
@@ -46,46 +40,57 @@ export const activityService = {
       day,
     });
 
-    // 2. Update user XP + streak
-    const user = await User.findById(input.userId);
+    // 2. Update user XP atomically (no read-modify-write race)
+    if (xp > 0) {
+      await User.updateOne(
+        { _id: input.userId },
+        { $inc: { xp }, $set: { lastActiveAt: new Date() } }
+      );
+    } else {
+      await User.updateOne(
+        { _id: input.userId },
+        { $set: { lastActiveAt: new Date() } }
+      );
+    }
+
+    // 3. Update streak using a Mongo filter that enforces the logic
+    //    client-side. Only touch it if the last active day is different.
+    const user = await User.findById(input.userId).select('lastActiveDay streak').lean();
     if (!user) return;
 
-    if (xp > 0) {
-      user.xp += xp;
-    }
+    const lastDay = user.lastActiveDay;
 
-    const lastDay = user.lastActiveDay; // we'll add this field
     if (lastDay !== day) {
+      let nextStreak: number;
       if (!lastDay) {
-        user.streak = 1;
+        nextStreak = 1;
       } else {
         const diff = dayDiff(lastDay, day);
-        if (diff === 1) {
-          user.streak = (user.streak ?? 0) + 1;
-        } else if (diff > 1) {
-          user.streak = 1;
-        }
-        // diff === 0 handled above
+        if (diff === 1) nextStreak = (user.streak ?? 0) + 1;
+        else if (diff > 1) nextStreak = 1;
+        else nextStreak = user.streak ?? 1; // same day or clock glitch, keep
       }
-      user.lastActiveDay = day;
+
+      // Only update if lastActiveDay still matches what we read — this
+      // makes concurrent streak updates idempotent.
+      await User.updateOne(
+        { _id: input.userId, lastActiveDay: lastDay ?? { $exists: false } },
+        { $set: { lastActiveDay: day, streak: nextStreak } }
+      );
     }
 
-    user.lastActiveAt = new Date();
-    await user.save();
-
-    // 3. Unlock any achievements
-    try {
-      await achievementService.evaluate(input.userId);
-    } catch (err) {
-      // Non-fatal — log but don't break the request
-      console.error('Achievement evaluation failed:', err);
-    }
+    // 4. Fire-and-forget achievements — do NOT await, do NOT block the
+    //    response. Duplicate fires are handled by unique index + catch.
+    void achievementService
+      .evaluate(input.userId)
+      .catch((err) =>
+        logger.error('Achievement evaluation failed', {
+          userId: input.userId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      );
   },
 
-  /**
-   * Aggregate activity for the last N days (default 365) as
-   * [{ day: 'YYYY-MM-DD', count, xp }]. Missing days = 0.
-   */
   async heatmap(userId: string, days = 365) {
     const from = new Date();
     from.setDate(from.getDate() - days + 1);
@@ -118,9 +123,6 @@ export const activityService = {
     return out;
   },
 
-  /**
-   * Per-week XP for last N weeks (for analytics chart).
-   */
   async weeklyXp(userId: string, weeks = 12) {
     const days = weeks * 7;
     const data = await this.heatmap(userId, days);
@@ -136,9 +138,6 @@ export const activityService = {
     return out;
   },
 
-  /**
-   * Count of distinct days the user was active within the last N days.
-   */
   async activeDaysCount(userId: string, days = 30) {
     const from = new Date();
     from.setDate(from.getDate() - days + 1);

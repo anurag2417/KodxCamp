@@ -5,7 +5,15 @@ import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 
 async function bootstrap() {
-  await connectDB();
+  try {
+    await connectDB();
+  } catch (err) {
+    logger.error('Failed to connect to MongoDB', {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    process.exit(1);
+  }
+
   const app = createApp();
 
   const server = app.listen(env.PORT, () => {
@@ -22,7 +30,6 @@ async function bootstrap() {
     shuttingDown = true;
     logger.info(`${signal} received — shutting down gracefully`);
 
-    // Force-exit fallback if graceful shutdown hangs
     const killTimer = setTimeout(() => {
       logger.error('Forced shutdown after 10s');
       process.exit(1);
@@ -35,14 +42,18 @@ async function bootstrap() {
       });
       logger.info('HTTP server closed');
     } catch (err) {
-      logger.error('Error closing HTTP server', { err });
+      logger.error('Error closing HTTP server', {
+        err: err instanceof Error ? err.message : String(err),
+      });
     }
 
     try {
       await mongoose.disconnect();
       logger.info('MongoDB disconnected');
     } catch (err) {
-      logger.error('Error disconnecting MongoDB', { err });
+      logger.error('Error disconnecting MongoDB', {
+        err: err instanceof Error ? err.message : String(err),
+      });
     }
 
     clearTimeout(killTimer);
@@ -53,7 +64,9 @@ async function bootstrap() {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 
   process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled promise rejection', { reason });
+    logger.error('Unhandled promise rejection', {
+      reason: reason instanceof Error ? reason.message : String(reason),
+    });
   });
 
   process.on('uncaughtException', (err) => {
@@ -66,6 +79,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  logger.error('Fatal startup error', { err });
+  console.error('Fatal startup error', err);
   process.exit(1);
 });
