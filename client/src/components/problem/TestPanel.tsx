@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -29,24 +29,39 @@ export const TestPanel: React.FC<Props> = ({
   const [activeIdx, setActiveIdx] = useState(0);
   const [open, setOpen] = useState(true);
 
-  // Auto-switch to result tab when results arrive
   const showingResult = !!results && results.length > 0;
+
+  // Auto-switch to result tab when results arrive
+  useEffect(() => {
+    if (showingResult) setTab('result');
+  }, [showingResult]);
 
   return (
     <div
       className={cn(
-        'flex flex-col overflow-hidden border-t border-border bg-surface',
+        'flex flex-col overflow-hidden border-t border-border bg-surface transition-[height] duration-200',
         open ? 'h-full' : 'h-11'
       )}
     >
       {/* Header */}
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-surface-secondary px-3">
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setTab('testcase')}
+            className={cn(
+              'rounded-md px-2.5 py-1 text-xs font-medium panel-transition',
+              tab === 'testcase'
+                ? 'bg-surface text-text-primary'
+                : 'text-text-muted hover:text-text-secondary'
+            )}
+          >
+            Testcase
+          </button>
           {showingResult && (
             <button
               onClick={() => setTab('result')}
               className={cn(
-                'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                'rounded-md px-2.5 py-1 text-xs font-medium panel-transition',
                 tab === 'result'
                   ? 'bg-surface text-text-primary'
                   : 'text-text-muted hover:text-text-secondary'
@@ -54,7 +69,10 @@ export const TestPanel: React.FC<Props> = ({
             >
               <span className="inline-flex items-center gap-1.5">
                 {accepted ? (
-                  <CheckCircle2 size={12} className="text-[var(--color-success)]" />
+                  <CheckCircle2
+                    size={12}
+                    className="text-[var(--color-success)]"
+                  />
                 ) : (
                   <XCircle size={12} className="text-[var(--color-error)]" />
                 )}
@@ -62,22 +80,11 @@ export const TestPanel: React.FC<Props> = ({
               </span>
             </button>
           )}
-          <button
-            onClick={() => setTab('testcase')}
-            className={cn(
-              'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-              tab === 'testcase' && !running
-                ? 'bg-surface text-text-primary'
-                : 'text-text-muted hover:text-text-secondary'
-            )}
-          >
-            Testcase
-          </button>
         </div>
 
         <button
           onClick={() => setOpen((v) => !v)}
-          className="rounded-md p-1 text-text-muted hover:bg-surface-tertiary hover:text-text-secondary"
+          className="rounded-md p-1 text-text-muted transition-colors hover:bg-surface-tertiary hover:text-text-secondary"
           title={open ? 'Collapse' : 'Expand'}
         >
           {open ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -118,14 +125,13 @@ const TestCaseView: React.FC<{
 
   return (
     <div>
-      {/* Test case selector tabs */}
       <div className="mb-3 flex flex-wrap gap-1">
         {testCases.map((_, i) => (
           <button
             key={i}
             onClick={() => onChange(i)}
             className={cn(
-              'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+              'rounded-md px-2.5 py-1 text-xs font-medium panel-transition',
               i === activeIdx
                 ? 'bg-surface-tertiary text-text-primary'
                 : 'text-text-muted hover:bg-surface-secondary hover:text-text-secondary'
@@ -168,7 +174,7 @@ const ResultView: React.FC<{
   const passedCount = results.filter((r) => r.passed).length;
 
   return (
-    <div>
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
       {accepted ? (
         <div className="mb-4 rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-3">
           <p className="text-sm font-bold text-[var(--color-success)]">
@@ -195,15 +201,16 @@ const ResultView: React.FC<{
       )}
 
       <div className="space-y-2">
-        {results.map((r) => (
+        {results.map((r, i) => (
           <div
             key={r.index}
             className={cn(
-              'rounded-lg border p-3 text-xs',
+              'rounded-lg border p-3 text-xs opacity-0 animate-in fade-in slide-in-from-bottom-1',
               r.passed
                 ? 'border-[var(--color-success)]/30 bg-[var(--color-success)]/5'
                 : 'border-[var(--color-error)]/30 bg-[var(--color-error)]/5'
             )}
+            style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'forwards' }}
           >
             <div className="flex items-center justify-between">
               <span className="font-semibold text-text-primary">

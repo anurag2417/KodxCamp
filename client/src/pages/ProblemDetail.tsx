@@ -4,6 +4,9 @@ import { ArrowLeft } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useProblem } from '../hooks/useProblem';
 import { runTests, type TestResult } from '../lib/runner/testHarness';
+import {
+  preloadPython,
+} from '../lib/runner/pythonRunner';
 import { problemsApi, type ApiSubmission } from '../lib/problems.api';
 import { useAuthStore } from '../store/auth.store';
 import { Spinner } from '../components/ui/Spinner';
@@ -12,6 +15,7 @@ import { CodeEditor } from '../components/editor/CodeEditor';
 import { ProblemPanel } from '../components/problem/ProblemPanel';
 import { TestPanel } from '../components/problem/TestPanel';
 import { EditorToolbar } from '../components/problem/EditorToolbar';
+import { AcceptanceOverlay } from '../components/problem/AcceptanceOverlay';
 
 const LANGUAGES = ['javascript', 'python'] as const;
 type Lang = (typeof LANGUAGES)[number];
@@ -25,9 +29,16 @@ export const ProblemDetail: React.FC = () => {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<TestResult[]>();
-  const [accepted, setAccepted] = useState<boolean>(false);
+  const [accepted, setAccepted] = useState(false);
   const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
+  const [showAcceptance, setShowAcceptance] = useState(false);
+  const [pyReady, setPyReady] = useState(false);
+
+  // Preload Python in the background so first run is fast
+  useEffect(() => {
+    void preloadPython().then(() => setPyReady(true));
+  }, []);
 
   useEffect(() => {
     if (!problem) return;
@@ -74,8 +85,12 @@ export const ProblemDetail: React.FC = () => {
         });
         const fresh = await problemsApi.submissions(problem._id);
         setSubmissions(fresh);
+
+        if (summary.allPassed) {
+          setShowAcceptance(true);
+        }
       } catch {
-        /* surfaced via the result tab */
+        /* surfaced in the result tab */
       }
     }
 
@@ -111,55 +126,63 @@ export const ProblemDetail: React.FC = () => {
   }
 
   return (
-    <div className="flex h-[calc(100vh-64px)] w-full">
-      <PanelGroup direction="horizontal" className="h-full flex-1">
-        {/* Left: problem panel */}
-        <Panel defaultSize={42} minSize={28}>
-          <div className="h-full bg-bg">
-            <ProblemPanel problem={problem} submissions={submissions} />
-          </div>
-        </Panel>
+    <>
+      <div className="flex h-[calc(100vh-64px)] w-full">
+        <PanelGroup direction="horizontal" className="h-full flex-1">
+          <Panel defaultSize={42} minSize={28}>
+            <div className="h-full bg-bg">
+              <ProblemPanel problem={problem} submissions={submissions} />
+            </div>
+          </Panel>
 
-        <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
+          <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
 
-        {/* Right: editor + tests */}
-        <Panel defaultSize={58} minSize={35}>
-          <PanelGroup direction="vertical">
-            <Panel defaultSize={65} minSize={30}>
-              <div className="flex h-full flex-col bg-surface">
-                <EditorToolbar
-                  languages={LANGUAGES}
-                  language={language}
-                  onLanguageChange={(l) => setLanguage(l as Lang)}
-                  onRun={() => void execute(false)}
-                  onSubmit={() => void execute(true)}
-                  running={busy}
-                  canSubmit={!!user}
-                />
-                <div className="flex-1">
-                  <CodeEditor
+          <Panel defaultSize={58} minSize={35}>
+            <PanelGroup direction="vertical">
+              <Panel defaultSize={65} minSize={30}>
+                <div className="flex h-full flex-col bg-surface">
+                  <EditorToolbar
+                    languages={LANGUAGES}
                     language={language}
-                    value={code}
-                    onChange={setCode}
+                    onLanguageChange={(l) => setLanguage(l as Lang)}
+                    onRun={() => void execute(false)}
+                    onSubmit={() => void execute(true)}
+                    running={busy}
+                    canSubmit={!!user}
+                    pyReady={pyReady}
                   />
+                  <div className="flex-1">
+                    <CodeEditor
+                      language={language}
+                      value={code}
+                      onChange={setCode}
+                    />
+                  </div>
                 </div>
-              </div>
-            </Panel>
+              </Panel>
 
-            <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-brand-500" />
+              <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-brand-500" />
 
-            <Panel defaultSize={35} minSize={15}>
-              <TestPanel
-                testCases={testCases}
-                results={results}
-                running={busy}
-                accepted={accepted}
-                totalRuntimeMs={totalRuntimeMs}
-              />
-            </Panel>
-          </PanelGroup>
-        </Panel>
-      </PanelGroup>
-    </div>
+              <Panel defaultSize={35} minSize={15}>
+                <TestPanel
+                  testCases={testCases}
+                  results={results}
+                  running={busy}
+                  accepted={accepted}
+                  totalRuntimeMs={totalRuntimeMs}
+                />
+              </Panel>
+            </PanelGroup>
+          </Panel>
+        </PanelGroup>
+      </div>
+
+      <AcceptanceOverlay
+        open={showAcceptance}
+        runtimeMs={totalRuntimeMs}
+        language={language}
+        onClose={() => setShowAcceptance(false)}
+      />
+    </>
   );
 };
