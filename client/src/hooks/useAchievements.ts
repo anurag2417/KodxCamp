@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { achievementsApi, type ApiAchievement } from '../lib/achievements.api';
 
 export function useAchievements() {
@@ -6,22 +6,22 @@ export function useAchievements() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await achievementsApi.mine();
-        if (!cancelled) setAchievements(data);
-      } catch {
-        if (!cancelled) setError('Failed to load achievements');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await achievementsApi.mine();
+      setAchievements(data);
+    } catch {
+      setError('Failed to load achievements');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { achievements, loading, error };
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { achievements, loading, error, reload };
 }

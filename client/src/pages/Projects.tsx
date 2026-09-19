@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useProjects } from '../hooks/useProjects';
 import { ProjectCard } from '../components/project/ProjectCard';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { cn } from '../lib/utils';
 import type { ProjectCategory } from '../lib/projects.api';
 
@@ -18,7 +19,7 @@ const filters: { label: string; value: Filter }[] = [
 ];
 
 export const Projects: React.FC = () => {
-  const { projects, loading, error } = useProjects();
+  const { projects, loading, error, reload } = useProjects();
   const [filter, setFilter] = useState<Filter>('all');
 
   const filtered = useMemo(() => {
@@ -59,21 +60,23 @@ export const Projects: React.FC = () => {
       )}
 
       {error && (
-        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
-          {error}
-        </div>
+        <ErrorState
+          title="Couldn't load projects"
+          message={error}
+          onRetry={reload}
+        />
       )}
 
-      {!loading && !error && (
+      {!loading && !error && filtered.length === 0 && (
+        <p className="text-text-muted">No projects in this category yet.</p>
+      )}
+
+      {!loading && !error && filtered.length > 0 && (
         <div className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((p) => (
             <ProjectCard key={p._id} project={p} />
           ))}
         </div>
-      )}
-
-      {!loading && !error && filtered.length === 0 && (
-        <p className="text-text-muted">No projects in this category yet.</p>
       )}
     </div>
   );

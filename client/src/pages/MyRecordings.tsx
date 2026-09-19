@@ -1,20 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, PlayCircle } from 'lucide-react';
 import { classesApi, type ApiMyRecording } from '../lib/classes.api';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 
 export const MyRecordings: React.FC = () => {
   const [rows, setRows] = useState<ApiMyRecording[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await classesApi.myRecordings();
+      setRows(data);
+    } catch {
+      setError('Failed to load your recordings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    classesApi
-      .myRecordings()
-      .then(setRows)
-      .finally(() => setLoading(false));
-  }, []);
+    void reload();
+  }, [reload]);
 
   return (
     <div className="w-full p-6 lg:p-8">
@@ -36,25 +48,40 @@ export const MyRecordings: React.FC = () => {
         </div>
       )}
 
-      {!loading && rows.length === 0 && (
+      {error && (
+        <ErrorState
+          title="Couldn't load your recordings"
+          message={error}
+          onRetry={reload}
+          className="mt-8"
+        />
+      )}
+
+      {!loading && !error && rows.length === 0 && (
         <Card className="mt-8 p-8 text-center">
           <p className="text-sm text-text-muted">
             No recordings yet. Enroll in a class to see its recordings here.
           </p>
-          <Link to="/classes" className="mt-4 inline-block text-brand-500 hover:underline">
+          <Link
+            to="/classes"
+            className="mt-4 inline-block text-brand-500 hover:underline"
+          >
             Browse classes →
           </Link>
         </Card>
       )}
 
-      {!loading && rows.length > 0 && (
+      {!loading && !error && rows.length > 0 && (
         <div className="mt-6 flex flex-col gap-3">
           {rows.map((r) => (
             <Link key={r.class._id} to={`/classes/${r.class.slug}`}>
               <Card className="flex items-center gap-4 p-4 transition-all hover:border-brand-500/60">
                 <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-surface-tertiary">
                   {r.recordingCompletedAt ? (
-                    <CheckCircle2 size={22} className="text-[var(--color-success)]" />
+                    <CheckCircle2
+                      size={22}
+                      className="text-[var(--color-success)]"
+                    />
                   ) : (
                     <PlayCircle size={22} className="text-brand-500" />
                   )}

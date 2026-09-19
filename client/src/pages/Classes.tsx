@@ -4,6 +4,7 @@ import { useClasses } from '../hooks/useClasses';
 import { ClassCard } from '../components/class/ClassCard';
 import { ClassForm } from '../components/class/ClassForm';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { useAuthStore } from '../store/auth.store';
@@ -15,10 +16,11 @@ type Tab = 'upcoming' | 'past';
 export const Classes: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const [tab, setTab] = useState<Tab>('upcoming');
-  const { classes, setClasses, loading, error } = useClasses(tab);
+  const { classes, setClasses, loading, error, reload } = useClasses(tab);
   const [showForm, setShowForm] = useState(false);
 
-  const isInstructor = user?.role === 'instructor' || user?.role === 'admin';
+  const isInstructor =
+    user?.role === 'instructor' || user?.role === 'admin';
 
   return (
     <div className="w-full p-6 lg:p-8">
@@ -76,21 +78,23 @@ export const Classes: React.FC = () => {
       )}
 
       {error && (
-        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
-          {error}
-        </div>
+        <ErrorState
+          title="Couldn't load classes"
+          message={error}
+          onRetry={reload}
+        />
       )}
 
-      {!loading && !error && (
+      {!loading && !error && classes.length === 0 && (
+        <p className="text-text-muted">No {tab} classes yet.</p>
+      )}
+
+      {!loading && !error && classes.length > 0 && (
         <div className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {classes.map((c) => (
             <ClassCard key={c._id} classItem={c} />
           ))}
         </div>
-      )}
-
-      {!loading && !error && classes.length === 0 && (
-        <p className="text-text-muted">No {tab} classes yet.</p>
       )}
     </div>
   );

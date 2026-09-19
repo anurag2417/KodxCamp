@@ -1,21 +1,28 @@
 import { Link } from 'react-router-dom';
-import {
-  BookOpen, Zap, Rocket, Video, Flame, Trophy, Clock,
-} from 'lucide-react';
+import { BookOpen, Zap, Rocket, Video, Flame, Trophy, Clock } from 'lucide-react';
 import { useProgressOverview } from '../hooks/useProgressOverview';
+import { useAuthStore } from '../store/auth.store';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { Card } from '../components/ui/Card';
 import { StatCard } from '../components/progress/StatCard';
 import { XPBar } from '../components/progress/XPBar';
 import { StreakFlame } from '../components/progress/StreakFlame';
 import { ActivityHeatmap } from '../components/progress/ActivityHeatmap';
-import { ProgressRing } from '../components/progress/ProgressRing';
-import { useAuthStore } from '../store/auth.store';
 
 export const Progress: React.FC = () => {
-  const user = useAuthStore((state) => state.user);
-  const { overview, courses, difficulty, weekly, heatmap, activity, loading, error } =
-    useProgressOverview();
+  const user = useAuthStore((s) => s.user);
+  const {
+    overview,
+    courses,
+    difficulty,
+    weekly,
+    heatmap,
+    activity,
+    loading,
+    error,
+    reload,
+  } = useProgressOverview();
 
   if (loading) {
     return (
@@ -27,15 +34,23 @@ export const Progress: React.FC = () => {
 
   if (error || !overview) {
     return (
-      <div className="w-full p-8">
-        <p className="text-[var(--color-error)]">{error ?? 'Failed to load'}</p>
+      <div className="w-full p-6 lg:p-8">
+        <h1 className="text-3xl font-bold text-text-primary">Your Progress</h1>
+        <div className="mt-6">
+          <ErrorState
+            title="Couldn't load your progress"
+            message={error ?? 'Failed to load'}
+            onRetry={reload}
+          />
+        </div>
       </div>
     );
   }
 
   const maxWeekXp = Math.max(1, ...weekly.map((w) => w.xp));
-  const totalSolved =
-    difficulty ? difficulty.easy + difficulty.medium + difficulty.hard : 0;
+  const totalSolved = difficulty
+    ? difficulty.easy + difficulty.medium + difficulty.hard
+    : 0;
 
   return (
     <div className="w-full p-6 lg:p-8">
@@ -106,9 +121,7 @@ export const Progress: React.FC = () => {
               <div key={i} className="flex flex-1 flex-col items-center gap-1">
                 <div
                   className="w-full rounded-t bg-brand-500 transition-all"
-                  style={{
-                    height: `${Math.max(4, (w.xp / maxWeekXp) * 100)}%`,
-                  }}
+                  style={{ height: `${Math.max(4, (w.xp / maxWeekXp) * 100)}%` }}
                   title={`${w.xp} XP · ${w.activities} activities`}
                 />
                 <span className="text-[9px] text-text-muted">
@@ -124,11 +137,15 @@ export const Progress: React.FC = () => {
             Difficulty Breakdown
           </h2>
           {totalSolved === 0 ? (
-            <p className="text-sm text-text-muted">Solve problems to see stats.</p>
+            <p className="text-sm text-text-muted">
+              Solve problems to see stats.
+            </p>
           ) : (
             <div className="flex flex-col items-center gap-6">
               <div className="flex flex-col items-center">
-                <span className="text-4xl font-bold text-brand-500">{totalSolved}</span>
+                <span className="text-4xl font-bold text-brand-500">
+                  {totalSolved}
+                </span>
                 <span className="mt-1 text-xs text-text-muted">solved</span>
               </div>
               <div className="w-full space-y-3">
@@ -181,7 +198,9 @@ export const Progress: React.FC = () => {
                 className="flex items-center gap-4 rounded-lg p-3 transition-colors hover:bg-surface-secondary"
               >
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-text-primary">{c.title}</p>
+                  <p className="text-sm font-medium text-text-primary">
+                    {c.title}
+                  </p>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-tertiary">
                     <div
                       className="h-full rounded-full bg-brand-500"
@@ -205,7 +224,7 @@ export const Progress: React.FC = () => {
           {activity.length === 0 && (
             <p className="text-sm text-text-muted">No activity yet.</p>
           )}
-          <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+          <div className="flex max-h-80 flex-col gap-2 overflow-y-auto">
             {activity.slice(0, 10).map((a) => (
               <div
                 key={a._id}
@@ -242,7 +261,9 @@ export const Progress: React.FC = () => {
           <Card className="flex items-center gap-3 p-5 transition-all hover:border-brand-500/60">
             <Trophy size={28} className="text-brand-500" />
             <div>
-              <p className="text-sm font-semibold text-text-primary">Achievements</p>
+              <p className="text-sm font-semibold text-text-primary">
+                Achievements
+              </p>
               <p className="text-xs text-text-muted">View your badges</p>
             </div>
           </Card>
@@ -260,7 +281,9 @@ export const Progress: React.FC = () => {
           <Card className="flex items-center gap-3 p-5 transition-all hover:border-brand-500/60">
             <Zap size={28} className="text-brand-500" />
             <div>
-              <p className="text-sm font-semibold text-text-primary">Practice More</p>
+              <p className="text-sm font-semibold text-text-primary">
+                Practice More
+              </p>
               <p className="text-xs text-text-muted">Solve another problem</p>
             </div>
           </Card>

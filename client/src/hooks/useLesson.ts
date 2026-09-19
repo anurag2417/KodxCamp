@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   coursesApi,
   type ApiCourse,
@@ -13,24 +13,23 @@ export function useLesson(courseSlug?: string, lessonSlug?: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!courseSlug || !lessonSlug) return;
-    let cancelled = false;
     setLoading(true);
-    (async () => {
-      try {
-        const result = await coursesApi.getLesson(courseSlug, lessonSlug);
-        if (!cancelled) setData(result);
-      } catch {
-        if (!cancelled) setError('Lesson not found');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setError(null);
+    try {
+      const result = await coursesApi.getLesson(courseSlug, lessonSlug);
+      setData(result);
+    } catch {
+      setError('Lesson not found');
+    } finally {
+      setLoading(false);
+    }
   }, [courseSlug, lessonSlug]);
 
-  return { data, loading, error };
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { data, loading, error, reload };
 }

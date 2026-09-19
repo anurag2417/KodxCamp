@@ -1,96 +1,87 @@
 import type { RunResult, RunnerOptions } from './types';
 
-interface PyodideInstance {
-  runPythonAsync: (code: string) => Promise<unknown>;
-  setStdout: (opts: { batched: (s: string) => void }) => void;
-  setStderr: (opts: { batched: (s: string) => void }) => void;
-}
-
-const PYODIDE_VERSION = '0.26.2';
-const PYODIDE_BASE = `/pyodide/v${PYODIDE_VERSION}/`;
-
-let pyodidePromise: Promise<PyodideInstance> | null = null;
-
-async function getPyodide(): Promise<PyodideInstance> {
-  if (!pyodidePromise) {
-    pyodidePromise = (async () => {
-      // Load the runtime script from our own origin (public/pyodide/v0.26.2/)
-      // Vite serves it with correct MIME in dev; Express serves it in prod.
-      await new Promise<void>((resolve, reject) => {
-        if ((window as unknown as { loadPyodide?: unknown }).loadPyodide) {
-          resolve();
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = `${PYODIDE_BASE}pyodide.js`;
-        script.onload = () => resolve();
-        script.onerror = () =>
-          reject(new Error('Failed to load Pyodide runtime script'));
-        document.head.appendChild(script);
-      });
-
-      const loadPyodide = (
-        window as unknown as {
-          loadPyodide: (opts: { indexURL: string }) => Promise<PyodideInstance>;
-        }
-      ).loadPyodide;
-
-      const py = await loadPyodide({ indexURL: PYODIDE_BASE });
-      return py;
-    })();
-  }
-  return pyodidePromise;
-}
-
+/**
+ * Runs Python code in a dedicated Web Worker.
+ *
+ * The worker loads Pyodide (WASM CPython). On timeout we terminate the
+ * worker — this kills running code even inside infinite loops. The next
+ * call spawns a fresh worker.
+ */
 export async function runPython(
   code: string,
   opts: RunnerOptions = {}
 ): Promise<RunResult> {
-  const timeoutMs = opts.timeoutMs ?? 8000;
-  const start = performance.now();
+  const timeoutMs = opts.timeoutMs ?? 10_000;
 
-  const py = await getPyodide();
+  const WorkerCtor = (await import('./py.worker?worker')).default;
+  const worker = new WorkerCtor();
 
-  const stdoutChunks: string[] = [];
-  const stderrChunks: string[] = [];
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  py.setStdout({ batched: (s) => stdoutChunks.push(s) });
-  py.setStderr({ batched: (s) => stderrChunks.push(s) });
+  return new Promise<RunResult>((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let finished = false;
 
-  const timeoutPromise = new Promise<'__timeout__'>((resolve) =>
-    setTimeout(() => resolve('__timeout__'), timeoutMs)
-  );
+    const finish = (result: RunResult) => {
+      if (finished) return;
+      finished = true;
+      worker.terminate();
+      resolve(result);
+    };
 
-  try {
-    const result = await Promise.race([py.runPythonAsync(code), timeoutPromise]);
-    const runtimeMs = Math.round(performance.now() - start);
-
-    if (result === '__timeout__') {
-      return {
+    const timer = setTimeout(() => {
+      finish({
         ok: false,
-        stdout: stdoutChunks.join('\n'),
-        stderr: `Time limit exceeded (${timeoutMs}ms)`,
+        stdout,
+        stderr: stderr || `Time limit exceeded (${timeoutMs}ms)`,
         verdict: 'time_limit_exceeded',
-        runtimeMs,
-      };
-    }
+        runtimeMs: timeoutMs,
+      });
+    }, timeoutMs);
 
-    return {
-      ok: true,
-      stdout: stdoutChunks.join('\n'),
-      stderr: stderrChunks.join('\n'),
-      verdict: 'accepted',
-      runtimeMs,
+    worker.onmessage = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg.requestId !== requestId) return;
+
+      if (msg.type === 'stdout' && typeof msg.text === 'string') {
+        stdout += (stdout ? '\n' : '') + msg.text;
+      } else if (msg.type === 'stderr' && typeof msg.text === 'string') {
+        stderr += (stderr ? '\n' : '') + msg.text;
+      } else if (msg.type === 'done') {
+        clearTimeout(timer);
+        finish({
+          ok: true,
+          stdout,
+          stderr,
+          verdict: 'accepted',
+          runtimeMs: msg.runtimeMs ?? 0,
+        });
+      } else if (msg.type === 'error') {
+        clearTimeout(timer);
+        const verdict =
+          msg.kind === 'syntax' ? 'compile_error' : 'runtime_error';
+        finish({
+          ok: false,
+          stdout,
+          stderr: stderr || msg.text || 'Runtime error',
+          verdict,
+          runtimeMs: msg.runtimeMs ?? 0,
+        });
+      }
     };
-  } catch (err) {
-    const runtimeMs = Math.round(performance.now() - start);
-    const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    return {
-      ok: false,
-      stdout: stdoutChunks.join('\n'),
-      stderr: stderrChunks.join('\n') + (stderrChunks.length ? '\n' : '') + msg,
-      verdict: 'runtime_error',
-      runtimeMs,
+
+    worker.onerror = (err) => {
+      clearTimeout(timer);
+      finish({
+        ok: false,
+        stdout,
+        stderr: err.message || 'Worker error',
+        verdict: 'runtime_error',
+        runtimeMs: 0,
+      });
     };
-  }
+
+    worker.postMessage({ type: 'run', code, requestId });
+  });
 }

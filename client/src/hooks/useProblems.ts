@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { problemsApi, type ApiProblemSummary } from '../lib/problems.api';
 
 export function useProblems() {
@@ -6,22 +6,22 @@ export function useProblems() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await problemsApi.list();
-        if (!cancelled) setProblems(data);
-      } catch {
-        if (!cancelled) setError('Failed to load problems');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await problemsApi.list();
+      setProblems(data);
+    } catch {
+      setError('Failed to load problems');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { problems, loading, error };
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { problems, loading, error, reload };
 }

@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import { z } from 'zod';
 import { classService } from '../services/class.service.js';
+import { storageService } from '../services/storage.service.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -22,7 +23,6 @@ export const createClassSchema = z.object({
     description: z.string().max(2000).default(''),
     scheduledAt: z.string().min(1),
     durationMinutes: z.number().int().min(5).max(480).default(60),
-    // REQUIRED — no auto-generated fake links
     meetLink: z.string().url('A valid Google Meet URL is required'),
     courseId: z.string().optional(),
   }),
@@ -43,7 +43,6 @@ export const updateClassSchema = z.object({
 export const watchProgressSchema = z.object({
   params: z.object({ slug: z.string().min(1) }),
   body: z.object({
-    // Cap to 24 hours — sanity bound against client bugs
     watchedSeconds: z.number().min(0).max(86400),
     durationSec: z.number().min(0).max(86400),
   }),
@@ -52,14 +51,15 @@ export const watchProgressSchema = z.object({
 export const classController = {
   list: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?._id.toString();
-    const scope = (req.query.scope as 'upcoming' | 'past' | 'all' | undefined) ?? 'all';
+    const scope =
+      (req.query.scope as 'upcoming' | 'past' | 'all' | undefined) ?? 'all';
     const classes = await classService.list({ scope }, userId);
     return ApiResponse.success(res, classes);
   }),
 
   getBySlug: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?._id.toString();
-    const data = await classService.getBySlug(req.params.slug as string, userId);
+    const data = await classService.getBySlug(req.params.slug, userId);
     return ApiResponse.success(res, data);
   }),
 
@@ -78,7 +78,7 @@ export const classController = {
   update: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
     const updated = await classService.update(
-      req.params.slug as string,
+      req.params.slug,
       user._id.toString(),
       req.body
     );
@@ -87,19 +87,28 @@ export const classController = {
 
   enroll: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
-    const result = await classService.enroll(req.params.slug as string, user._id.toString());
+    const result = await classService.enroll(
+      req.params.slug,
+      user._id.toString()
+    );
     return ApiResponse.success(res, result, 'Enrolled');
   }),
 
   unenroll: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
-    const result = await classService.unenroll(req.params.slug as string, user._id.toString());
+    const result = await classService.unenroll(
+      req.params.slug,
+      user._id.toString()
+    );
     return ApiResponse.success(res, result, 'Left class');
   }),
 
   attend: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
-    const result = await classService.markAttended(req.params.slug as string, user._id.toString());
+    const result = await classService.markAttended(
+      req.params.slug,
+      user._id.toString()
+    );
     return ApiResponse.success(res, result, 'Attendance recorded');
   }),
 
@@ -107,7 +116,7 @@ export const classController = {
     const user = req.user!;
     const { watchedSeconds, durationSec } = req.body;
     const result = await classService.updateWatchProgress(
-      req.params.slug as string,
+      req.params.slug,
       user._id.toString(),
       watchedSeconds,
       durationSec
@@ -118,7 +127,21 @@ export const classController = {
   myRecordings: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
     const list = await classService.listMyRecordings(user._id.toString());
-    return ApiResponse.success(res, list);
+
+    // Convert stored URLs to absolute URLs (respects PUBLIC_UPLOAD_BASE_URL)
+    const withAbsolute = list.map((item) => ({
+      ...item,
+      class: {
+        ...item.class,
+        recording: item.class.recording
+          ? {
+              ...item.class.recording,
+              url: storageService.toAbsoluteUrl(item.class.recording.url),
+            }
+          : undefined,
+      },
+    }));
+    return ApiResponse.success(res, withAbsolute);
   }),
 
   uploadRecording: asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -128,15 +151,20 @@ export const classController = {
     }
     if (!req.file) throw new ApiError(400, 'No file uploaded');
 
-    const slug = req.params.slug as string;
+    const { slug } = req.params;
     const durationSec = Number(req.body.durationSec ?? 0);
-    const url = `/uploads/recordings/${req.file.filename}`;
 
-    const updated = await classService.attachRecording(slug, user._id.toString(), {
-      url,
-      durationSec,
-      sizeBytes: req.file.size,
-    });
+    const stored = await storageService.saveRecording(req.file);
+
+    const updated = await classService.attachRecording(
+      slug,
+      user._id.toString(),
+      {
+        url: stored.url,
+        durationSec,
+        sizeBytes: stored.size,
+      }
+    );
 
     return ApiResponse.success(res, updated, 'Recording uploaded', 201);
   }),

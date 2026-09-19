@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { projectsApi, type ApiProjectFull } from '../lib/projects.api';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { CategoryBadge } from '../components/project/CategoryBadge';
 import { Badge } from '../components/ui/Badge';
 
@@ -18,13 +19,24 @@ interface Row {
 export const MyProjects: React.FC = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await projectsApi.mine();
+      setRows(data as Row[]);
+    } catch {
+      setError('Failed to load your projects');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    projectsApi
-      .mine()
-      .then((data) => setRows(data as Row[]))
-      .finally(() => setLoading(false));
-  }, []);
+    void reload();
+  }, [reload]);
 
   return (
     <div className="w-full p-6 lg:p-8">
@@ -46,16 +58,29 @@ export const MyProjects: React.FC = () => {
         </div>
       )}
 
-      {!loading && rows.length === 0 && (
+      {error && (
+        <ErrorState
+          title="Couldn't load your projects"
+          message={error}
+          onRetry={reload}
+          className="mt-8"
+        />
+      )}
+
+      {!loading && !error && rows.length === 0 && (
         <div className="mt-8 rounded-xl border border-border bg-surface p-8 text-center">
-          <p className="text-sm text-text-muted">You haven't started any projects yet.</p>
+          <p className="text-sm text-text-muted">
+            You haven't started any projects yet.
+          </p>
           <Link to="/projects" className="mt-4 inline-block">
-            <span className="text-brand-500 hover:underline">Browse projects →</span>
+            <span className="text-brand-500 hover:underline">
+              Browse projects →
+            </span>
           </Link>
         </div>
       )}
 
-      {!loading && rows.length > 0 && (
+      {!loading && !error && rows.length > 0 && (
         <div className="mt-6 flex flex-col gap-3">
           {rows.map((r) => (
             <Link key={r._id} to={`/projects/${r.project.slug}`}>

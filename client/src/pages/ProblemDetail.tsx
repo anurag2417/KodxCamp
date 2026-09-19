@@ -8,6 +8,7 @@ import { problemsApi, type ApiSubmission } from '../lib/problems.api';
 import { useAuthStore } from '../store/auth.store';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { CodeEditor } from '../components/editor/CodeEditor';
 import { Console } from '../components/editor/Console';
 import { RunBar } from '../components/editor/RunBar';
@@ -21,7 +22,7 @@ type Lang = (typeof availableLanguages)[number];
 
 export const ProblemDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
-  const { problem, loading, error } = useProblem(slug);
+  const { problem, loading, error, reload } = useProblem(slug);
   const user = useAuthStore((s) => s.user);
 
   const [language, setLanguage] = useState<Lang>('javascript');
@@ -46,7 +47,7 @@ export const ProblemDetail: React.FC = () => {
 
   useEffect(() => {
     if (!user || !problem) return;
-    problemsApi.submissions(problem._id).then(setSubmissions).catch(() => { });
+    problemsApi.submissions(problem._id).then(setSubmissions).catch(() => {});
   }, [user, problem]);
 
   const testCases = useMemo(() => problem?.testCases ?? [], [problem]);
@@ -71,8 +72,9 @@ export const ProblemDetail: React.FC = () => {
     setResults(summary.results.map((r) => ({ passed: r.passed })));
 
     const summaryLine = summary.allPassed
-      ? `✅ All ${summary.totalTests} test${summary.totalTests === 1 ? '' : 's'
-      } passed (${summary.totalRuntimeMs}ms).`
+      ? `✅ All ${summary.totalTests} test${
+          summary.totalTests === 1 ? '' : 's'
+        } passed (${summary.totalRuntimeMs}ms).`
       : `❌ ${summary.passedTests}/${summary.totalTests} tests passed.`;
 
     const failures = summary.results
@@ -110,7 +112,8 @@ export const ProblemDetail: React.FC = () => {
         setOutput(
           (prev) =>
             prev +
-            `\n\n⚠️ Submit failed: ${err instanceof Error ? err.message : 'unknown error'
+            `\n\n⚠️ Submit failed: ${
+              err instanceof Error ? err.message : 'unknown error'
             }`
         );
       }
@@ -128,16 +131,20 @@ export const ProblemDetail: React.FC = () => {
 
   if (error || !problem) {
     return (
-      <div className="w-full p-8">
-        <p className="text-[var(--color-error)]">
-          {error ?? 'Problem not found'}
-        </p>
+      <div className="w-full p-6 lg:p-8">
         <Link
           to="/practice"
-          className="mt-4 inline-block text-brand-500 hover:underline"
+          className="inline-flex items-center gap-2 text-xs text-text-muted hover:text-brand-500"
         >
-          ← Back to practice
+          <ArrowLeft size={14} /> Practice
         </Link>
+        <div className="mt-6">
+          <ErrorState
+            title="Couldn't load this problem"
+            message={error ?? 'Problem not found'}
+            onRetry={reload}
+          />
+        </div>
       </div>
     );
   }
@@ -164,7 +171,8 @@ export const ProblemDetail: React.FC = () => {
             </div>
 
             <h1 className="mt-3 text-2xl font-bold text-text-primary">
-              <span className="text-text-muted">{problem.number}.</span> {problem.title}
+              <span className="text-text-muted">{problem.number}.</span>{' '}
+              {problem.title}
             </h1>
 
             <p className="mt-2 text-xs text-text-muted">

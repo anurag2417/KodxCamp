@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useProblems } from '../hooks/useProblems';
 import { ProblemCard } from '../components/problem/ProblemCard';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { cn } from '../lib/utils';
 import type { Difficulty } from '../lib/problems.api';
 
@@ -15,7 +16,7 @@ const filters: { label: string; value: Filter }[] = [
 ];
 
 export const Practice: React.FC = () => {
-  const { problems, loading, error } = useProblems();
+  const { problems, loading, error, reload } = useProblems();
   const [filter, setFilter] = useState<Filter>('all');
 
   const filtered = useMemo(() => {
@@ -68,21 +69,23 @@ export const Practice: React.FC = () => {
       )}
 
       {error && (
-        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
-          {error}
-        </div>
+        <ErrorState
+          title="Couldn't load problems"
+          message={error}
+          onRetry={reload}
+        />
       )}
 
-      {!loading && !error && (
+      {!loading && !error && filtered.length === 0 && (
+        <p className="text-text-muted">No problems in this category yet.</p>
+      )}
+
+      {!loading && !error && filtered.length > 0 && (
         <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((p) => (
             <ProblemCard key={p._id} problem={p} />
           ))}
         </div>
-      )}
-
-      {!loading && !error && filtered.length === 0 && (
-        <p className="text-text-muted">No problems in this category yet.</p>
       )}
     </div>
   );

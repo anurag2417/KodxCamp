@@ -14,6 +14,7 @@ export function useProject(slug: string | undefined) {
   const reload = useCallback(async () => {
     if (!slug) return;
     setLoading(true);
+    setError(null);
     try {
       const { project, userProject } = await projectsApi.getBySlug(slug);
       setProject(project);
@@ -26,8 +27,15 @@ export function useProject(slug: string | undefined) {
   }, [slug]);
 
   useEffect(() => {
-    reload();
+    void reload();
   }, [reload]);
 
-  return { project, userProject, setUserProject, loading, error, reload };
+  return {
+    project,
+    userProject,
+    setUserProject,
+    loading,
+    error,
+    reload,
+  };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { coursesApi, type ApiCourse } from '../lib/courses.api';
 
 export function useCourses() {
@@ -6,22 +6,22 @@ export function useCourses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await coursesApi.list();
-        if (!cancelled) setCourses(data);
-      } catch (e) {
-        if (!cancelled) setError('Failed to load courses');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await coursesApi.list();
+      setCourses(data);
+    } catch {
+      setError('Failed to load courses');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { courses, loading, error };
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { courses, loading, error, reload };
 }

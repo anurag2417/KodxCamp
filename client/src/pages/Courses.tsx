@@ -1,9 +1,10 @@
 import { useCourses } from '../hooks/useCourses';
 import { CourseCard } from '../components/course/CourseCard';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 
 export const Courses: React.FC = () => {
-  const { courses, loading, error } = useCourses();
+  const { courses, loading, error, reload } = useCourses();
 
   return (
     <div className="w-full p-6 lg:p-8">
@@ -21,21 +22,23 @@ export const Courses: React.FC = () => {
       )}
 
       {error && (
-        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
-          {error}
-        </div>
+        <ErrorState
+          title="Couldn't load courses"
+          message={error}
+          onRetry={reload}
+        />
       )}
 
-      {!loading && !error && (
+      {!loading && !error && courses.length === 0 && (
+        <p className="text-text-muted">No courses yet. Check back soon.</p>
+      )}
+
+      {!loading && !error && courses.length > 0 && (
         <div className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {courses.map((c) => (
             <CourseCard key={c._id} course={c} />
           ))}
         </div>
-      )}
-
-      {!loading && !error && courses.length === 0 && (
-        <p className="text-text-muted">No courses yet. Run the seed script on the server.</p>
       )}
     </div>
   );

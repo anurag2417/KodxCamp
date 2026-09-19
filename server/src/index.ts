@@ -3,6 +3,10 @@ import { createApp } from './app.js';
 import { connectDB } from './config/db.js';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
+import {
+  startClassLifecycleJob,
+  stopClassLifecycleJob,
+} from './jobs/classLifecycle.job.js';
 
 async function bootstrap() {
   try {
@@ -21,6 +25,7 @@ async function bootstrap() {
       env: env.NODE_ENV,
       clientUrl: env.CLIENT_URL,
     });
+    startClassLifecycleJob();
   });
 
   let shuttingDown = false;
@@ -29,6 +34,8 @@ async function bootstrap() {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info(`${signal} received — shutting down gracefully`);
+
+    stopClassLifecycleJob();
 
     const killTimer = setTimeout(() => {
       logger.error('Forced shutdown after 10s');

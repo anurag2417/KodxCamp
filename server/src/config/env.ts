@@ -16,9 +16,6 @@ const envSchema = z.object({
     .pipe(z.array(z.string().url())),
   HMAC_SECRET: z.string().min(32, 'HMAC_SECRET must be at least 32 characters'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-
-  // Optional: absolute URL for uploads (e.g. Cloudinary / CDN / S3).
-  // If unset, falls back to same-origin /uploads/...
   PUBLIC_UPLOAD_BASE_URL: z.string().url().optional(),
 });
 
@@ -56,7 +53,6 @@ if (env.NODE_ENV === 'production') {
       );
       process.exit(1);
     }
-    // Entropy check: at least 16 distinct characters
     if (new Set(value).size < 16) {
       console.error(
         `❌ ${name} has too little entropy (only ${new Set(value).size} distinct characters).`

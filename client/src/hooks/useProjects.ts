@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { projectsApi, type ApiProjectSummary } from '../lib/projects.api';
 
 export function useProjects() {
@@ -6,22 +6,22 @@ export function useProjects() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await projectsApi.list();
-        if (!cancelled) setProjects(data);
-      } catch {
-        if (!cancelled) setError('Failed to load projects');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await projectsApi.list();
+      setProjects(data);
+    } catch {
+      setError('Failed to load projects');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { projects, loading, error };
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { projects, loading, error, reload };
 }

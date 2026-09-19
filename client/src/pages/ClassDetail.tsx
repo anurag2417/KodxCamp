@@ -6,22 +6,32 @@ import { classesApi } from '../lib/classes.api';
 import { useAuthStore } from '../store/auth.store';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { Card } from '../components/ui/Card';
 import { ClassStatusBadge } from '../components/class/ClassStatusBadge';
 import { RecordingPlayer } from '../components/class/RecordingPlayer';
 
-/** Absolute origin for media. Falls back to same-origin if VITE_API_URL unset. */
+/**
+ * Absolute origin for media. Falls back to same-origin if VITE_API_URL unset.
+ * Strips a trailing /api.
+ */
 const API_ORIGIN = (() => {
   const base = import.meta.env.VITE_API_URL as string | undefined;
   if (!base) return '';
-  // Strip trailing /api
   return base.replace(/\/api\/?$/, '');
 })();
 
 export const ClassDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
-  const { cls, enrollment, setEnrollment, attendeeCount, loading, error, reload } =
-    useClass(slug);
+  const {
+    cls,
+    enrollment,
+    setEnrollment,
+    attendeeCount,
+    loading,
+    error,
+    reload,
+  } = useClass(slug);
   const user = useAuthStore((s) => s.user);
   const [busy, setBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
@@ -31,7 +41,7 @@ export const ClassDetail: React.FC = () => {
   // Track last-sent watch position so we don't spam the server
   const lastSentRef = useRef(0);
 
-  // Save on unmount via sendBeacon (bypasses CORS preflight + survives unload)
+  // Save on unmount via sendBeacon (survives unload)
   useEffect(() => {
     return () => {
       const e = enrollment;
@@ -39,7 +49,7 @@ export const ClassDetail: React.FC = () => {
       const url = `${API_ORIGIN}/api/classes/${slug}/watch`;
       const body = JSON.stringify({
         watchedSeconds: lastSentRef.current,
-        durationSec: e.watchedSeconds ?? 0, // server clamps anyway
+        durationSec: e.watchedSeconds ?? 0,
       });
       if (navigator.sendBeacon) {
         const blob = new Blob([body], { type: 'application/json' });
@@ -58,11 +68,20 @@ export const ClassDetail: React.FC = () => {
 
   if (error || !cls) {
     return (
-      <div className="w-full p-8">
-        <p className="text-[var(--color-error)]">{error ?? 'Class not found'}</p>
-        <Link to="/classes" className="mt-4 inline-block text-brand-500 hover:underline">
-          ← Back to classes
+      <div className="w-full p-6 lg:p-8">
+        <Link
+          to="/classes"
+          className="inline-flex items-center gap-2 text-xs text-text-muted hover:text-brand-500"
+        >
+          <ArrowLeft size={14} /> Classes
         </Link>
+        <div className="mt-6">
+          <ErrorState
+            title="Couldn't load this class"
+            message={error ?? 'Class not found'}
+            onRetry={reload}
+          />
+        </div>
       </div>
     );
   }
@@ -94,13 +113,11 @@ export const ClassDetail: React.FC = () => {
   };
 
   const handleJoin = () => {
-    // Open the meeting synchronously so popup blockers allow it
+    // Open meeting synchronously so popup blockers allow it
     if (cls.meetLink) {
       window.open(cls.meetLink, '_blank', 'noopener,noreferrer');
     }
-    // Fire-and-forget attendance
     classesApi.attend(cls.slug).catch(() => {});
-    // Optimistically refresh after a beat
     setTimeout(() => reload(), 500);
   };
 
@@ -132,7 +149,9 @@ export const ClassDetail: React.FC = () => {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-2xl">
           <ClassStatusBadge status={cls.status} />
-          <h1 className="mt-3 text-3xl font-bold text-text-primary">{cls.title}</h1>
+          <h1 className="mt-3 text-3xl font-bold text-text-primary">
+            {cls.title}
+          </h1>
           <p className="mt-2 text-sm text-text-secondary">{cls.description}</p>
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-text-muted">
             <span>👩‍🏫 {cls.instructorName}</span>
@@ -197,7 +216,9 @@ export const ClassDetail: React.FC = () => {
 
       {cls.recording ? (
         <div className="mb-6">
-          <h2 className="mb-3 text-lg font-semibold text-text-primary">Recording</h2>
+          <h2 className="mb-3 text-lg font-semibold text-text-primary">
+            Recording
+          </h2>
           <Card className="overflow-hidden p-0">
             <div className="h-[480px]">
               <RecordingPlayer
@@ -211,7 +232,6 @@ export const ClassDetail: React.FC = () => {
                 initialSeconds={enrollment?.watchedSeconds ?? 0}
                 onProgress={(watched) => {
                   if (!isEnrolled) return;
-                  // Throttle: only send if advanced by 10+ seconds
                   if (Math.abs(watched - lastSentRef.current) < 10) return;
                   lastSentRef.current = watched;
                   classesApi
@@ -256,7 +276,8 @@ export const ClassDetail: React.FC = () => {
               className="text-xs text-text-secondary file:mr-3 file:rounded-lg file:border-0 file:bg-surface-tertiary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-text-secondary hover:file:bg-surface-secondary"
             />
             <Button onClick={handleUpload} disabled={!file || busy}>
-              <Upload size={14} /> {busy ? uploadProgress || 'Uploading...' : 'Upload'}
+              <Upload size={14} />{' '}
+              {busy ? uploadProgress || 'Uploading...' : 'Upload'}
             </Button>
             {durationSec > 0 && (
               <span className="text-xs text-text-muted">

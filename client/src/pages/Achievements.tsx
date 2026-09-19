@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useAchievements } from '../hooks/useAchievements';
 import { Spinner } from '../components/ui/Spinner';
-import { Card } from '../components/ui/Card';
+import { ErrorState } from '../components/ui/ErrorState';
 import { AchievementBadge } from '../components/progress/AchievementBadge';
 import { cn } from '../lib/utils';
 import type { AchievementCategory } from '../lib/achievements.api';
@@ -17,7 +17,7 @@ const TABS: { label: string; value: AchievementCategory | 'all' }[] = [
 ];
 
 export const Achievements: React.FC = () => {
-  const { achievements, loading, error } = useAchievements();
+  const { achievements, loading, error, reload } = useAchievements();
   const [tab, setTab] = useState<AchievementCategory | 'all'>('all');
 
   const filtered = useMemo(() => {
@@ -60,9 +60,11 @@ export const Achievements: React.FC = () => {
       )}
 
       {error && (
-        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-4 text-sm text-[var(--color-error)]">
-          {error}
-        </div>
+        <ErrorState
+          title="Couldn't load achievements"
+          message={error}
+          onRetry={reload}
+        />
       )}
 
       {!loading && !error && (

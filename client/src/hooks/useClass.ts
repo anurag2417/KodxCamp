@@ -15,6 +15,7 @@ export function useClass(slug: string | undefined) {
   const reload = useCallback(async () => {
     if (!slug) return;
     setLoading(true);
+    setError(null);
     try {
       const data = await classesApi.getBySlug(slug);
       setCls(data.class);
@@ -28,8 +29,16 @@ export function useClass(slug: string | undefined) {
   }, [slug]);
 
   useEffect(() => {
-    reload();
+    void reload();
   }, [reload]);
 
-  return { cls, enrollment, setEnrollment, attendeeCount, loading, error, reload };
+  return {
+    cls,
+    enrollment,
+    setEnrollment,
+    attendeeCount,
+    loading,
+    error,
+    reload,
+  };
 }

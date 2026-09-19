@@ -1,20 +1,39 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useProgressOverview } from '../hooks/useProgressOverview';
+import { useAuthStore } from '../store/auth.store';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { StreakFlame } from '../components/progress/StreakFlame';
 import { ActivityHeatmap } from '../components/progress/ActivityHeatmap';
-import { useAuthStore } from '../store/auth.store';
 
 export const Streak: React.FC = () => {
-  const { heatmap, overview, loading } = useProgressOverview();
+  const { heatmap, overview, loading, error, reload } = useProgressOverview();
   const user = useAuthStore((s) => s.user);
 
   if (loading) {
     return (
       <div className="flex w-full justify-center py-32">
         <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full p-6 lg:p-8">
+        <Link
+          to="/dashboard"
+          className="mb-4 inline-flex items-center gap-2 text-xs text-text-muted hover:text-brand-500"
+        >
+          <ArrowLeft size={14} /> Dashboard
+        </Link>
+        <ErrorState
+          title="Couldn't load your streak"
+          message={error}
+          onRetry={reload}
+        />
       </div>
     );
   }
@@ -75,7 +94,8 @@ export const Streak: React.FC = () => {
         </ul>
         {user && (
           <p className="mt-4 text-xs text-text-muted">
-            Current streak: <strong className="text-brand-500">{user.streak ?? 0} days</strong>
+            Current streak:{' '}
+            <strong className="text-brand-500">{user.streak ?? 0} days</strong>
           </p>
         )}
       </Card>
