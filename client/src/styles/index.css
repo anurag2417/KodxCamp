@@ -25,6 +25,26 @@
   --color-success: #2a835f;
   --color-error: #c65353;
   --color-warning: #c58a24;
+
+  --color-cat-frontend: #2a835f;
+  --color-cat-react: #0d7a9c;
+  --color-cat-api: #8a5ccf;
+  --color-cat-sql: #c58a24;
+  --color-cat-dataviz: #c65353;
+  --color-cat-javascript: #c5a024;
+
+  /* ─── Class statuses ─────────────────────────── */
+  --color-status-scheduled: #0d7a9c;
+  --color-status-live: #c65353;
+  --color-status-ended: #2a835f;
+  --color-status-cancelled: #8a5ccf;
+
+  /* ─── Code surfaces (used in editor areas) ───── */
+  --color-code-bg: #06191d;
+  --color-code-surface: #092328;
+  --color-code-border: #1b4844;
+  --color-code-text: #d8e7e0;
+  --color-code-muted: #88a39a;
 }
 
 /* ============================================================
@@ -89,13 +109,16 @@ body {
   width: 10px;
   height: 10px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--color-surface-secondary);
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 6px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-primary-500);
 }

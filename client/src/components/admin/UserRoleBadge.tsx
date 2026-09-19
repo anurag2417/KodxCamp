@@ -6,8 +6,8 @@ interface Props {
 
 const styles: Record<Props['role'], string> = {
   student: 'bg-surface-tertiary text-text-secondary',
-  instructor: 'bg-[#0D7A9C]/10 text-[#0D7A9C] dark:bg-[#0D7A9C]/20 dark:text-[#7FC7B4]',
-  admin: 'bg-[#C65353]/10 text-[#C65353] dark:bg-[#C65353]/20 dark:text-[#F07178]',
+  instructor: 'bg-[var(--color-cat-react)]/10 text-[var(--color-cat-react)]',
+  admin: 'bg-[var(--color-error)]/10 text-[var(--color-error)]',
 };
 
 export const UserRoleBadge: React.FC<Props> = ({ role }) => (

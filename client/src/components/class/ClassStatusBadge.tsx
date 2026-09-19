@@ -2,16 +2,20 @@ import { cn } from '../../lib/utils';
 import type { ClassStatus } from '../../lib/classes.api';
 
 const styles: Record<ClassStatus, string> = {
-  scheduled: 'bg-[#0D7A9C]/10 text-[#0D7A9C] dark:bg-[#0D7A9C]/20 dark:text-[#7FC7B4]',
-  live: 'bg-[#C65353]/10 text-[#C65353] dark:bg-[#C65353]/20 dark:text-[#F07178]',
-  ended: 'bg-[#2A835F]/10 text-[#2A835F] dark:bg-[#2A835F]/20 dark:text-[#8BBB92]',
-  cancelled: 'bg-[#8A5CCF]/10 text-[#8A5CCF] dark:bg-[#8A5CCF]/20 dark:text-[#C7A8F0]',
+  scheduled:
+    'bg-[var(--color-status-scheduled)]/10 text-[var(--color-status-scheduled)]',
+  live:
+    'bg-[var(--color-status-live)]/10 text-[var(--color-status-live)]',
+  ended:
+    'bg-[var(--color-status-ended)]/10 text-[var(--color-status-ended)]',
+  cancelled:
+    'bg-[var(--color-status-cancelled)]/10 text-[var(--color-status-cancelled)]',
 };
 
-export const ClassStatusBadge: React.FC<{ status: ClassStatus; className?: string }> = ({
-  status,
-  className,
-}) => (
+export const ClassStatusBadge: React.FC<{
+  status: ClassStatus;
+  className?: string;
+}> = ({ status, className }) => (
   <span
     className={cn(
       'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize',
