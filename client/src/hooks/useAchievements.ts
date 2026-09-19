@@ -1,27 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
-import { achievementsApi, type ApiAchievement } from '../lib/achievements.api';
+import { useQuery } from '@tanstack/react-query';
+import { achievementsApi } from '../lib/achievements.api';
+import { queryKeys } from '../lib/queryKeys';
 
 export function useAchievements() {
-  const [achievements, setAchievements] = useState<ApiAchievement[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: queryKeys.achievements.mine,
+    queryFn: () => achievementsApi.mine(),
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await achievementsApi.mine();
-      setAchievements(data);
-    } catch {
-      setError('Failed to load achievements');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { achievements, loading, error, reload };
+  return {
+    achievements: query.data ?? [],
+    loading: query.isLoading,
+    error: query.error ? 'Failed to load achievements' : null,
+    reload: query.refetch,
+  };
 }

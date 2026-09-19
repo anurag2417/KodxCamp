@@ -1,27 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
-import { coursesApi, type ApiCourse } from '../lib/courses.api';
+import { useQuery } from '@tanstack/react-query';
+import { coursesApi } from '../lib/courses.api';
+import { queryKeys } from '../lib/queryKeys';
 
 export function useCourses() {
-  const [courses, setCourses] = useState<ApiCourse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: queryKeys.courses.all,
+    queryFn: () => coursesApi.list(),
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await coursesApi.list();
-      setCourses(data);
-    } catch {
-      setError('Failed to load courses');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { courses, loading, error, reload };
+  return {
+    courses: query.data ?? [],
+    loading: query.isLoading,
+    error: query.error ? 'Failed to load courses' : null,
+    reload: query.refetch,
+  };
 }

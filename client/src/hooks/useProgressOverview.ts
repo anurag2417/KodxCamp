@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   progressApi,
   type ApiOverview,
@@ -8,6 +8,7 @@ import {
   type ApiWeeklyXp,
   type ApiActivity,
 } from '../lib/progress.api';
+import { queryKeys } from '../lib/queryKeys';
 
 interface Bundle {
   overview: ApiOverview | null;
@@ -28,14 +29,9 @@ const EMPTY: Bundle = {
 };
 
 export function useProgressOverview() {
-  const [data, setData] = useState<Bundle>(EMPTY);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const query = useQuery({
+    queryKey: queryKeys.progress.overview,
+    queryFn: async (): Promise<Bundle> => {
       const [overview, courses, difficulty, weekly, heatmap, activity] =
         await Promise.all([
           progressApi.overview(),
@@ -45,17 +41,16 @@ export function useProgressOverview() {
           progressApi.heatmap(365),
           progressApi.recentActivity(),
         ]);
-      setData({ overview, courses, difficulty, weekly, heatmap, activity });
-    } catch {
-      setError('Failed to load progress');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return { overview, courses, difficulty, weekly, heatmap, activity };
+    },
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const data = query.data ?? EMPTY;
 
-  return { ...data, loading, error, reload };
+  return {
+    ...data,
+    loading: query.isLoading,
+    error: query.error ? 'Failed to load progress' : null,
+    reload: query.refetch,
+  };
 }

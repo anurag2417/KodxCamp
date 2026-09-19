@@ -1,44 +1,34 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  classesApi,
-  type ApiClass,
-  type ApiEnrollment,
-} from '../lib/classes.api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { classesApi } from '../lib/classes.api';
+import { queryKeys } from '../lib/queryKeys';
 
 export function useClass(slug: string | undefined) {
-  const [cls, setCls] = useState<ApiClass | null>(null);
-  const [enrollment, setEnrollment] = useState<ApiEnrollment | null>(null);
-  const [attendeeCount, setAttendeeCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: queryKeys.classes.detail(slug ?? ''),
+    queryFn: () => classesApi.getBySlug(slug!),
+    enabled: !!slug,
+  });
 
-  const reload = useCallback(async () => {
-    if (!slug) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await classesApi.getBySlug(slug);
-      setCls(data.class);
-      setEnrollment(data.enrollment);
-      setAttendeeCount(data.attendeeCount);
-    } catch {
-      setError('Class not found');
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const data = query.data ?? {
+    class: null,
+    enrollment: null,
+    attendeeCount: 0,
+  };
 
   return {
-    cls,
-    enrollment,
-    setEnrollment,
-    attendeeCount,
-    loading,
-    error,
-    reload,
+    cls: data.class,
+    enrollment: data.enrollment,
+    attendeeCount: data.attendeeCount,
+    loading: query.isLoading,
+    error: query.error ? 'Class not found' : null,
+    reload: query.refetch,
+    /** Local override for optimistic enrollment updates */
+    setEnrollment: (enrollment: typeof data.enrollment) => {
+      queryClient.setQueryData(queryKeys.classes.detail(slug ?? ''), {
+        ...data,
+        enrollment,
+      });
+    },
   };
 }

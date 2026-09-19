@@ -1,41 +1,30 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  projectsApi,
-  type ApiProjectFull,
-  type ApiUserProject,
-} from '../lib/projects.api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { projectsApi } from '../lib/projects.api';
+import { queryKeys } from '../lib/queryKeys';
 
 export function useProject(slug: string | undefined) {
-  const [project, setProject] = useState<ApiProjectFull | null>(null);
-  const [userProject, setUserProject] = useState<ApiUserProject | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const reload = useCallback(async () => {
-    if (!slug) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const { project, userProject } = await projectsApi.getBySlug(slug);
-      setProject(project);
-      setUserProject(userProject);
-    } catch {
-      setError('Project not found');
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
+  const query = useQuery({
+    queryKey: queryKeys.projects.detail(slug ?? ''),
+    queryFn: () => projectsApi.getBySlug(slug!),
+    enabled: !!slug,
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const data = query.data ?? { project: null, userProject: null };
 
   return {
-    project,
-    userProject,
-    setUserProject,
-    loading,
-    error,
-    reload,
+    project: data.project,
+    userProject: data.userProject,
+    loading: query.isLoading,
+    error: query.error ? 'Project not found' : null,
+    reload: query.refetch,
+    /** Local override for optimistic updates */
+    setUserProject: (up: typeof data.userProject) => {
+      queryClient.setQueryData(queryKeys.projects.detail(slug ?? ''), {
+        ...data,
+        userProject: up,
+      });
+    },
   };
 }

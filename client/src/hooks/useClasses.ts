@@ -1,27 +1,30 @@
-import { useCallback, useEffect, useState } from 'react';
-import { classesApi, type ApiClass } from '../lib/classes.api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { classesApi } from '../lib/classes.api';
+import { queryKeys } from '../lib/queryKeys';
+
+type ClassesData = Awaited<ReturnType<typeof classesApi.list>>;
+
+interface ClassesUpdater {
+  (prev: ClassesData | undefined): ClassesData | undefined;
+}
 
 export function useClasses(scope: 'upcoming' | 'past' | 'all' = 'all') {
-  const [classes, setClasses] = useState<ApiClass[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: queryKeys.classes.all(scope),
+    queryFn: () => classesApi.list(scope),
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await classesApi.list(scope);
-      setClasses(data);
-    } catch {
-      setError('Failed to load classes');
-    } finally {
-      setLoading(false);
-    }
-  }, [scope]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { classes, setClasses, loading, error, reload };
+  return {
+    classes: query.data ?? [],
+    loading: query.isLoading,
+    error: query.error ? 'Failed to load classes' : null,
+    reload: query.refetch,
+    /** Local mutation helper for the create-class form */
+    setClasses: (updater: ClassesUpdater) => {
+      queryClient.setQueryData<ClassesData>(queryKeys.classes.all(scope), (prev: ClassesData | undefined) =>
+        updater((prev ?? []) as ClassesData)
+      );
+    },
+  };
 }

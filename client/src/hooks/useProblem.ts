@@ -1,28 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
-import { problemsApi, type ApiProblemFull } from '../lib/problems.api';
+import { useQuery } from '@tanstack/react-query';
+import { problemsApi } from '../lib/problems.api';
+import { queryKeys } from '../lib/queryKeys';
 
 export function useProblem(slug: string | undefined) {
-  const [problem, setProblem] = useState<ApiProblemFull | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: queryKeys.problems.detail(slug ?? ''),
+    queryFn: () => problemsApi.getBySlug(slug!),
+    enabled: !!slug,
+  });
 
-  const reload = useCallback(async () => {
-    if (!slug) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await problemsApi.getBySlug(slug);
-      setProblem(data);
-    } catch {
-      setError('Problem not found');
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { problem, loading, error, reload };
+  return {
+    problem: query.data ?? null,
+    loading: query.isLoading,
+    error: query.error ? 'Problem not found' : null,
+    reload: query.refetch,
+  };
 }

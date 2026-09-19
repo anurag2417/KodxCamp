@@ -4,9 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useProblem } from '../hooks/useProblem';
 import { runTests, type TestResult } from '../lib/runner/testHarness';
-import {
-  preloadPython,
-} from '../lib/runner/pythonRunner';
+import { preloadPython } from '../lib/runner/pythonRunner';
 import { problemsApi, type ApiSubmission } from '../lib/problems.api';
 import { useAuthStore } from '../store/auth.store';
 import { Spinner } from '../components/ui/Spinner';
@@ -35,11 +33,12 @@ export const ProblemDetail: React.FC = () => {
   const [showAcceptance, setShowAcceptance] = useState(false);
   const [pyReady, setPyReady] = useState(false);
 
-  // Preload Python in the background so first run is fast
+  // Warm Python in the background so first run feels instant
   useEffect(() => {
     void preloadPython().then(() => setPyReady(true));
   }, []);
 
+  // Reset editor state when the problem or language changes
   useEffect(() => {
     if (!problem) return;
     const starter = problem.starterCode?.[language] ?? '';
@@ -48,9 +47,21 @@ export const ProblemDetail: React.FC = () => {
     setAccepted(false);
   }, [problem, language]);
 
+  // Load submissions (uncached — simple, refetched on problem change)
   useEffect(() => {
     if (!user || !problem) return;
-    problemsApi.submissions(problem._id).then(setSubmissions).catch(() => {});
+    let cancelled = false;
+    problemsApi
+      .submissions(problem._id)
+      .then((rows) => {
+        if (!cancelled) setSubmissions(rows);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user, problem]);
 
   const testCases = useMemo(() => problem?.testCases ?? [], [problem]);
@@ -86,11 +97,12 @@ export const ProblemDetail: React.FC = () => {
         const fresh = await problemsApi.submissions(problem._id);
         setSubmissions(fresh);
 
+        // Show the celebration overlay only on all-pass
         if (summary.allPassed) {
           setShowAcceptance(true);
         }
       } catch {
-        /* surfaced in the result tab */
+        /* surfaced in the result panel */
       }
     }
 
@@ -129,6 +141,7 @@ export const ProblemDetail: React.FC = () => {
     <>
       <div className="flex h-[calc(100vh-64px)] w-full">
         <PanelGroup direction="horizontal" className="h-full flex-1">
+          {/* Left: problem panel */}
           <Panel defaultSize={42} minSize={28}>
             <div className="h-full bg-bg">
               <ProblemPanel problem={problem} submissions={submissions} />
@@ -137,6 +150,7 @@ export const ProblemDetail: React.FC = () => {
 
           <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
 
+          {/* Right: editor + test panel */}
           <Panel defaultSize={58} minSize={35}>
             <PanelGroup direction="vertical">
               <Panel defaultSize={65} minSize={30}>
