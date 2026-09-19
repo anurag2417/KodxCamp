@@ -27,6 +27,10 @@ import {
   adminClassController,
   updateClassAdminSchema,
 } from '../controllers/admin.class.controller.js';
+import {
+  adminBulkController,
+  importSchema,
+} from '../controllers/admin.bulk.controller.js';
 
 const router = Router();
 
@@ -103,5 +107,8 @@ router.patch(
   adminClassController.update
 );
 router.delete('/classes/:slug', adminClassController.remove);
+
+// ─── Bulk import ────────────────────────────────
+router.post('/bulk/import', validate(importSchema), adminBulkController.import);
 
 export default router;

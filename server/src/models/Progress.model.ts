@@ -1,7 +1,11 @@
 import mongoose, { Schema, type Document } from 'mongoose';
-import type { IProgress } from '@kodxcamp/shared';
-
-export interface ProgressDocument extends Omit<IProgress, '_id'>, Document {}
+export interface ProgressDocument extends Document {
+  userId: string;
+  courseId: string;
+  completedLessons: string[];
+  currentLessonId?: string;
+  percentage: number;
+}
 
 const progressSchema = new Schema<ProgressDocument>(
   {

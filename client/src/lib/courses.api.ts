@@ -26,6 +26,8 @@ export interface ApiLessonFull {
   order: number;
   content: string;
   starterCode: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
   language: string;
   testCases: { input: string; expectedOutput: string }[];
 }

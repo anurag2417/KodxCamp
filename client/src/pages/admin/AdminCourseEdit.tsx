@@ -30,6 +30,8 @@ interface LessonEditorState {
   content: string;
   starterCode: string;
   solution: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
   testCases: EditableTestCase[];
 }
 
@@ -40,6 +42,8 @@ const emptyLesson = (order: number): LessonEditorState => ({
   content: '',
   starterCode: '',
   solution: '',
+  functionName: 'solve',
+  outputMode: 'print',
   testCases: [],
 });
 
@@ -78,7 +82,6 @@ export const AdminCourseEdit: React.FC = () => {
     setLoading(true);
     setLoadError('');
     try {
-      // Admin endpoint — returns full lesson docs including solution + testCases
       const { data } = await api.get(`/admin/courses/${slug}`);
       setCourse(data.data);
     } catch (err) {
@@ -116,6 +119,8 @@ export const AdminCourseEdit: React.FC = () => {
       content: lesson.content,
       starterCode: lesson.starterCode ?? '',
       solution: lesson.solution ?? '',
+      functionName: lesson.functionName ?? 'solve',
+      outputMode: lesson.outputMode ?? 'print',
       testCases: (lesson.testCases ?? []).map((tc) => ({
         input: tc.input,
         expectedOutput: tc.expectedOutput,
@@ -136,7 +141,6 @@ export const AdminCourseEdit: React.FC = () => {
     setBusy(true);
     setError('');
 
-    // Pre-validation
     const issues: string[] = [];
     if (!editing.title || editing.title.length < 2) {
       issues.push('Title must be at least 2 characters');
@@ -153,13 +157,19 @@ export const AdminCourseEdit: React.FC = () => {
     if (!editing.order || editing.order < 1) {
       issues.push('Order must be at least 1');
     }
+    if (
+      !editing.functionName ||
+      !/^[A-Za-z_][A-Za-z0-9_]*$/.test(editing.functionName)
+    ) {
+      issues.push(
+        'Function name must be a valid identifier (letters, digits, underscores; cannot start with a digit)'
+      );
+    }
     const emptyExpected = editing.testCases.findIndex(
       (tc) => !tc.expectedOutput || tc.expectedOutput.length === 0
     );
     if (emptyExpected !== -1) {
-      issues.push(
-        `Test #${emptyExpected + 1} is missing its expected output`
-      );
+      issues.push(`Test #${emptyExpected + 1} is missing its expected output`);
     }
     if (issues.length) {
       setError(issues.map((p) => `• ${p}`).join('\n'));
@@ -174,6 +184,8 @@ export const AdminCourseEdit: React.FC = () => {
       content: editing.content,
       starterCode: editing.starterCode,
       solution: editing.solution,
+      functionName: editing.functionName,
+      outputMode: editing.outputMode,
       language: course.language,
       testCases: editing.testCases,
     };
@@ -309,6 +321,48 @@ export const AdminCourseEdit: React.FC = () => {
             className="mt-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
           />
 
+          {/* Function name + output mode */}
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-secondary">
+                Function name
+              </label>
+              <Input
+                placeholder="e.g. sum, double, reverse"
+                value={editing.functionName}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    functionName: e.target.value.trim(),
+                  })
+                }
+              />
+              <p className="mt-1 text-[10px] text-text-muted">
+                {editing.outputMode === 'return'
+                  ? `Platform auto-calls ${editing.functionName || 'name'}() and compares the return value.`
+                  : `Student prints output; the function is not auto-called.`}
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-secondary">
+                Output mode
+              </label>
+              <select
+                value={editing.outputMode}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    outputMode: e.target.value as 'return' | 'print',
+                  })
+                }
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+              >
+                <option value="print">Print to console (default for lessons)</option>
+                <option value="return">Return value</option>
+              </select>
+            </div>
+          </div>
+
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <textarea
               placeholder="Starter code"
@@ -371,6 +425,11 @@ export const AdminCourseEdit: React.FC = () => {
                 <p className="text-sm font-medium text-text-primary">
                   {l.title}
                 </p>
+                {l.outputMode === 'return' && (
+                  <span className="rounded bg-brand-500/10 px-1.5 py-0.5 font-mono text-[10px] text-brand-500">
+                    {l.functionName}()
+                  </span>
+                )}
               </div>
               <p className="mt-1 truncate text-xs text-text-muted">
                 {l.slug}

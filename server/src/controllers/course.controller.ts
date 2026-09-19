@@ -24,7 +24,7 @@ export const courseController = {
   }),
 
   getBySlug: asyncHandler(async (req: Request, res: Response) => {
-    const course = await courseService.getBySlug(req.params.slug);
+    const course = await courseService.getBySlug(req.params.slug as string);
     return ApiResponse.success(res, course);
   }),
 

@@ -6,6 +6,7 @@ import {
   Rocket,
   Video,
   Users,
+  Upload,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -16,11 +17,11 @@ const tabs = [
   { to: '/admin/projects', label: 'Projects', icon: Rocket },
   { to: '/admin/classes', label: 'Classes', icon: Video },
   { to: '/admin/users', label: 'Users', icon: Users },
+  { to: '/admin/bulk-import', label: 'Bulk Import', icon: Upload },
 ];
 
 export const AdminLayout: React.FC = () => (
   <div className="w-full">
-    {/* Sub-nav */}
     <div className="w-full border-b border-border bg-surface">
       <div className="flex w-full items-center gap-1 overflow-x-auto px-6">
         {tabs.map(({ to, label, icon: Icon, end }) => (
@@ -44,7 +45,6 @@ export const AdminLayout: React.FC = () => (
       </div>
     </div>
 
-    {/* Page content */}
     <div className="w-full">
       <Outlet />
     </div>

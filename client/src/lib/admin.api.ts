@@ -1,6 +1,7 @@
 import { api } from './api';
 
 // ─── Types ───────────────────────────────────────
+
 export interface AdminStats {
   users: { total: number; instructors: number; admins: number; newLast7d: number };
   content: {
@@ -60,17 +61,22 @@ export interface AdminLesson {
   content: string;
   starterCode: string;
   solution: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
   language: string;
   testCases: { input: string; expectedOutput: string }[];
 }
 
 export interface AdminProblem {
   _id: string;
+  number: number;
   title: string;
   slug: string;
   difficulty: 'easy' | 'medium' | 'hard';
   topics: string[];
   statement: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
   testCases: { input: string; expectedOutput: string }[];
   createdAt: string;
@@ -105,21 +111,37 @@ export interface AdminClass {
   meetLink: string;
 }
 
+// ─── Bulk import ────────────────────────────────
+
+export type BulkKind = 'problems' | 'projects' | 'courses';
+export type BulkMode = 'merge' | 'replace';
+
+export interface BulkImportReport {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: { index: number; slug?: string; error: string }[];
+  totalProcessed: number;
+}
+
 // ─── API ─────────────────────────────────────────
+
 export const adminApi = {
-  // Stats
+  // ─── Stats ─────────────────────────────────────
   getStats: async (): Promise<AdminStats> => {
     const { data } = await api.get('/admin/stats');
     return data.data;
   },
 
-  // Users
-  listUsers: async (params: {
-    search?: string;
-    role?: string;
-    page?: number;
-    limit?: number;
-  } = {}): Promise<AdminUsersResponse> => {
+  // ─── Users ─────────────────────────────────────
+  listUsers: async (
+    params: {
+      search?: string;
+      role?: string;
+      page?: number;
+      limit?: number;
+    } = {}
+  ): Promise<AdminUsersResponse> => {
     const { data } = await api.get('/admin/users', { params });
     return data.data;
   },
@@ -137,7 +159,7 @@ export const adminApi = {
     return data.data;
   },
 
-  // Courses
+  // ─── Courses ───────────────────────────────────
   createCourse: async (input: {
     title: string;
     slug: string;
@@ -146,6 +168,11 @@ export const adminApi = {
     thumbnail?: string;
   }): Promise<AdminCourse> => {
     const { data } = await api.post('/admin/courses', input);
+    return data.data;
+  },
+
+  getCourseFull: async (slug: string): Promise<AdminCourse & { lessons: AdminLesson[] }> => {
+    const { data } = await api.get(`/admin/courses/${slug}`);
     return data.data;
   },
 
@@ -162,7 +189,7 @@ export const adminApi = {
     return data.data;
   },
 
-  // Lessons
+  // ─── Lessons ───────────────────────────────────
   createLesson: async (
     courseSlug: string,
     input: Partial<AdminLesson>
@@ -193,7 +220,7 @@ export const adminApi = {
     return data.data;
   },
 
-  // Problems
+  // ─── Problems ──────────────────────────────────
   createProblem: async (input: Partial<AdminProblem>): Promise<AdminProblem> => {
     const { data } = await api.post('/admin/problems', input);
     return data.data;
@@ -217,7 +244,7 @@ export const adminApi = {
     return data.data;
   },
 
-  // Projects
+  // ─── Projects ──────────────────────────────────
   createProject: async (input: Partial<AdminProject>): Promise<AdminProject> => {
     const { data } = await api.post('/admin/projects', input);
     return data.data;
@@ -241,7 +268,7 @@ export const adminApi = {
     return data.data;
   },
 
-  // Classes
+  // ─── Classes ───────────────────────────────────
   listClasses: async (): Promise<AdminClass[]> => {
     const { data } = await api.get('/admin/classes');
     return data.data;
@@ -257,6 +284,17 @@ export const adminApi = {
 
   deleteClass: async (slug: string): Promise<{ ok: boolean }> => {
     const { data } = await api.delete(`/admin/classes/${slug}`);
+    return data.data;
+  },
+
+  // ─── Bulk import ───────────────────────────────
+  bulkImport: async (input: {
+    kind: BulkKind;
+    mode: BulkMode;
+    dryRun: boolean;
+    items: unknown;
+  }): Promise<BulkImportReport> => {
+    const { data } = await api.post('/admin/bulk/import', input);
     return data.data;
   },
 };

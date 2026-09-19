@@ -27,7 +27,9 @@ export const ProblemDetail: React.FC = () => {
   const [language, setLanguage] = useState<Lang>('javascript');
   const [code, setCode] = useState('');
   const [output, setOutput] = useState('');
-  const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>(
+    'idle'
+  );
   const [results, setResults] = useState<{ passed: boolean }[]>();
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
   const [tab, setTab] = useState<'tests' | 'submissions'>('tests');
@@ -44,7 +46,7 @@ export const ProblemDetail: React.FC = () => {
 
   useEffect(() => {
     if (!user || !problem) return;
-    problemsApi.submissions(problem._id).then(setSubmissions).catch(() => {});
+    problemsApi.submissions(problem._id).then(setSubmissions).catch(() => { });
   }, [user, problem]);
 
   const testCases = useMemo(() => problem?.testCases ?? [], [problem]);
@@ -61,12 +63,16 @@ export const ProblemDetail: React.FC = () => {
     setResults(undefined);
     setOutput('Running tests...');
 
-    const summary = await runTests(language, code, testCases);
+    const summary = await runTests(language, code, testCases, {
+      functionName: problem.functionName,
+      outputMode: problem.outputMode,
+    });
 
     setResults(summary.results.map((r) => ({ passed: r.passed })));
 
     const summaryLine = summary.allPassed
-      ? `✅ All ${summary.totalTests} test${summary.totalTests === 1 ? '' : 's'} passed (${summary.totalRuntimeMs}ms).`
+      ? `✅ All ${summary.totalTests} test${summary.totalTests === 1 ? '' : 's'
+      } passed (${summary.totalRuntimeMs}ms).`
       : `❌ ${summary.passedTests}/${summary.totalTests} tests passed.`;
 
     const failures = summary.results
@@ -104,8 +110,7 @@ export const ProblemDetail: React.FC = () => {
         setOutput(
           (prev) =>
             prev +
-            `\n\n⚠️ Submit failed: ${
-              err instanceof Error ? err.message : 'unknown error'
+            `\n\n⚠️ Submit failed: ${err instanceof Error ? err.message : 'unknown error'
             }`
         );
       }
@@ -124,8 +129,13 @@ export const ProblemDetail: React.FC = () => {
   if (error || !problem) {
     return (
       <div className="w-full p-8">
-        <p className="text-[var(--color-error)]">{error ?? 'Problem not found'}</p>
-        <Link to="/practice" className="mt-4 inline-block text-brand-500 hover:underline">
+        <p className="text-[var(--color-error)]">
+          {error ?? 'Problem not found'}
+        </p>
+        <Link
+          to="/practice"
+          className="mt-4 inline-block text-brand-500 hover:underline"
+        >
           ← Back to practice
         </Link>
       </div>
@@ -154,8 +164,18 @@ export const ProblemDetail: React.FC = () => {
             </div>
 
             <h1 className="mt-3 text-2xl font-bold text-text-primary">
-              {problem.title}
+              <span className="text-text-muted">{problem.number}.</span> {problem.title}
             </h1>
+
+            <p className="mt-2 text-xs text-text-muted">
+              Implement{' '}
+              <code className="rounded bg-surface-tertiary px-1.5 py-0.5 font-mono text-text-primary">
+                {problem.functionName}
+              </code>{' '}
+              {problem.outputMode === 'return'
+                ? '— return the result; the platform compares it to the expected output.'
+                : '— print the result; the platform compares stdout to the expected output.'}
+            </p>
 
             <div className="prose prose-sm mt-4 max-w-none whitespace-pre-wrap text-sm text-text-secondary">
               {problem.statement}
@@ -239,7 +259,11 @@ export const ProblemDetail: React.FC = () => {
                   running={busy}
                 />
                 <div className="flex-1">
-                  <CodeEditor language={language} value={code} onChange={setCode} />
+                  <CodeEditor
+                    language={language}
+                    value={code}
+                    onChange={setCode}
+                  />
                 </div>
               </div>
             </Panel>

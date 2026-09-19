@@ -23,6 +23,8 @@ export interface ILesson {
   content: string;
   starterCode: string;
   solution: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
   language: CourseLanguage;
   testCases: ITestCase[];
   createdAt: Date;

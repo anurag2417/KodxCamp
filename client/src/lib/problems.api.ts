@@ -9,6 +9,7 @@ export type SubmissionStatus =
 
 export interface ApiProblemSummary {
   _id: string;
+  number: number;
   title: string;
   slug: string;
   difficulty: Difficulty;
@@ -24,11 +25,14 @@ export interface ApiProblemTestCase {
 
 export interface ApiProblemFull {
   _id: string;
+  number: number;
   title: string;
   slug: string;
   difficulty: Difficulty;
   topics: string[];
   statement: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
   testCases: ApiProblemTestCase[];
   solved?: boolean;
@@ -61,7 +65,11 @@ export const problemsApi = {
   validate: async (input: {
     problemId: string;
     reportedResults: { index: number; passed: boolean }[];
-  }): Promise<{ status: SubmissionStatus; passedCount: number; totalTests: number }> => {
+  }): Promise<{
+    status: SubmissionStatus;
+    passedCount: number;
+    totalTests: number;
+  }> => {
     const { data } = await api.post('/problems/validate', input);
     return data.data;
   },

@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose';
+
 type CourseLanguage =
   | 'html-css'
   | 'javascript'
@@ -10,7 +11,9 @@ type CourseLanguage =
   | 'dsa-python'
   | 'dsa-javascript';
 
-export interface LessonDocument extends Document {
+type ProblemOutputMode = 'return' | 'print';
+
+interface LessonFields {
   courseId: string;
   title: string;
   slug: string;
@@ -18,9 +21,13 @@ export interface LessonDocument extends Document {
   content: string;
   starterCode: string;
   solution: string;
+  functionName: string;
+  outputMode: ProblemOutputMode;
   language: CourseLanguage;
-  testCases: Array<{ input: string; expectedOutput: string }>;
+  testCases: { input: string; expectedOutput: string }[];
 }
+
+export interface LessonDocument extends LessonFields, Document {}
 
 const testCaseSchema = new Schema(
   {
@@ -39,6 +46,12 @@ const lessonSchema = new Schema<LessonDocument>(
     content: { type: String, required: true },
     starterCode: { type: String, default: '' },
     solution: { type: String, default: '' },
+    functionName: { type: String, default: 'solve', trim: true },
+    outputMode: {
+      type: String,
+      enum: ['return', 'print'] as ProblemOutputMode[],
+      default: 'print',
+    },
     language: {
       type: String,
       enum: [

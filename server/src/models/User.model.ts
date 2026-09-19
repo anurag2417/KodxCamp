@@ -1,7 +1,15 @@
 import mongoose, { Schema, type Document } from 'mongoose';
-import type { IUser, UserRole } from '@kodxcamp/shared';
+type UserRole = 'student' | 'instructor' | 'admin';
 
-export interface UserDocument extends Omit<IUser, '_id'>, Document {
+export interface UserDocument extends Document {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  avatar?: string;
+  xp: number;
+  streak: number;
+  lastActiveAt: Date;
   lastActiveDay?: string;
 }
 

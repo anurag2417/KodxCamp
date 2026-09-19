@@ -72,9 +72,9 @@ export const courseService = {
       .lean();
     if (!lesson) throw new ApiError(404, 'Lesson not found');
 
-    const visibleTestCases: LessonTestCase[] = (lesson.testCases ?? []).filter(
-      (tc: LessonTestCase) => !tc.isHidden
-    );
+    const visibleTestCases: LessonTestCase[] = (
+      lesson.testCases as unknown as LessonTestCase[] | undefined ?? []
+    ).filter((tc) => !tc.isHidden);
 
     const safeLesson = {
       ...lesson,

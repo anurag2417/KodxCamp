@@ -10,6 +10,10 @@ const testCaseSchema = z.object({
   expectedOutput: z.string().min(1, 'Expected output is required'),
 });
 
+/**
+ * Body schema for POST /admin/problems.
+ * Wrapped in { body } to match the validator contract.
+ */
 export const problemBodySchema = z.object({
   body: z.object({
     title: z.string().min(2, 'Title must be at least 2 chars').max(150),
@@ -17,12 +21,26 @@ export const problemBodySchema = z.object({
       .string()
       .min(2, 'Slug must be at least 2 chars')
       .max(80)
-      .regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and dashes'),
+      .regex(
+        /^[a-z0-9-]+$/,
+        'Slug can only contain lowercase letters, numbers, and dashes'
+      ),
     difficulty: z.enum(['easy', 'medium', 'hard']),
     topics: z.array(z.string()).default([]),
     statement: z.string().min(10, 'Statement must be at least 10 chars'),
+    functionName: z
+      .string()
+      .min(1, 'Function name is required')
+      .max(60)
+      .regex(
+        /^[A-Za-z_][A-Za-z0-9_]*$/,
+        'Function name must be a valid identifier (letters, digits, underscores; cannot start with a digit)'
+      ),
+    outputMode: z.enum(['return', 'print']).default('return'),
     starterCode: z.record(z.string()).default({}),
-    testCases: z.array(testCaseSchema).min(1, 'At least one test case is required'),
+    testCases: z
+      .array(testCaseSchema)
+      .min(1, 'At least one test case is required'),
   }),
 });
 
@@ -39,6 +57,13 @@ export const updateProblemSchema = z.object({
     difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
     topics: z.array(z.string()).optional(),
     statement: z.string().min(10).optional(),
+    functionName: z
+      .string()
+      .min(1)
+      .max(60)
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
+      .optional(),
+    outputMode: z.enum(['return', 'print']).optional(),
     starterCode: z.record(z.string()).optional(),
     testCases: z.array(testCaseSchema).optional(),
   }),
@@ -55,17 +80,20 @@ export const adminProblemController = {
   }),
 
   getFull: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const problem = await problemService.getFullBySlug(String(req.params.slug));
+    const problem = await problemService.getFullBySlug(req.params.slug as string);
     return ApiResponse.success(res, problem);
   }),
 
   update: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const updated = await problemService.updateProblem(String(req.params.slug), req.body);
+    const updated = await problemService.updateProblem(
+      req.params.slug as string,
+      req.body
+    );
     return ApiResponse.success(res, updated, 'Problem updated');
   }),
 
   remove: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const result = await problemService.deleteProblem(String(req.params.slug));
+    const result = await problemService.deleteProblem(req.params.slug as string);
     return ApiResponse.success(res, result, 'Problem deleted');
   }),
 };

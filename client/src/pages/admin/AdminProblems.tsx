@@ -20,6 +20,8 @@ interface ProblemEditorState {
   slug: string;
   difficulty: 'easy' | 'medium' | 'hard';
   statement: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
   testCases: EditableTestCase[];
 }
@@ -29,11 +31,12 @@ const emptyProblem: ProblemEditorState = {
   slug: '',
   difficulty: 'easy',
   statement: '',
+  functionName: 'solve',
+  outputMode: 'return',
   starterCode: { javascript: '', python: '' },
   testCases: [],
 };
 
-/** Extract a useful error message + field details from an axios error. */
 function extractError(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const body = err.response?.data as
@@ -86,7 +89,10 @@ export const AdminProblems: React.FC = () => {
       .replace(/-+/g, '-');
 
   const openCreate = () => {
-    setEditing({ ...emptyProblem, starterCode: { javascript: '', python: '' } });
+    setEditing({
+      ...emptyProblem,
+      starterCode: { javascript: '', python: '' },
+    });
     setTopicsText('');
     setStarterCodeText(JSON.stringify({ javascript: '', python: '' }, null, 2));
     setOriginalSlug(null);
@@ -100,6 +106,8 @@ export const AdminProblems: React.FC = () => {
       slug: full.slug,
       difficulty: full.difficulty,
       statement: full.statement,
+      functionName: full.functionName ?? 'solve',
+      outputMode: full.outputMode ?? 'return',
       starterCode: {
         javascript: full.starterCode.javascript ?? '',
         python: full.starterCode.python ?? '',
@@ -145,42 +153,52 @@ export const AdminProblems: React.FC = () => {
       starterCode = parsed as Record<string, string>;
     } catch (e) {
       setError(
-        `Starter code must be a JSON object like {"javascript": "...", "python": "..."}.\n${e instanceof Error ? e.message : ''}`
+        `Starter code must be a JSON object like {"javascript": "...", "python": "..."}.\n${
+          e instanceof Error ? e.message : ''
+        }`
       );
       setBusy(false);
       return;
     }
 
-    // Client-side pre-validation — surface obvious issues before the request
-    const validationIssues: string[] = [];
+    // Client-side pre-validation
+    const issues: string[] = [];
     if (!editing.title || editing.title.length < 2) {
-      validationIssues.push('Title must be at least 2 characters');
+      issues.push('Title must be at least 2 characters');
     }
     if (!editing.slug || editing.slug.length < 2) {
-      validationIssues.push('Slug must be at least 2 characters');
+      issues.push('Slug must be at least 2 characters');
     }
     if (!/^[a-z0-9-]+$/.test(editing.slug)) {
-      validationIssues.push(
+      issues.push(
         'Slug can only contain lowercase letters, numbers, and dashes'
       );
     }
     if (!editing.statement || editing.statement.length < 10) {
-      validationIssues.push('Statement must be at least 10 characters');
+      issues.push('Statement must be at least 10 characters');
+    }
+    if (
+      !editing.functionName ||
+      !/^[A-Za-z_][A-Za-z0-9_]*$/.test(editing.functionName)
+    ) {
+      issues.push(
+        'Function name must be a valid identifier (letters, digits, underscores; cannot start with a digit)'
+      );
     }
     if (editing.testCases.length === 0) {
-      validationIssues.push('At least one test case is required');
+      issues.push('At least one test case is required');
     }
     const emptyExpected = editing.testCases.findIndex(
       (tc) => !tc.expectedOutput || tc.expectedOutput.length === 0
     );
     if (emptyExpected !== -1) {
-      validationIssues.push(
+      issues.push(
         `Test #${emptyExpected + 1} is missing its expected output`
       );
     }
 
-    if (validationIssues.length) {
-      setError(validationIssues.map((p) => `• ${p}`).join('\n'));
+    if (issues.length) {
+      setError(issues.map((p) => `• ${p}`).join('\n'));
       setBusy(false);
       return;
     }
@@ -194,6 +212,8 @@ export const AdminProblems: React.FC = () => {
         .map((t) => t.trim())
         .filter(Boolean),
       statement: editing.statement,
+      functionName: editing.functionName,
+      outputMode: editing.outputMode,
       starterCode,
       testCases: editing.testCases,
     };
@@ -265,7 +285,6 @@ export const AdminProblems: React.FC = () => {
                 setEditing({
                   ...editing,
                   title: e.target.value,
-                  // Only auto-slug on create — don't rename existing URLs
                   slug: originalSlug ? editing.slug : autoSlug(e.target.value),
                 })
               }
@@ -298,11 +317,60 @@ export const AdminProblems: React.FC = () => {
             />
           </div>
 
+          {/* Function name + output mode */}
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-secondary">
+                Function name
+              </label>
+              <Input
+                placeholder="e.g. sum, twoSum, reverseString"
+                value={editing.functionName}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    functionName: e.target.value.trim(),
+                  })
+                }
+              />
+              <p className="mt-1 text-[10px] text-text-muted">
+                JS: <code>function {editing.functionName || 'name'}(...)</code>{' '}
+                · Python:{' '}
+                <code>def {editing.functionName || 'name'}(...):</code>
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-secondary">
+                Output mode
+              </label>
+              <select
+                value={editing.outputMode}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    outputMode: e.target.value as 'return' | 'print',
+                  })
+                }
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+              >
+                <option value="return">Return value (recommended)</option>
+                <option value="print">Print to console</option>
+              </select>
+              <p className="mt-1 text-[10px] text-text-muted">
+                {editing.outputMode === 'return'
+                  ? 'Student returns a value; the platform compares it to Expected Output.'
+                  : 'Student prints; the platform compares stdout to Expected Output.'}
+              </p>
+            </div>
+          </div>
+
           <textarea
             placeholder="Problem statement"
             rows={5}
             value={editing.statement}
-            onChange={(e) => setEditing({ ...editing, statement: e.target.value })}
+            onChange={(e) =>
+              setEditing({ ...editing, statement: e.target.value })
+            }
             className="mt-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
           />
 
@@ -317,10 +385,9 @@ export const AdminProblems: React.FC = () => {
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
             />
             <p className="mt-1 text-[10px] text-text-muted">
-              Example:{' '}
-              <code>
-                {`{"javascript":"function solve() {}","python":"def solve(): pass"}`}
-              </code>
+              Students define only the function — do NOT include{' '}
+              <code>__input__</code> or <code>console.log</code> in the starter
+              code. The runner calls the function for them.
             </p>
           </div>
 
@@ -356,7 +423,9 @@ export const AdminProblems: React.FC = () => {
           <Spinner className="h-8 w-8" />
         </div>
       ) : (
-        <AdminTable headers={['Title', 'Difficulty', 'Topics', 'Actions']}>
+        <AdminTable
+          headers={['Title', 'Difficulty', 'Function', 'Topics', 'Actions']}
+        >
           {problems.map((p) => (
             <tr key={p._id} className="hover:bg-surface-secondary">
               <td className="px-4 py-3">
@@ -365,6 +434,9 @@ export const AdminProblems: React.FC = () => {
               </td>
               <td className="px-4 py-3">
                 <DifficultyBadge difficulty={p.difficulty} />
+              </td>
+              <td className="px-4 py-3 font-mono text-xs text-text-secondary">
+                {p.functionName ?? '—'}
               </td>
               <td className="px-4 py-3 text-xs text-text-muted">
                 {p.topics?.join(', ')}
@@ -388,7 +460,10 @@ export const AdminProblems: React.FC = () => {
           ))}
           {problems.length === 0 && (
             <tr>
-              <td colSpan={4} className="px-4 py-10 text-center text-text-muted">
+              <td
+                colSpan={5}
+                className="px-4 py-10 text-center text-text-muted"
+              >
                 No problems yet. Add your first one.
               </td>
             </tr>

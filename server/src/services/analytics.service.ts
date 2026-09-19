@@ -79,11 +79,11 @@ export const analyticsService = {
           completedLessons: p.completedLessons?.length ?? 0,
           totalLessons: c.totalLessons,
           percentage: p.percentage,
-          updatedAt: p.updatedAt,
+          updatedAt: (p as unknown as { updatedAt?: Date }).updatedAt,
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
-      .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+      .sort((a, b) => +new Date(b.updatedAt ?? 0) - +new Date(a.updatedAt ?? 0));
   },
 
   /**
@@ -129,7 +129,7 @@ export const analyticsService = {
 
     const enriched = await Promise.all(
       rows.map(async (r) => {
-        let label = r.type;
+        //let label = r.type;
         let title = '';
         let link = '';
 

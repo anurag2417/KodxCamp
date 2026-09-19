@@ -32,6 +32,8 @@ import { AdminProblems } from './pages/admin/AdminProblems';
 import { AdminProjects } from './pages/admin/AdminProjects';
 import { AdminClasses } from './pages/admin/AdminClasses';
 import { AdminUsers } from './pages/admin/AdminUsers';
+import { AdminBulkImport } from './pages/admin/AdminBulkImport';
+
 
 import { useThemeStore } from './store/theme.store';
 import { useAuthStore } from './store/auth.store';
@@ -156,6 +158,7 @@ export default function App() {
               <Route path="projects" element={<AdminProjects />} />
               <Route path="classes" element={<AdminClasses />} />
               <Route path="users" element={<AdminUsers />} />
+              <Route path="bulk-import" element={<AdminBulkImport />} />
             </Route>
 
             {/* 404 inside layout */}

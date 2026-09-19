@@ -1,21 +1,19 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 type Difficulty = 'easy' | 'medium' | 'hard';
+type ProblemOutputMode = 'return' | 'print';
 
-interface IProblem {
-  _id: unknown;
+export interface ProblemDocument extends Document {
+  number: number;
   title: string;
   slug: string;
   difficulty: Difficulty;
   topics: string[];
   statement: string;
-  starterCode: Record<string, string>;
-  testCases: Array<{
-    input: string;
-    expectedOutput: string;
-  }>;
+  functionName: string;
+  outputMode: ProblemOutputMode;
+  starterCode: Map<string, string>;
+  testCases: Array<{ input?: string; expectedOutput: string }>;
 }
-
-export interface ProblemDocument extends Omit<IProblem, '_id'>, Document {}
 
 const testCaseSchema = new Schema(
   {
@@ -27,6 +25,7 @@ const testCaseSchema = new Schema(
 
 const problemSchema = new Schema<ProblemDocument>(
   {
+    number: { type: Number, required: true, unique: true, index: true },
     title: { type: String, required: true },
     slug: { type: String, required: true, unique: true },
     difficulty: {
@@ -36,6 +35,17 @@ const problemSchema = new Schema<ProblemDocument>(
     },
     topics: { type: [String], default: [] },
     statement: { type: String, required: true },
+    functionName: {
+      type: String,
+      required: true,
+      default: 'solve',
+      trim: true,
+    },
+    outputMode: {
+      type: String,
+      enum: ['return', 'print'] as ProblemOutputMode[],
+      default: 'return',
+    },
     starterCode: { type: Map, of: String, default: {} },
     testCases: { type: [testCaseSchema], default: [] },
   },

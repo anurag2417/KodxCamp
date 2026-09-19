@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { z } from 'zod';
 import { projectService } from '../services/project.service.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
