@@ -1,20 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import App from './App';
-import { ErrorBoundary } from './components/layout/ErrorBoundary';
+import App from '@/app/App';
+import { AppProviders } from '@/app/providers';
+import { ErrorBoundary } from '@/shared/components/layout/ErrorBoundary';
 import './styles/index.css';
-
-const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
+      <AppProviders>
         <App />
-        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
-      </QueryClientProvider>
+      </AppProviders>
     </ErrorBoundary>
   </React.StrictMode>
 );

@@ -1,0 +1,18 @@
+import { useQuery } from '@tanstack/react-query';
+import { coursesApi } from '@/features/courses/api';
+import { queryKeys } from '@/shared/lib/queryKeys';
+
+export function useCourse(slug: string | undefined) {
+  const query = useQuery({
+    queryKey: queryKeys.courses.detail(slug ?? ''),
+    queryFn: () => coursesApi.getBySlug(slug!),
+    enabled: !!slug,
+  });
+
+  return {
+    course: query.data ?? null,
+    loading: query.isLoading,
+    error: query.error ? 'Course not found' : null,
+    reload: query.refetch,
+  };
+}

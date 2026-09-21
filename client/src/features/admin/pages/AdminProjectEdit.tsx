@@ -1,0 +1,1 @@
+export const AdminProjectEdit: React.FC = () => null;
