@@ -46,7 +46,7 @@ export const Classes: React.FC = () => {
           </h2>
           <ClassForm
             onCreated={(cls: ApiClass) => {
-              setClasses((prev) => [cls, ...prev]);
+              setClasses((prev) => [cls, ...(prev ?? [])]);
               setShowForm(false);
             }}
             onCancel={() => setShowForm(false)}
