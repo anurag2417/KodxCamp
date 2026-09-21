@@ -12,6 +12,7 @@ import {
   Video,
   PlayCircle,
   Shield,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -53,18 +54,30 @@ const sections: NavSection[] = [
   },
 ];
 
+const instructorSection: NavSection = {
+  title: 'INSTRUCTOR',
+  items: [
+    { to: '/instructor', label: 'My Courses', icon: BookOpen, end: true },
+    // Placeholder for future pages — links will resolve once built
+    // { to: '/instructor/students', label: 'Students', icon: Users },
+  ],
+};
+
 const adminSection: NavSection = {
   title: 'ADMIN',
-  items: [
-    { to: '/admin', label: 'Admin Panel', icon: Shield, end: true },
-  ],
+  items: [{ to: '/admin', label: 'Admin Panel', icon: Shield, end: true }],
 };
 
 export const Sidebar: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
+  const isInstructor = user?.role === 'instructor' || isAdmin;
 
-  const allSections = isAdmin ? [...sections, adminSection] : sections;
+  const allSections: NavSection[] = [
+    ...sections,
+    ...(isInstructor ? [instructorSection] : []),
+    ...(isAdmin ? [adminSection] : []),
+  ];
 
   return (
     <aside className="hidden w-64 shrink-0 border-r border-border bg-surface-secondary lg:block">

@@ -5,9 +5,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const courseSlugSchema = z.object({
-  params: z.object({
-    slug: z.string().min(1),
-  }),
+  params: z.object({ slug: z.string().min(1) }),
 });
 
 export const lessonSlugSchema = z.object({
@@ -24,12 +22,14 @@ export const courseController = {
   }),
 
   getBySlug: asyncHandler(async (req: Request, res: Response) => {
-    const course = await courseService.getBySlug(req.params.slug as string);
+    const slug = String(req.params.slug);
+    const course = await courseService.getBySlug(slug);
     return ApiResponse.success(res, course);
   }),
 
   getLesson: asyncHandler(async (req: Request, res: Response) => {
-    const { courseSlug, lessonSlug } = req.params;
+    const courseSlug = String(req.params.courseSlug);
+    const lessonSlug = String(req.params.lessonSlug);
     const result = await courseService.getLessonBySlug(courseSlug, lessonSlug);
     return ApiResponse.success(res, result);
   }),

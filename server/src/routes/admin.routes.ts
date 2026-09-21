@@ -5,15 +5,6 @@ import { validate } from '../middleware/validate.middleware.js';
 
 import { adminStatsController } from '../controllers/admin.stats.controller.js';
 import {
-  adminCourseController,
-  createCourseSchema,
-  updateCourseSchema,
-  createLessonSchema,
-  updateLessonSchema,
-  lessonSlugSchema,
-  courseSlugOnlySchema,
-} from '../controllers/admin.course.controller.js';
-import {
   adminProblemController,
   problemBodySchema,
   updateProblemSchema,
@@ -36,46 +27,13 @@ const router = Router();
 
 router.use(requireAuth, requireAdmin);
 
-// ─── Stats ─────────────────────────────────────
+// Stats + Users
 router.get('/stats', adminStatsController.platform);
-
-// ─── Users ─────────────────────────────────────
 router.get('/users', adminStatsController.listUsers);
 router.patch('/users/:userId/role', adminStatsController.setUserRole);
 router.delete('/users/:userId', adminStatsController.deleteUser);
 
-// ─── Courses ───────────────────────────────────
-router.post('/courses', validate(createCourseSchema), adminCourseController.create);
-router.get(
-  '/courses/:slug',
-  validate(courseSlugOnlySchema),
-  adminCourseController.getFull
-);
-router.patch(
-  '/courses/:slug',
-  validate(updateCourseSchema),
-  adminCourseController.update
-);
-router.delete('/courses/:slug', adminCourseController.remove);
-
-// ─── Lessons ───────────────────────────────────
-router.post(
-  '/courses/:courseSlug/lessons',
-  validate(createLessonSchema),
-  adminCourseController.createLesson
-);
-router.patch(
-  '/courses/:courseSlug/lessons/:lessonSlug',
-  validate(updateLessonSchema),
-  adminCourseController.updateLesson
-);
-router.delete(
-  '/courses/:courseSlug/lessons/:lessonSlug',
-  validate(lessonSlugSchema),
-  adminCourseController.removeLesson
-);
-
-// ─── Problems ──────────────────────────────────
+// Problems (admin-only)
 router.post('/problems', validate(problemBodySchema), adminProblemController.create);
 router.get(
   '/problems/:slug',
@@ -93,13 +51,13 @@ router.delete(
   adminProblemController.remove
 );
 
-// ─── Projects ──────────────────────────────────
+// Projects (admin-only)
 router.post('/projects', validate(projectBodySchema), adminProjectController.create);
 router.get('/projects/:slug', adminProjectController.getFull);
 router.patch('/projects/:slug', adminProjectController.update);
 router.delete('/projects/:slug', adminProjectController.remove);
 
-// ─── Classes ───────────────────────────────────
+// Classes (admin override)
 router.get('/classes', adminClassController.list);
 router.patch(
   '/classes/:slug',
@@ -108,7 +66,7 @@ router.patch(
 );
 router.delete('/classes/:slug', adminClassController.remove);
 
-// ─── Bulk import ────────────────────────────────
+// Bulk import (admin-only)
 router.post('/bulk/import', validate(importSchema), adminBulkController.import);
 
 export default router;

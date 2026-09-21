@@ -9,6 +9,15 @@ export type CourseLanguage =
   | 'dsa-python'
   | 'dsa-javascript';
 
+export type CourseTeamRole = 'lead' | 'author' | 'reviewer' | 'ta' | 'viewer';
+
+export interface ICourseTeamMember {
+  userId: string;
+  role: CourseTeamRole;
+  addedAt: Date;
+  addedBy: string;
+}
+
 export interface ITestCase {
   input: string;
   expectedOutput: string;
@@ -40,6 +49,9 @@ export interface ICourse {
   thumbnail?: string;
   lessons: ILesson[];
   totalLessons: number;
+  createdBy: string;
+  members: ICourseTeamMember[];
+  published: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

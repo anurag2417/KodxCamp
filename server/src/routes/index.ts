@@ -8,6 +8,7 @@ import classRoutes from './class.routes.js';
 import achievementRoutes from './achievement.routes.js';
 import analyticsRoutes from './analytics.routes.js';
 import adminRoutes from './admin.routes.js';
+import instructorRoutes from './instructor.routes.js';
 import { csrfMiddleware } from '../middleware/csrf.middleware.js';
 
 const router = Router();
@@ -20,11 +21,12 @@ router.get('/health', (_req, res) => {
   });
 });
 
-// CSRF protection for every state-changing request below this line
+// CSRF for state-changing requests
 router.use(csrfMiddleware);
 
 router.use('/auth', authRoutes);
 router.use('/courses', courseRoutes);
+router.use('/instructor', instructorRoutes);
 router.use('/progress', progressRoutes);
 router.use('/problems', problemRoutes);
 router.use('/projects', projectRoutes);

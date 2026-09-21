@@ -26,14 +26,14 @@ import { NotFound } from './pages/NotFound';
 import { AdminGuard } from './components/admin/AdminGuard';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { AdminCourses } from './pages/admin/AdminCourses';
-import { AdminCourseEdit } from './pages/admin/AdminCourseEdit';
 import { AdminProblems } from './pages/admin/AdminProblems';
 import { AdminProjects } from './pages/admin/AdminProjects';
 import { AdminClasses } from './pages/admin/AdminClasses';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminBulkImport } from './pages/admin/AdminBulkImport';
 
+import { InstructorGuard } from './components/instructor/InstructorGuard';
+import { InstructorLayout } from './components/instructor/InstructorLayout';
 
 import { useThemeStore } from './store/theme.store';
 import { useAuthStore } from './store/auth.store';
@@ -64,7 +64,7 @@ export default function App() {
 
   useEffect(() => {
     initTheme();
-    fetchMe();
+    void fetchMe();
   }, [initTheme, fetchMe]);
 
   return (
@@ -73,30 +73,32 @@ export default function App() {
         future={{
           v7_startTransition: true,
           v7_relativeSplatPath: true,
-        }}>
+        }}
+      >
         <Routes>
-          {/* Public standalone */}
+          {/* ─── Standalone (no layout) ───────────────────── */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Public marketing + catalog (AppLayout) */}
+          {/* ─── App layout (public + authenticated) ─────── */}
           <Route path="/" element={<AppLayout />}>
+            {/* Public */}
             <Route index element={<Home />} />
             <Route path="courses" element={<Courses />} />
             <Route path="courses/:slug" element={<CourseDetail />} />
-            <Route path="practice" element={<Practice />} />
-            <Route path="playground" element={<Playground />} />
-            <Route path="projects" element={<Projects />} />
-            <Route path="classes" element={<Classes />} />
-            <Route path="classes/:slug" element={<ClassDetail />} />
             <Route
               path="courses/:courseSlug/lessons/:lessonSlug"
               element={<Lesson />}
             />
+            <Route path="practice" element={<Practice />} />
             <Route path="practice/:slug" element={<ProblemDetail />} />
+            <Route path="playground" element={<Playground />} />
+            <Route path="projects" element={<Projects />} />
             <Route path="projects/:slug" element={<ProjectDetail />} />
+            <Route path="classes" element={<Classes />} />
+            <Route path="classes/:slug" element={<ClassDetail />} />
 
-            {/* Authenticated pages */}
+            {/* Authenticated */}
             <Route
               path="dashboard"
               element={
@@ -146,7 +148,23 @@ export default function App() {
               }
             />
 
-            {/* Admin */}
+            {/* ─── Instructor section ──────────────────── */}
+            <Route
+              path="instructor"
+              element={
+                <InstructorGuard>
+                  <InstructorLayout />
+                </InstructorGuard>
+              }
+            >
+              <Route index element={<Navigate to="/courses" replace />} />
+              <Route
+                path="courses/:slug"
+                element={<Navigate to="/courses" replace />}
+              />
+            </Route>
+
+            {/* ─── Admin section ──────────────────────── */}
             <Route
               path="admin"
               element={
@@ -156,16 +174,25 @@ export default function App() {
               }
             >
               <Route index element={<AdminDashboard />} />
-              <Route path="courses" element={<AdminCourses />} />
-              <Route path="courses/:slug" element={<AdminCourseEdit />} />
               <Route path="problems" element={<AdminProblems />} />
               <Route path="projects" element={<AdminProjects />} />
               <Route path="classes" element={<AdminClasses />} />
               <Route path="users" element={<AdminUsers />} />
               <Route path="bulk-import" element={<AdminBulkImport />} />
+
+              {/* Legacy course routes now live in the instructor section.
+                  Redirect so old bookmarks/links still work. */}
+              <Route
+                path="courses"
+                element={<Navigate to="/instructor" replace />}
+              />
+              <Route
+                path="courses/:slug"
+                element={<Navigate to="/instructor" replace />}
+              />
             </Route>
 
-            {/* 404 inside layout */}
+            {/* ─── 404 catch-all inside layout ─────────── */}
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
