@@ -1,51 +1,71 @@
 import { Link } from 'react-router-dom';
-import { Button } from '@/shared/components/ui/Button';
+import { ArrowRight } from 'lucide-react';
+import { Button } from '../../../shared/components/ui/Button';
+import { Seo } from '../../../shared/components/seo/Seo';
+import { Hero } from '../components/Hero';
+import { FeatureGrid } from '../components/FeatureGrid';
+import { CodePreview } from '../components/CodePreview';
+import { HowItWorks } from '../components/HowItWorks';
+import { Testimonials } from '../components/Testimonials';
+import { Pricing } from '../components/Pricing';
+import { Faq } from '../components/Faq';
 
 export const Home: React.FC = () => (
-  <div className="w-full">
-    {/* Hero */}
-    <section className="w-full bg-gradient-to-br from-brand-900 to-brand-700 px-6 py-24 text-white">
-      <div className="mx-auto w-full max-w-7xl">
-        <h1 className="max-w-3xl text-4xl font-bold leading-tight md:text-6xl">
-          Learn to code by doing — <span className="text-brand-300">right in your browser.</span>
-        </h1>
-        <p className="mt-6 max-w-2xl text-lg text-[#C7D8D1]">
-          Interactive lessons, DSA practice, personal playgrounds, projects, and live classes —
-          all in one calm, browser-first learning environment.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link to="/register">
-            <Button size="lg">Start Learning Free</Button>
-          </Link>
-          <Link to="/courses">
-            <Button size="lg" variant="ghost" className="text-white">
-              Explore Courses
-            </Button>
-          </Link>
-        </div>
-      </div>
-    </section>
+  <>
+    <Seo
+      title="Learn to code by doing"
+      description="Interactive lessons, DSA practice, live projects, and classes — all in the browser. Write real code, run real tests, build real things."
+    />
 
-    {/* Features */}
-    <section className="w-full px-6 py-20">
-      <div className="mx-auto grid w-full max-w-7xl gap-6 md:grid-cols-3">
-        {[
-          { title: 'Interactive Lessons', desc: 'Read, then write and run code immediately.' },
-          { title: 'DSA Practice', desc: 'LeetCode-style practice — no contests, just growth.' },
-          { title: 'Browser-First Execution', desc: 'Run JS, Python, SQL safely in your browser.' },
-          { title: 'Personal Playground', desc: 'Experiment with your own code anytime.' },
-          { title: 'Real Projects', desc: 'Build frontend, React, API, and SQL projects.' },
-          { title: 'Live Classes', desc: 'Join Google Meet classes or rewatch recordings.' },
-        ].map((f) => (
-          <div
-            key={f.title}
-            className="rounded-xl border border-border bg-surface p-6 transition-shadow hover:shadow-md"
-          >
-            <h3 className="text-lg font-semibold text-text-primary">{f.title}</h3>
-            <p className="mt-2 text-sm text-text-muted">{f.desc}</p>
+    <div className="w-full">
+      <Hero />
+      <FeatureGrid />
+      <CodePreview />
+      <HowItWorks />
+      <Testimonials />
+      <Pricing />
+      <Faq />
+
+      {/* Final CTA */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-[#0d3d42] to-brand-700 py-24">
+        <div
+          className="pointer-events-none absolute -left-40 top-10 h-96 w-96 rounded-full bg-brand-500/20 blur-3xl hero-orb-a"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute -right-40 bottom-10 h-96 w-96 rounded-full bg-brand-300/20 blur-3xl hero-orb-b"
+          aria-hidden="true"
+        />
+        <div className="relative mx-auto max-w-3xl px-6 text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-white md:text-5xl">
+            Ready to write your first line?
+          </h2>
+          <p className="mt-6 text-lg text-[#C7D8D1]">
+            Create a free account and start a course in under a minute. No card,
+            no trial, no fine print.
+          </p>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            <Link to="/register">
+              <Button size="lg" className="group">
+                Start Learning Free
+                <ArrowRight
+                  size={16}
+                  className="transition-transform group-hover:translate-x-0.5"
+                />
+              </Button>
+            </Link>
+            <Link to="/login">
+              <Button
+                size="lg"
+                variant="ghost"
+                className="text-white hover:bg-white/10"
+              >
+                I already have an account
+              </Button>
+            </Link>
           </div>
-        ))}
-      </div>
-    </section>
-  </div>
+        </div>
+      </section>
+    </div>
+  </>
 );
