@@ -2,24 +2,7 @@ import crypto from 'node:crypto';
 import { Problem } from '../models/Problem.model.js';
 import { judgeService } from './judge.service.js';
 import { ApiError } from '../utils/ApiError.js';
-
-type CanonicalizationId =
-  | 'trim-trailing-newline'
-  | 'trim'
-  | 'normalize-whitespace';
-
-function canonicalizeOutput(value: string, mode: CanonicalizationId): string {
-  switch (mode) {
-    case 'trim-trailing-newline':
-      return value.replace(/\r?\n$/, '');
-    case 'trim':
-      return value.trim();
-    case 'normalize-whitespace':
-      return value.trim().replace(/\s+/g, ' ');
-    default:
-      return value;
-  }
-}
+import { canonicalize, type CanonicalizationId } from '@kodxcamp/shared';
 
 interface TestCaseInput {
   input: string;
@@ -50,14 +33,6 @@ async function nextProblemNumber(): Promise<number> {
   return (last?.number ?? 0) + 1;
 }
 
-/**
- * Normalize an incoming test case.
- *
- * Hidden tests must arrive with an `expectedOutputHash` (the admin UI
- * computes it from the plaintext via `hashExpectedOutput` before
- * posting). If somehow a plaintext expectedOutput reaches a hidden
- * test, we refuse rather than store it.
- */
 function normalizeTestCase(
   tc: TestCaseInput,
   index: number
@@ -97,15 +72,16 @@ function normalizeTestCase(
 }
 
 /**
- * Hash a plaintext expected output. Used by the migration script and by
- * admin tooling that computes the hash before saving. Not exposed via
- * the API — the client should never send plaintext for hidden tests.
+ * Hash a plaintext expected output. Used by admin tooling that wants to
+ * convert a plaintext answer into the hashed form before saving. The
+ * client should never send plaintext for a hidden test through the
+ * normal API — the Zod schema rejects it.
  */
 export function hashExpectedOutput(
   plaintext: string,
   canonicalization: CanonicalizationId = 'trim-trailing-newline'
 ): string {
-  const canon = canonicalizeOutput(plaintext, canonicalization);
+  const canon = canonicalize(plaintext, canonicalization);
   return crypto.createHash('sha256').update(canon).digest('hex');
 }
 
@@ -127,9 +103,14 @@ export const problemService = {
   /**
    * Public problem view — for students.
    *
-   * Splits test cases into visible (plaintext) and hidden (hashed).
-   * Generates a fresh per-request session salt for the client to use
-   * when hashing. The salt is NOT persisted anywhere.
+   * Splits test cases into visible (with plaintext expected output) and
+   * hidden (with only a SHA-256 hash). The hidden test input IS sent to
+   * the client because the client must run it — there is no way around
+   * that in a browser-only judge. The hidden expected output never
+   * leaves the server.
+   *
+   * See the project brief §4.3.1 for the attack surface this does and
+   * does not close.
    */
   async getBySlug(slug: string, userId?: string) {
     const problem = await Problem.findOne({ slug }).lean();
@@ -182,15 +163,14 @@ export const problemService = {
       starterCode: problem.starterCode,
       testCases: visibleTestCases,
       hiddenTestCases,
-      sessionSalt: crypto.randomUUID(),
       solved: solvedIds.includes(problem._id.toString()),
     };
   },
 
   /**
-   * Admin view — includes every test case in raw form. Hidden tests
-   * are returned as-is (hash only) so the admin editor can display and
-   * re-save them without recomputing.
+   * Admin view — includes every test case in raw form. Hidden tests are
+   * returned as-is (hash only) so the admin editor can display and
+   * re-save them.
    */
   async getFullBySlug(slug: string) {
     const problem = await Problem.findOne({ slug }).lean();
@@ -249,7 +229,9 @@ export const problemService = {
 
     const update: Record<string, unknown> = { ...patch };
     if (patch.testCases) {
-      update.testCases = patch.testCases.map((tc, i) => normalizeTestCase(tc, i));
+      update.testCases = patch.testCases.map((tc, i) =>
+        normalizeTestCase(tc, i)
+      );
     }
 
     const updated = await Problem.findOneAndUpdate({ slug }, update, {

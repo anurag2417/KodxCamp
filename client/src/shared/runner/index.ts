@@ -5,11 +5,13 @@ import { runSql } from '@/shared/runner/sqlRunner';
 import { runHtml } from '@/shared/runner/htmlRunner';
 
 export type { RunResult, RunnerOptions, Verdict } from '@/shared/runner/types';
+export {
+  runHiddenTests,
+  type HiddenTestCase,
+  type HiddenTestOutcome,
+  type HiddenRunOptions,
+} from '@/shared/runner/hiddenHarness';
 
-/**
- * Run code in the appropriate in-browser runtime.
- * Languages supported: javascript, typescript (naive strip), python, sql, html-css, tailwind, react.
- */
 export async function runCode(
   language: string,
   code: string,
@@ -21,7 +23,6 @@ export async function runCode(
       return runJavaScript(code, opts);
 
     case 'typescript': {
-      // Naive TS → JS (strips common annotations). Good enough for lessons.
       const stripped = code
         .replace(/:\s*[A-Za-z_][A-Za-z0-9_<>[\]|&\s]*(?=[=;,)\n])/g, '')
         .replace(/\bas\s+[A-Za-z_][A-Za-z0-9_<>[\]|&\s]*/g, '');

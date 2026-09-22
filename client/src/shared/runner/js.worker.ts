@@ -1,21 +1,54 @@
 /// <reference lib="webworker" />
 
+import { canonicalize } from '@kodxcamp/shared';
+
 /**
  * JavaScript sandbox worker.
- * Runs user code in a fresh scope, captures console output.
+ *
+ * Two modes:
+ *  - `run`        — visible test / playground. Returns raw stdout.
+ *  - `run-hidden` — hidden test. Hashes the output inside the worker
+ *                   and posts back only `{ passed }`. Raw stdout
+ *                   never crosses the worker boundary.
  */
 
-type InMsg = { type: 'run'; code: string };
+type InMsg =
+  | { type: 'run'; code: string }
+  | {
+      type: 'run-hidden';
+      requestId: string;
+      code: string;
+      expectedOutputHash: string;
+      canonicalization: 'trim-trailing-newline' | 'trim-all' | 'exact';
+    };
+
 type OutMsg =
   | { type: 'stdout'; text: string }
   | { type: 'done'; runtimeMs: number }
-  | { type: 'error'; text: string; kind: 'runtime' | 'syntax'; runtimeMs: number };
+  | { type: 'error'; text: string; kind: 'runtime' | 'syntax'; runtimeMs: number }
+  | {
+      type: 'hidden-result';
+      requestId: string;
+      passed: boolean;
+      runtimeMs: number;
+    };
 
 const post = (msg: OutMsg) => (self as unknown as Worker).postMessage(msg);
 
-self.onmessage = async (e: MessageEvent<InMsg>) => {
-  if (e.data.type !== 'run') return;
+// ─── Shared execution core ──────────────────────────────────────
+//
+// Both modes run the same wrapped code. `captureOutput` decides what
+// to do with it: post it (visible) or hash it (hidden).
 
+interface ExecutionResult {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  kind?: 'runtime' | 'syntax';
+  runtimeMs: number;
+}
+
+async function execute(code: string): Promise<ExecutionResult> {
   const start = performance.now();
   const lines: string[] = [];
 
@@ -42,53 +75,98 @@ self.onmessage = async (e: MessageEvent<InMsg>) => {
     debug: capture('[debug] '),
   };
 
-  // ─── Compile ────────────────────────────────────────
-  // Wrap in an async IIFE so top-level `await` works.
+  // Compile
   let fn: (console: typeof sandboxConsole) => Promise<unknown>;
   try {
     fn = new Function(
       'console',
       `"use strict";
        return (async () => {
-         ${e.data.code}
+         ${code}
        })();`
     ) as typeof fn;
   } catch (err) {
     const msg =
       err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    post({
-      type: 'error',
-      text: msg,
+    return {
+      ok: false,
+      stdout: '',
+      stderr: msg,
       kind: 'syntax',
       runtimeMs: Math.round(performance.now() - start),
-    });
-    return;
+    };
   }
 
-  // ─── Execute ────────────────────────────────────────
+  // Execute
   try {
     const returnValue = await fn(sandboxConsole);
-
     if (returnValue !== undefined) {
       lines.push(stringify(returnValue));
     }
-
-    if (lines.length > 0) {
-      post({ type: 'stdout', text: lines.join('\n') });
-    }
-
-    post({ type: 'done', runtimeMs: Math.round(performance.now() - start) });
+    return {
+      ok: true,
+      stdout: lines.join('\n'),
+      stderr: '',
+      runtimeMs: Math.round(performance.now() - start),
+    };
   } catch (err) {
     const msg =
       err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    if (lines.length > 0) {
-      post({ type: 'stdout', text: lines.join('\n') });
-    }
-    post({
-      type: 'error',
-      text: msg,
+    return {
+      ok: false,
+      stdout: lines.join('\n'),
+      stderr: msg,
       kind: 'runtime',
       runtimeMs: Math.round(performance.now() - start),
+    };
+  }
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// ─── Message handling ───────────────────────────────────────────
+
+self.onmessage = async (e: MessageEvent<InMsg>) => {
+  if (e.data.type === 'run') {
+    const result = await execute(e.data.code);
+
+    if (result.ok) {
+      if (result.stdout) post({ type: 'stdout', text: result.stdout });
+      post({ type: 'done', runtimeMs: result.runtimeMs });
+    } else {
+      if (result.stdout) post({ type: 'stdout', text: result.stdout });
+      post({
+        type: 'error',
+        text: result.stderr,
+        kind: result.kind ?? 'runtime',
+        runtimeMs: result.runtimeMs,
+      });
+    }
+    return;
+  }
+
+  if (e.data.type === 'run-hidden') {
+    const { requestId, code, expectedOutputHash, canonicalization } = e.data;
+    const result = await execute(code);
+
+    let passed = false;
+    if (result.ok) {
+      const canonical = canonicalize(result.stdout, canonicalization);
+      const actualHash = await sha256Hex(canonical);
+      passed = actualHash === expectedOutputHash;
+    }
+
+    post({
+      type: 'hidden-result',
+      requestId,
+      passed,
+      runtimeMs: result.runtimeMs,
     });
   }
 };
