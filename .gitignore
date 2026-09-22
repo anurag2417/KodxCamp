@@ -12,3 +12,4 @@ coverage/
 uploads/
 recordings/
 !uploads/.gitkeep
+package-lock.json
