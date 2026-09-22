@@ -19,28 +19,23 @@ export function createApp() {
   // Behind Render / Vercel / nginx proxies
   app.set('trust proxy', 1);
 
-  // Request ID — always first so every log line can reference it
+  // Request ID
   app.use(requestIdMiddleware);
 
   // Security headers
   app.use(
     helmet({
-      crossOriginResourcePolicy: { policy: 'cross-origin' }, // for /uploads media
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'none'"],
-          frameAncestors: ["'none'"],
-        },
-      },
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: false,
     })
   );
 
-  // CORS — allow the client origin(s) + cookies
+  // CORS
   app.use(
     cors({
       origin: env.CLIENT_URL,
       credentials: true,
-      maxAge: 86_400, // cache preflight for 24h
+      maxAge: 86_400,
     })
   );
 
@@ -58,14 +53,13 @@ export function createApp() {
       morgan('combined', {
         skip: (req) => req.path === '/api/health',
         stream: {
-          write: (msg: string) =>
-            logger.info('HTTP', { line: msg.trim() }),
+          write: (msg: string) => logger.info('HTTP', { line: msg.trim() }),
         },
       })
     );
   }
 
-  // Static uploads — always ensure dir exists, always register
+  // Static uploads
   const uploadsDir = path.resolve(process.cwd(), 'uploads');
   fs.mkdirSync(path.join(uploadsDir, 'recordings'), { recursive: true });
   app.use(
@@ -76,27 +70,50 @@ export function createApp() {
     })
   );
 
-  // Rate limiting on API
+  // Rate limiting
   app.use('/api', globalLimiter);
 
   // API routes
   app.use('/api', routes);
 
-  // API 404s must return JSON, not index.html
+  // API 404s
   app.use('/api', notFound);
 
-  // In production, serve the built client (monolith mode)
+  // ─── Serve built client in production (monolith) ────
   if (env.NODE_ENV === 'production') {
     const clientDist = path.resolve(process.cwd(), '..', 'client', 'dist');
+
+    // Debug logs — remove after confirming
+    logger.info('Client serving check', {
+      cwd: process.cwd(),
+      clientDist,
+      exists: fs.existsSync(clientDist),
+    });
+
     if (fs.existsSync(clientDist)) {
-      app.use(express.static(clientDist));
+      // Static assets (JS, CSS, images)
+      app.use(
+        express.static(clientDist, {
+          maxAge: '1y',
+          immutable: true,
+          index: false,
+        })
+      );
+
+      // SPA fallback — every non-API, non-uploads route returns index.html
       app.get('*', (_req, res) => {
         res.sendFile(path.join(clientDist, 'index.html'));
+      });
+
+      logger.info('✅ Serving client from', { clientDist });
+    } else {
+      logger.warn('⚠️  Client dist not found — API-only mode', {
+        clientDist,
       });
     }
   }
 
-  // Catch-all 404 (dev only — production has SPA fallback above)
+  // 404 (dev only, or if client dist missing in prod)
   app.use(notFound);
 
   // Error handler — always last
