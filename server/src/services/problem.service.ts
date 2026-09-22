@@ -2,7 +2,25 @@ import crypto from 'node:crypto';
 import { Problem } from '../models/Problem.model.js';
 import { judgeService } from './judge.service.js';
 import { ApiError } from '../utils/ApiError.js';
-import { canonicalize, type CanonicalizationId } from '@kodxcamp/shared';
+type CanonicalizationId =
+  | 'exact'
+  | 'trim-trailing-newline'
+  | 'trim-whitespace';
+
+function canonicalizeOutput(
+  output: string,
+  canonicalization: CanonicalizationId
+): string {
+  switch (canonicalization) {
+    case 'trim-trailing-newline':
+      return output.replace(/\r?\n$/, '');
+    case 'trim-whitespace':
+      return output.trim();
+    case 'exact':
+    default:
+      return output;
+  }
+}
 
 interface TestCaseInput {
   input: string;
@@ -81,7 +99,7 @@ export function hashExpectedOutput(
   plaintext: string,
   canonicalization: CanonicalizationId = 'trim-trailing-newline'
 ): string {
-  const canon = canonicalize(plaintext, canonicalization);
+  const canon = canonicalizeOutput(plaintext, canonicalization);
   return crypto.createHash('sha256').update(canon).digest('hex');
 }
 

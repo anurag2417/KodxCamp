@@ -1,5 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { problemsApi, type ApiSubmission } from '@/features/problems/api';
+import {
+  problemsApi,
+  type ApiSubmission,
+} from '@/features/problems/api';
 import { progressApi } from '@/features/progress/api';
 import { projectsApi } from '@/features/projects/api';
 import { queryKeys } from '@/shared/lib/queryKeys';
@@ -11,12 +14,10 @@ export function useSubmitSolution() {
     mutationFn: (input: Parameters<typeof problemsApi.submit>[0]) =>
       problemsApi.submit(input),
     onSuccess: (data, variables) => {
-      // Append the new submission to the cached list
       qc.setQueryData<ApiSubmission[]>(
         queryKeys.problems.submissions(variables.problemId),
         (prev = []) => [data, ...prev]
       );
-      // Refresh the problem list to reflect solved state
       qc.invalidateQueries({ queryKey: queryKeys.problems.all });
     },
   });
