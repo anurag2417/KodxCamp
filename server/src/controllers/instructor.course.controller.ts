@@ -5,10 +5,35 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
-const testCaseSchema = z.object({
-  input: z.string().default(''),
-  expectedOutput: z.string().min(1, 'Expected output is required'),
-});
+const canonicalizationSchema = z.enum([
+  'trim-trailing-newline',
+  'trim-all',
+  'exact',
+]);
+
+const visibleTestCaseSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(false).default(false),
+    expectedOutput: z.string().min(1, 'Expected output is required'),
+  })
+  .strict();
+
+const hiddenTestCaseSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(true),
+    expectedOutputHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/),
+    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
+  })
+  .strict();
+
+const testCaseSchema = z.discriminatedUnion('isHidden', [
+  visibleTestCaseSchema,
+  hiddenTestCaseSchema,
+]);
 
 export const createCourseSchema = z.object({
   body: z.object({
@@ -110,25 +135,21 @@ export const teamMemberParamsSchema = z.object({
 });
 
 export const instructorCourseController = {
-  // List courses this instructor works on
   listMine: asyncHandler(async (req: AuthRequest, res: Response) => {
     const courses = await courseService.listForUser(req);
     return ApiResponse.success(res, courses);
   }),
 
-  // Full editor payload (course + all lessons + permissions)
   getFull: asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = await courseService.getFullForEditor(req, String(req.params.slug));
     return ApiResponse.success(res, data);
   }),
 
-  // Create course (admin only; enforced in service)
   create: asyncHandler(async (req: AuthRequest, res: Response) => {
     const created = await courseService.createCourse(req, req.body);
     return ApiResponse.success(res, created, 'Course created', 201);
   }),
 
-  // Update course details
   update: asyncHandler(async (req: AuthRequest, res: Response) => {
     const updated = await courseService.updateCourse(
       req,
@@ -138,7 +159,6 @@ export const instructorCourseController = {
     return ApiResponse.success(res, updated, 'Course updated');
   }),
 
-  // Publish/unpublish
   setPublished: asyncHandler(async (req: AuthRequest, res: Response) => {
     const updated = await courseService.setPublished(
       req,
@@ -148,13 +168,11 @@ export const instructorCourseController = {
     return ApiResponse.success(res, updated, 'Publish state updated');
   }),
 
-  // Delete
   remove: asyncHandler(async (req: AuthRequest, res: Response) => {
     const result = await courseService.deleteCourse(req, String(req.params.slug));
     return ApiResponse.success(res, result, 'Course deleted');
   }),
 
-  // Lessons
   createLesson: asyncHandler(async (req: AuthRequest, res: Response) => {
     const created = await courseService.createLesson(
       req,
@@ -183,7 +201,6 @@ export const instructorCourseController = {
     return ApiResponse.success(res, result, 'Lesson deleted');
   }),
 
-  // Team management
   listTeam: asyncHandler(async (req: AuthRequest, res: Response) => {
     const members = await courseService.listTeam(req, String(req.params.slug));
     return ApiResponse.success(res, members);

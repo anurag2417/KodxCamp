@@ -1,13 +1,32 @@
 import mongoose from 'mongoose';
+import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { env } from '../config/env.js';
 import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { Problem } from '../models/Problem.model.js';
 import { Project } from '../models/Project.model.js';
-import bcrypt from 'bcryptjs';
 import { User } from '../models/User.model.js';
 import { Class } from '../models/Class.model.js';
 import { achievementService } from '../services/achievement.service.js';
+
+// ─── Types ────────────────────────────────────────────────────────
+
+type CanonicalizationId = 'trim-trailing-newline';
+
+interface RawTestCase {
+  input: string;
+  expectedOutput: string;
+  isHidden: boolean;
+}
+
+interface MaterializedTestCase {
+  input: string;
+  isHidden: boolean;
+  expectedOutput?: string;
+  expectedOutputHash?: string;
+  canonicalization?: CanonicalizationId;
+}
 
 interface LessonSeed {
   title: string;
@@ -15,7 +34,7 @@ interface LessonSeed {
   content: string;
   starterCode: string;
   solution: string;
-  testCases?: { input: string; expectedOutput: string; isHidden: boolean }[];
+  testCases?: RawTestCase[];
 }
 
 interface CourseSeed {
@@ -23,23 +42,64 @@ interface CourseSeed {
   slug: string;
   description: string;
   language:
-    | 'html-css'
-    | 'javascript'
-    | 'typescript'
-    | 'python'
-    | 'sql'
-    | 'react'
-    | 'tailwind'
-    | 'dsa-python'
-    | 'dsa-javascript';
+  | 'html-css'
+  | 'javascript'
+  | 'typescript'
+  | 'python'
+  | 'sql'
+  | 'react'
+  | 'tailwind'
+  | 'dsa-python'
+  | 'dsa-javascript';
   lessons: LessonSeed[];
 }
+
+// ─── Hidden-test helpers ──────────────────────────────────────────
+
+function canonicalize(
+  plaintext: string,
+  canon: CanonicalizationId
+): string {
+  if (canon === 'trim-trailing-newline') {
+    return plaintext.replace(/\r?\n$/, '');
+  }
+  return plaintext;
+}
+
+function hashExpected(
+  plaintext: string,
+  canon: CanonicalizationId = 'trim-trailing-newline'
+): string {
+  return crypto
+    .createHash('sha256')
+    .update(canonicalize(plaintext, canon))
+    .digest('hex');
+}
+
+function materializeTestCase(tc: RawTestCase): MaterializedTestCase {
+  if (!tc.isHidden) {
+    return {
+      input: tc.input,
+      isHidden: false,
+      expectedOutput: tc.expectedOutput,
+    };
+  }
+  return {
+    input: tc.input,
+    isHidden: true,
+    expectedOutputHash: hashExpected(tc.expectedOutput),
+    canonicalization: 'trim-trailing-newline',
+  };
+}
+
+// ─── Course seed data ─────────────────────────────────────────────
 
 const courses: CourseSeed[] = [
   {
     title: 'HTML & CSS Fundamentals',
     slug: 'html-css',
-    description: 'Build your foundation for web development with modern HTML and CSS.',
+    description:
+      'Build your foundation for web development with modern HTML and CSS.',
     language: 'html-css',
     lessons: [
       {
@@ -97,7 +157,8 @@ const courses: CourseSeed[] = [
           'Functions encapsulate reusable logic.\n\n**Task:** Write a function `double(n)` that returns `n * 2`. Print `double(21)`.',
         starterCode:
           'function double(n) {\n  // TODO\n}\n\nconsole.log(double(21));\n',
-        solution: 'function double(n) {\n  return n * 2;\n}\n\nconsole.log(double(21));',
+        solution:
+          'function double(n) {\n  return n * 2;\n}\n\nconsole.log(double(21));',
         testCases: [{ input: '', expectedOutput: '42', isHidden: false }],
       },
     ],
@@ -195,8 +256,7 @@ const courses: CourseSeed[] = [
         content:
           'Tailwind provides utility classes.\n\n**Task:** Create a `<div>` with classes `p-4 bg-green-500 text-white`.',
         starterCode: '<!-- Use Tailwind classes -->\n<div>Hello</div>\n',
-        solution:
-          '<div class="p-4 bg-green-500 text-white">Hello</div>',
+        solution: '<div class="p-4 bg-green-500 text-white">Hello</div>',
       },
     ],
   },
@@ -213,7 +273,9 @@ const courses: CourseSeed[] = [
           'Reverse a list in-place or return a new reversed list.\n\n**Task:** Print the reversed list of `[1, 2, 3, 4]`.',
         starterCode: 'nums = [1, 2, 3, 4]\n# print reversed\n',
         solution: 'nums = [1, 2, 3, 4]\nprint(nums[::-1])',
-        testCases: [{ input: '', expectedOutput: '[4, 3, 2, 1]', isHidden: false }],
+        testCases: [
+          { input: '', expectedOutput: '[4, 3, 2, 1]', isHidden: false },
+        ],
       },
     ],
   },
@@ -228,9 +290,9 @@ const courses: CourseSeed[] = [
         slug: 'two-sum',
         content:
           'Find two numbers that add to a target.\n\n**Task:** Print the indices `[0, 1]` for `nums = [2, 7]`, `target = 9`.',
-        starterCode: 'const nums = [2, 7];\nconst target = 9;\n// print the two indices\n',
-        solution:
-          'const nums = [2, 7];\nconst target = 9;\nconsole.log([0, 1]);',
+        starterCode:
+          'const nums = [2, 7];\nconst target = 9;\n// print the two indices\n',
+        solution: 'const nums = [2, 7];\nconst target = 9;\nconsole.log([0, 1]);',
         testCases: [{ input: '', expectedOutput: '[0, 1]', isHidden: false }],
       },
     ],
@@ -238,6 +300,7 @@ const courses: CourseSeed[] = [
 ];
 
 // ─── DSA practice problems ────────────────────────────────────────
+
 const problems = [
   {
     title: 'Two Sum',
@@ -256,8 +319,16 @@ const problems = [
       { input: '[3,3], 6', expectedOutput: '[0,1]', isHidden: false },
       { input: '[1,5,8,3], 11', expectedOutput: '[2,3]', isHidden: true },
       { input: '[0,4,3,0], 0', expectedOutput: '[0,3]', isHidden: true },
-      { input: '[-1,-2,-3,-4,-5], -8', expectedOutput: '[2,4]', isHidden: true },
-      { input: '[10,20,30,40,50], 90', expectedOutput: '[3,4]', isHidden: true },
+      {
+        input: '[-1,-2,-3,-4,-5], -8',
+        expectedOutput: '[2,4]',
+        isHidden: true,
+      },
+      {
+        input: '[10,20,30,40,50], 90',
+        expectedOutput: '[3,4]',
+        isHidden: true,
+      },
       {
         input: '[1,2,3,4,5,6,7,8,9,10], 19',
         expectedOutput: '[8,9]',
@@ -342,6 +413,7 @@ const problems = [
 ];
 
 // ─── Project starter templates ────────────────────────────────────
+
 const projects = [
   {
     title: 'Personal Profile Card',
@@ -736,9 +808,43 @@ data.forEach((v, i) => {
   },
 ];
 
-// ─── Instructor + demo classes ────────────────────────────────────
+// ─── Seed helpers ─────────────────────────────────────────────────
+
+/**
+ * Ensure a seed admin exists and return its `_id`.
+ *
+ * Course documents require `createdBy` (added by the RBAC migration),
+ * and every seeded course needs an owner. In development we reuse a
+ * deterministic admin account; in production we still need a user, so
+ * we fall back to the first admin we can find and refuse to continue if
+ * none exists.
+ */
+async function ensureSeedAdmin(): Promise<string> {
+  const existing = await User.findOne({ role: 'admin' }).lean();
+  if (existing) {
+    console.log(`  ✅ Reusing admin: ${existing.email}`);
+    return existing._id.toString();
+  }
+
+  if (env.NODE_ENV === 'production') {
+    throw new Error(
+      'Refusing to seed courses: no admin user exists. Run `npm run make-admin` first.'
+    );
+  }
+
+  const email = 'admin@kodxcamp.dev';
+  const password = await bcrypt.hash('admin12345', 12);
+  const created = await User.create({
+    name: 'Seed Admin',
+    email,
+    password,
+    role: 'admin',
+  });
+  console.log(`  ✅ Demo admin: ${email} / admin12345`);
+  return created._id.toString();
+}
+
 async function seedInstructorAndClasses() {
-  // In production, never seed a demo instructor with a known password.
   if (env.NODE_ENV === 'production') {
     console.log('  ⚠️  Skipping demo instructor + classes in production.');
     return;
@@ -752,7 +858,9 @@ async function seedInstructorAndClasses() {
       password: await bcrypt.hash('instructor123', 12),
       role: 'instructor',
     });
-    console.log('  ✅ Demo instructor: instructor@kodxcamp.dev / instructor123');
+    console.log(
+      '  ✅ Demo instructor: instructor@kodxcamp.dev / instructor123'
+    );
   }
 
   const now = Date.now();
@@ -793,9 +901,6 @@ async function seedInstructorAndClasses() {
       durationMinutes: 45,
       status: 'ended' as const,
       meetLink: 'https://meet.google.com/landing',
-      // NOTE: no `recording` field — the previous fake URL
-      // (/uploads/recordings/sample-lecture.mp4) 404'd in practice.
-      // An instructor can upload a real recording via the UI.
     },
   ];
 
@@ -806,17 +911,17 @@ async function seedInstructorAndClasses() {
 }
 
 // ─── Main seed ────────────────────────────────────────────────────
+
 async function seed() {
   console.log('🌱 Seeding KodxCamp database...');
 
-  // ─── Production guard ────────────────────────────────────────
   const force = process.argv.includes('--force');
   if (env.NODE_ENV === 'production' && !force) {
     console.error(
       '❌ Refusing to seed in production without --force.\n' +
-        '   This will DELETE all courses, lessons, problems, and projects.\n' +
-        '   User data (progress, projects, activity, achievements) is NEVER wiped.\n' +
-        '   Run: npm run seed -- --force'
+      '   This will DELETE all courses, lessons, problems, and projects.\n' +
+      '   User data (progress, projects, activity, achievements) is NEVER wiped.\n' +
+      '   Run: npm run seed -- --force'
     );
     process.exit(1);
   }
@@ -824,7 +929,6 @@ async function seed() {
   await mongoose.connect(env.MONGODB_URI);
   console.log('✅ Connected');
 
-  // Content-only wipe — NEVER touches user data.
   await Promise.all([
     Course.deleteMany({}),
     Lesson.deleteMany({}),
@@ -832,6 +936,9 @@ async function seed() {
     Project.deleteMany({}),
   ]);
   console.log('🧹 Cleared courses / lessons / problems / projects');
+
+  // ─── Admin (needed as `createdBy` on every course) ───────────
+  const adminId = await ensureSeedAdmin();
 
   // ─── Courses + lessons ───────────────────────────────────────
   for (const c of courses) {
@@ -841,6 +948,9 @@ async function seed() {
       description: c.description,
       language: c.language,
       totalLessons: c.lessons.length,
+      createdBy: adminId,
+      members: [],
+      published: true,
     });
 
     for (let i = 0; i < c.lessons.length; i++) {
@@ -854,15 +964,21 @@ async function seed() {
         starterCode: l.starterCode,
         solution: l.solution,
         language: c.language,
-        testCases: l.testCases ?? [],
+        testCases: (l.testCases ?? []).map(materializeTestCase),
       });
     }
     console.log(`  ✅ ${c.title} (${c.lessons.length} lessons)`);
   }
 
-  // ─── DSA problems (this used to be missing!) ─────────────────
-  for (const p of problems) {
-    await Problem.create(p);
+  // ─── DSA problems ────────────────────────────────────────────
+  for (let i = 0; i < problems.length; i++) {
+    const p = problems[i];
+    const materialized = {
+      ...p,
+      number: i + 1,
+      testCases: p.testCases.map(materializeTestCase),
+    };
+    await Problem.create(materialized);
     console.log(`  ✅ Problem: ${p.title}`);
   }
 
@@ -884,7 +1000,16 @@ async function seed() {
   process.exit(0);
 }
 
-seed().catch((err) => {
-  console.error('❌ Seed failed:', err);
-  process.exit(1);
-});
+seed()
+  .catch((err) => {
+    console.error('❌ Seed failed:', err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    try {
+      await mongoose.disconnect();
+    } catch {
+      /* ignore */
+    }
+    process.exit(process.exitCode ?? 0);
+  });

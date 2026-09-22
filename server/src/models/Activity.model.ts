@@ -8,16 +8,15 @@ export type ActivityType =
   | 'project_completed'
   | 'class_attended'
   | 'recording_watched'
+  | 'achievement_unlocked'
   | 'login';
 
 export interface IActivity {
   _id: string;
   userId: string;
   type: ActivityType;
-  /** Optional reference: courseId, problemId, projectId, classId */
   refId?: string;
   xp: number;
-  /** Local calendar day in YYYY-MM-DD (server timezone). Used for heatmap + streak. */
   day: string;
   createdAt: Date;
 }
@@ -37,6 +36,7 @@ const activitySchema = new Schema<ActivityDocument>(
         'project_completed',
         'class_attended',
         'recording_watched',
+        'achievement_unlocked',
         'login',
       ],
       required: true,
@@ -52,4 +52,7 @@ const activitySchema = new Schema<ActivityDocument>(
 activitySchema.index({ userId: 1, day: -1 });
 activitySchema.index({ userId: 1, type: 1, refId: 1 });
 
-export const Activity = mongoose.model<ActivityDocument>('Activity', activitySchema);
+export const Activity = mongoose.model<ActivityDocument>(
+  'Activity',
+  activitySchema
+);

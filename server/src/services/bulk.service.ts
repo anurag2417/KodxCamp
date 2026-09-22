@@ -4,12 +4,102 @@ import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { z } from 'zod';
+import crypto from 'node:crypto';
 
-// ─── Schemas ─────────────────────────────────────────
-const testCaseSchema = z.object({
-  input: z.string().default(''),
-  expectedOutput: z.string().min(1),
-});
+const canonicalizationSchema = z.enum([
+  'trim-trailing-newline',
+  'trim-all',
+  'exact',
+]);
+
+type Canonicalization = z.infer<typeof canonicalizationSchema>;
+
+function canonicalize(value: string, mode: Canonicalization): string {
+  switch (mode) {
+    case 'trim-all':
+      return value.trim();
+    case 'exact':
+      return value;
+    case 'trim-trailing-newline':
+      return value.replace(/(?:\r\n|\n|\r)+$/, '');
+  }
+}
+
+const visibleTestCaseSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(false).default(false),
+    expectedOutput: z.string().min(1),
+  })
+  .strict();
+
+const hiddenTestCaseSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(true),
+    expectedOutputHash: z.string().regex(/^[0-9a-f]{64}$/),
+    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
+  })
+  .strict();
+
+/**
+ * Bulk import accepts EITHER the hashed form OR a plaintext
+ * `expectedOutput` for hidden tests — because a bulk JSON file is a
+ * convenient place to store the expected output in plaintext and let
+ * the server hash it. The hash is computed here, in-process, and the
+ * plaintext is discarded immediately.
+ */
+const testCaseSchema = z.union([
+  visibleTestCaseSchema,
+  hiddenTestCaseSchema,
+  z
+    .object({
+      input: z.string().default(''),
+      isHidden: z.literal(true),
+      expectedOutput: z.string().min(1),
+      canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
+    })
+    .strict(),
+]);
+
+function materializeTestCase(raw: unknown) {
+  const tc = raw as {
+    input: string;
+    isHidden: boolean;
+    expectedOutput?: string;
+    expectedOutputHash?: string;
+    canonicalization?: 'trim-trailing-newline' | 'trim-all' | 'exact';
+  };
+
+  if (!tc.isHidden) {
+    return {
+      input: tc.input ?? '',
+      isHidden: false,
+      expectedOutput: tc.expectedOutput ?? '',
+    };
+  }
+
+  if (tc.expectedOutputHash) {
+    return {
+      input: tc.input ?? '',
+      isHidden: true,
+      expectedOutputHash: tc.expectedOutputHash,
+      canonicalization: tc.canonicalization ?? 'trim-trailing-newline',
+    };
+  }
+
+  const canon = tc.canonicalization ?? 'trim-trailing-newline';
+  const hash = crypto
+    .createHash('sha256')
+    .update(canonicalize(tc.expectedOutput!, canon))
+    .digest('hex');
+  return {
+    input: tc.input ?? '',
+    isHidden: true,
+    expectedOutputHash: hash,
+    canonicalization: canon,
+  };
+}
 
 const problemSchema = z.object({
   title: z.string().min(2).max(150),
@@ -17,7 +107,7 @@ const problemSchema = z.object({
     .string()
     .min(2)
     .max(80)
-    .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and dashes'),
+    .regex(/^[a-z0-9-]+$/),
   difficulty: z.enum(['easy', 'medium', 'hard']),
   topics: z.array(z.string()).default([]),
   statement: z.string().min(10),
@@ -25,11 +115,10 @@ const problemSchema = z.object({
     .string()
     .min(1)
     .max(60)
-    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'Function name must be a valid identifier'),
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
   outputMode: z.enum(['return', 'print']).default('return'),
   starterCode: z.record(z.string()).default({}),
-  testCases: z.array(testCaseSchema).min(1, 'At least one test case required'),
-  // Optional — if absent, server auto-assigns
+  testCases: z.array(testCaseSchema).min(1),
   number: z.number().int().positive().optional(),
 });
 
@@ -95,7 +184,6 @@ export interface ImportReport {
   totalProcessed: number;
 }
 
-// ─── Helpers ─────────────────────────────────────────
 function zipValidationErrors(
   items: unknown[],
   schema: z.ZodSchema
@@ -130,7 +218,6 @@ async function nextProblemNumber(): Promise<number> {
   return (last?.number ?? 0) + 1;
 }
 
-// ─── Service ─────────────────────────────────────────
 export const bulkService = {
   async importProblems(
     items: unknown,
@@ -152,7 +239,6 @@ export const bulkService = {
     const { valid, errors } = zipValidationErrors(items, problemSchema);
     report.failed = errors;
 
-    // Check for duplicate slugs within the batch
     const seenSlugs = new Set<string>();
     const seenNumbers = new Set<number>();
     const deduped: unknown[] = [];
@@ -186,13 +272,22 @@ export const bulkService = {
     }
 
     for (const item of deduped) {
-      const doc = item as { slug: string; number?: number };
+      const doc = item as {
+        slug: string;
+        number?: number;
+        testCases: unknown[];
+      };
+      // Materialize hidden test cases (hash plaintext if present).
+      const materialized = {
+        ...doc,
+        testCases: (doc.testCases ?? []).map(materializeTestCase),
+      };
+
       const existing = await Problem.findOne({ slug: doc.slug });
 
       if (existing) {
         if (mode === 'merge') {
-          // Preserve existing number unless explicitly overridden
-          const { number, ...rest } = doc;
+          const { number, ...rest } = materialized;
           Object.assign(existing, rest);
           if (number !== undefined && number !== existing.number) {
             const clash = await Problem.findOne({ number }).lean();
@@ -210,13 +305,11 @@ export const bulkService = {
           report.updated++;
         } else {
           const num = doc.number ?? (await nextProblemNumber());
-          await Problem.create({ ...doc, number: num });
+          await Problem.create({ ...materialized, number: num });
           report.created++;
         }
       } else {
-        // New problem — assign number if missing
         const num = doc.number ?? (await nextProblemNumber());
-        // Check number collision
         const clash = await Problem.findOne({ number: num }).lean();
         if (clash) {
           report.failed.push({
@@ -226,7 +319,7 @@ export const bulkService = {
           });
           continue;
         }
-        await Problem.create({ ...doc, number: num });
+        await Problem.create({ ...materialized, number: num });
         report.created++;
       }
     }
@@ -307,17 +400,22 @@ export const bulkService = {
       const courseData = item as z.infer<typeof courseSchema>;
       const existing = await Course.findOne({ slug: courseData.slug });
 
+      const materializedLessons = courseData.lessons.map((l) => ({
+        ...l,
+        testCases: (l.testCases ?? []).map(materializeTestCase),
+      }));
+
       if (existing && mode === 'merge') {
         Object.assign(existing, {
           title: courseData.title,
           description: courseData.description,
           language: courseData.language,
-          totalLessons: courseData.lessons.length,
+          totalLessons: materializedLessons.length,
         });
         await existing.save();
 
         await Lesson.deleteMany({ courseId: existing._id.toString() });
-        for (const l of courseData.lessons) {
+        for (const l of materializedLessons) {
           await Lesson.create({
             ...l,
             courseId: existing._id.toString(),
@@ -331,9 +429,9 @@ export const bulkService = {
           slug: courseData.slug,
           description: courseData.description,
           language: courseData.language,
-          totalLessons: courseData.lessons.length,
+          totalLessons: materializedLessons.length,
         });
-        for (const l of courseData.lessons) {
+        for (const l of materializedLessons) {
           await Lesson.create({
             ...l,
             courseId: created._id.toString(),

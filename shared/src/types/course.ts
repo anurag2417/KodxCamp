@@ -1,3 +1,5 @@
+import type { CanonicalizationId } from './problem';
+
 export type CourseLanguage =
   | 'html-css'
   | 'javascript'
@@ -20,7 +22,10 @@ export interface ICourseTeamMember {
 
 export interface ITestCase {
   input: string;
-  expectedOutput: string;
+  isHidden: boolean;
+  expectedOutput?: string;
+  expectedOutputHash?: string;
+  canonicalization?: CanonicalizationId;
 }
 
 export interface ILesson {

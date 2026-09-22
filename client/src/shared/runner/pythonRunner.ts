@@ -1,18 +1,5 @@
 import type { RunResult, RunnerOptions } from './types';
 
-/**
- * Runs Python code via a persistent Web Worker running Pyodide.
- *
- * Design:
- *  - ONE worker is kept alive across all runs on the page.
- *  - Pyodide loads once per page (~3-5s) and persists.
- *  - On timeout, the worker is terminated and recreated on the next call.
- *  - `preloadPython()` warms it in the background on page mount.
- *
- * Worker format: classic (iife) — required for `importScripts` in the worker.
- * Do NOT pass `{ type: 'module' }` to `new Worker()`.
- */
-
 type WorkerMessage = {
   type: 'stdout' | 'stderr' | 'done' | 'error' | 'ready';
   text?: string;
@@ -32,7 +19,7 @@ interface PendingRun {
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 let worker: Worker | null = null;
-let pending: Map<string, PendingRun> = new Map();
+const pending: Map<string, PendingRun> = new Map();
 
 let workerCtorPromise: Promise<new () => Worker> | null = null;
 
@@ -105,21 +92,16 @@ function attachListeners(w: Worker) {
 async function ensureWorker(): Promise<Worker> {
   if (worker) return worker;
   const Ctor = await getWorkerCtor();
-  // Classic worker (no `{ type: 'module' }`) — required by Pyodide.
   worker = new Ctor();
   attachListeners(worker);
   return worker;
 }
 
-/**
- * Warm the Python worker in the background.
- * Call from a page mount so the first run feels instant.
- */
 export async function preloadPython(): Promise<void> {
   try {
     const w = await ensureWorker();
     const id = `__preload__${Date.now()}`;
-    const timer = window.setTimeout(() => {
+    const timer = setTimeout(() => {
       pending.delete(id);
     }, 20_000);
 
@@ -127,7 +109,7 @@ export async function preloadPython(): Promise<void> {
       stdout: '',
       stderr: '',
       startedAt: performance.now(),
-      timeoutId: timer,
+      timeoutId: timer as unknown as number,
       resolve: () => {
         clearTimeout(timer);
       },

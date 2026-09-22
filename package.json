@@ -20,11 +20,16 @@
     "clean": "rimraf node_modules client/node_modules server/node_modules shared/node_modules shared/dist server/dist client/dist"
   },
   "devDependencies": {
+    "@esbuild/win32-x64": "^0.28.2",
     "concurrently": "^9.0.1",
     "rimraf": "^6.0.1",
     "typescript": "^5.6.3"
   },
   "engines": {
     "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true
   }
 }

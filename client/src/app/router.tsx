@@ -51,33 +51,113 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 export function AppRouter() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Home />} />
+
+          {/* Courses */}
           <Route path="courses" element={<Courses />} />
           <Route path="courses/:slug" element={<CourseDetail />} />
-          <Route path="courses/:courseSlug/lessons/:lessonSlug" element={<Lesson />} />
+          <Route
+            path="courses/:courseSlug/lessons/:lessonSlug"
+            element={<Lesson />}
+          />
+
+          {/* Practice */}
           <Route path="practice" element={<Practice />} />
           <Route path="practice/:slug" element={<ProblemDetail />} />
+
+          {/* Playground */}
           <Route path="playground" element={<Playground />} />
+
+          {/* Projects — the static "mine" route MUST come before :slug */}
           <Route path="projects" element={<Projects />} />
+          <Route
+            path="projects/mine"
+            element={
+              <RequireAuth>
+                <MyProjects />
+              </RequireAuth>
+            }
+          />
           <Route path="projects/:slug" element={<ProjectDetail />} />
+
+          {/* Classes — static "mine" route MUST come before :slug */}
           <Route path="classes" element={<Classes />} />
+          <Route
+            path="classes/mine"
+            element={
+              <RequireAuth>
+                <MyRecordings />
+              </RequireAuth>
+            }
+          />
           <Route path="classes/:slug" element={<ClassDetail />} />
-          <Route path="dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
-          <Route path="progress" element={<RequireAuth><Progress /></RequireAuth>} />
-          <Route path="achievements" element={<RequireAuth><Achievements /></RequireAuth>} />
-          <Route path="streak" element={<RequireAuth><Streak /></RequireAuth>} />
-          <Route path="projects/mine" element={<RequireAuth><MyProjects /></RequireAuth>} />
-          <Route path="classes/mine" element={<RequireAuth><MyRecordings /></RequireAuth>} />
-          <Route path="instructor" element={<InstructorGuard><InstructorLayout /></InstructorGuard>}>
+
+          {/* User-only */}
+          <Route
+            path="dashboard"
+            element={
+              <RequireAuth>
+                <Dashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="progress"
+            element={
+              <RequireAuth>
+                <Progress />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="achievements"
+            element={
+              <RequireAuth>
+                <Achievements />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="streak"
+            element={
+              <RequireAuth>
+                <Streak />
+              </RequireAuth>
+            }
+          />
+
+          {/* Instructor */}
+          <Route
+            path="instructor"
+            element={
+              <InstructorGuard>
+                <InstructorLayout />
+              </InstructorGuard>
+            }
+          >
             <Route index element={<Navigate to="/courses" replace />} />
-            <Route path="courses/:slug" element={<Navigate to="/courses" replace />} />
+            <Route
+              path="courses/:slug"
+              element={<Navigate to="/courses" replace />}
+            />
           </Route>
-          <Route path="admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
+
+          {/* Admin */}
+          <Route
+            path="admin"
+            element={
+              <AdminGuard>
+                <AdminLayout />
+              </AdminGuard>
+            }
+          >
             <Route index element={<AdminDashboard />} />
             <Route path="problems" element={<AdminProblems />} />
             <Route path="projects" element={<AdminProjects />} />
@@ -85,12 +165,15 @@ export function AppRouter() {
             <Route path="users" element={<AdminUsers />} />
             <Route path="bulk-import" element={<AdminBulkImport />} />
             <Route path="courses" element={<Navigate to="/instructor" replace />} />
-            <Route path="courses/:slug" element={<Navigate to="/instructor" replace />} />
+            <Route
+              path="courses/:slug"
+              element={<Navigate to="/instructor" replace />}
+            />
           </Route>
+
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </BrowserRouter>
   );
 }
-

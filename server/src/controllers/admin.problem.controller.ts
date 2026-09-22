@@ -5,42 +5,55 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
-const testCaseSchema = z.object({
-  input: z.string().default(''),
-  expectedOutput: z.string().min(1, 'Expected output is required'),
-});
+const canonicalizationSchema = z.enum([
+  'trim-trailing-newline',
+  'trim-all',
+  'exact',
+]);
 
-/**
- * Body schema for POST /admin/problems.
- * Wrapped in { body } to match the validator contract.
- */
+const visibleTestCaseSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(false).default(false),
+    expectedOutput: z.string().min(1, 'Expected output is required'),
+  })
+  .strict();
+
+const hiddenTestCaseSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(true),
+    expectedOutputHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/, 'expectedOutputHash must be 64 hex chars'),
+    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
+  })
+  .strict();
+
+const testCaseSchema = z.discriminatedUnion('isHidden', [
+  visibleTestCaseSchema,
+  hiddenTestCaseSchema,
+]);
+
 export const problemBodySchema = z.object({
   body: z.object({
-    title: z.string().min(2, 'Title must be at least 2 chars').max(150),
+    title: z.string().min(2).max(150),
     slug: z
       .string()
-      .min(2, 'Slug must be at least 2 chars')
+      .min(2)
       .max(80)
-      .regex(
-        /^[a-z0-9-]+$/,
-        'Slug can only contain lowercase letters, numbers, and dashes'
-      ),
+      .regex(/^[a-z0-9-]+$/),
     difficulty: z.enum(['easy', 'medium', 'hard']),
     topics: z.array(z.string()).default([]),
-    statement: z.string().min(10, 'Statement must be at least 10 chars'),
+    statement: z.string().min(10),
     functionName: z
       .string()
-      .min(1, 'Function name is required')
+      .min(1)
       .max(60)
-      .regex(
-        /^[A-Za-z_][A-Za-z0-9_]*$/,
-        'Function name must be a valid identifier (letters, digits, underscores; cannot start with a digit)'
-      ),
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
     outputMode: z.enum(['return', 'print']).default('return'),
     starterCode: z.record(z.string()).default({}),
-    testCases: z
-      .array(testCaseSchema)
-      .min(1, 'At least one test case is required'),
+    testCases: z.array(testCaseSchema).min(1, 'At least one test case is required'),
   }),
 });
 

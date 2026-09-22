@@ -13,12 +13,12 @@ export interface AchievementDefinition {
   title: string;
   description: string;
   category:
-    | 'learning'
-    | 'practice'
-    | 'projects'
-    | 'classes'
-    | 'streak'
-    | 'milestones';
+  | 'learning'
+  | 'practice'
+  | 'projects'
+  | 'classes'
+  | 'streak'
+  | 'milestones';
   icon: string;
   xpReward: number;
   secret: boolean;
@@ -363,7 +363,6 @@ export const achievementService = {
         ) {
           continue;
         }
-        // Real error — log and continue
         logger.warn('UserAchievement.create failed', {
           userId,
           key: def.key,
@@ -375,16 +374,15 @@ export const achievementService = {
     if (totalBonusXp > 0) {
       await User.updateOne({ _id: userId }, { $inc: { xp: totalBonusXp } });
 
-      // Also create Activity rows for the bonus XP so analytics stays in sync
-      // with User.xp. Fire-and-forget.
+      // Also log one activity row per unlocked achievement so analytics
+      // and the recent-activity feed stay in sync with User.xp.
       void Promise.all(
         newlyUnlocked.map((key) =>
           Activity.create({
             userId,
-            type: 'project_completed' as never, // fallback
+            type: 'achievement_unlocked',
             refId: key,
-            xp:
-              DEFS.find((d) => d.key === key)?.xpReward ?? 0,
+            xp: DEFS.find((d) => d.key === key)?.xpReward ?? 0,
             day: new Date().toISOString().slice(0, 10),
           })
         )

@@ -12,6 +12,18 @@ type CourseLanguage =
   | 'dsa-javascript';
 
 type ProblemOutputMode = 'return' | 'print';
+type CanonicalizationId =
+  | 'trim-trailing-newline'
+  | 'trim-all'
+  | 'exact';
+
+interface LessonTestCase {
+  input: string;
+  isHidden: boolean;
+  expectedOutput?: string;
+  expectedOutputHash?: string;
+  canonicalization?: CanonicalizationId;
+}
 
 interface LessonFields {
   courseId: string;
@@ -24,18 +36,62 @@ interface LessonFields {
   functionName: string;
   outputMode: ProblemOutputMode;
   language: CourseLanguage;
-  testCases: { input: string; expectedOutput: string }[];
+  testCases: LessonTestCase[];
 }
 
 export interface LessonDocument extends LessonFields, Document {}
 
-const testCaseSchema = new Schema(
+const testCaseSchema = new Schema<LessonTestCase>(
   {
     input: { type: String, default: '' },
-    expectedOutput: { type: String, required: true },
+    isHidden: { type: Boolean, default: false, required: true },
+    expectedOutput: { type: String, required: false },
+    expectedOutputHash: {
+      type: String,
+      required: false,
+      match: /^[0-9a-f]{64}$/,
+    },
+    canonicalization: {
+      type: String,
+      enum: ['trim-trailing-newline', 'trim-all', 'exact'],
+      default: 'trim-trailing-newline',
+    },
   },
   { _id: false }
 );
+
+testCaseSchema.pre('validate', function (next) {
+  const tc = this as unknown as LessonTestCase;
+
+  if (tc.isHidden) {
+    if (!tc.expectedOutputHash) {
+      return next(
+        new Error('Hidden test case requires expectedOutputHash')
+      );
+    }
+    if (tc.expectedOutput) {
+      return next(
+        new Error(
+          'Hidden test case must not store plaintext expectedOutput'
+        )
+      );
+    }
+  } else {
+    if (!tc.expectedOutput) {
+      return next(
+        new Error('Visible test case requires expectedOutput')
+      );
+    }
+    if (tc.expectedOutputHash) {
+      return next(
+        new Error(
+          'Visible test case must not store expectedOutputHash'
+        )
+      );
+    }
+  }
+  next();
+});
 
 const lessonSchema = new Schema<LessonDocument>(
   {
@@ -74,4 +130,7 @@ const lessonSchema = new Schema<LessonDocument>(
 
 lessonSchema.index({ courseId: 1, order: 1 });
 
-export const Lesson = mongoose.model<LessonDocument>('Lesson', lessonSchema);
+export const Lesson = mongoose.model<LessonDocument>(
+  'Lesson',
+  lessonSchema
+);

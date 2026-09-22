@@ -20,23 +20,24 @@ export const judgeService = {
   /**
    * Record a submission.
    *
-   * NOTE (v1): The server cannot yet execute hidden tests. The client runs
-   * the visible tests and reports pass/fail counts. We accept the counts as
-   * an honor-system self-report, and we only award XP once per (user, problem).
+   * v1 (current): the server does NOT execute code. The browser runs
+   * the visible tests (and, per §4.3.1, the hidden tests via hashing)
+   * and reports pass/fail counts. We accept the counts as an honor-system
+   * self-report, clamp them to the problem's actual test-case count, and
+   * award XP only once per (user, problem).
    *
-   * TODO (v2): run the code server-side against hidden test cases before
-   * accepting.
+   * v2 (future): run the code server-side against hidden test cases
+   * before accepting. Tracked as "Secure server-side code judging" in
+   * the brief's §9.
    */
   async recordSubmission(input: RecordSubmissionInput) {
     const problem = await Problem.findById(input.problemId);
     if (!problem) throw new ApiError(404, 'Problem not found');
 
-    // Sanity: totalTests can never exceed the server's actual test count
     const serverTotal = problem.testCases.length;
     const totalTests = Math.min(input.totalTests, serverTotal);
     const passedTests = Math.max(0, Math.min(input.passedTests, totalTests));
 
-    // Sanity: status must be consistent with counts
     const computedStatus: RecordSubmissionInput['status'] =
       passedTests === serverTotal && serverTotal > 0
         ? 'accepted'
@@ -108,12 +109,13 @@ export const judgeService = {
   /**
    * @deprecated
    *
-   * Previously used to "verify" client-reported results against an HMAC of
-   * hidden test inputs. This provided no real protection since the client
-   * already had the inputs, and the results themselves were unverified.
+   * Previously used to "verify" client-reported results against an HMAC
+   * of hidden test inputs. That provided no real protection because the
+   * client already had the inputs, and the results themselves were
+   * unverified.
    *
    * Kept as a no-op stub so existing client code doesn't 404 while we
-   * migrate. The route will return a computed status from counts.
+   * migrate. Returns a computed status from the reported pass count.
    */
   async validateResults(input: {
     problemId: string;

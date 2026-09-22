@@ -2,4 +2,5 @@ export * from './types/user';
 export * from './types/course';
 export * from './types/problem';
 export * from './types/progress';
+export * from './testcase/canonicalize';
 export * from './constants';
