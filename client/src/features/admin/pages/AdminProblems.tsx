@@ -101,6 +101,23 @@ export const AdminProblems: React.FC = () => {
 
   const openEdit = async (p: AdminProblem) => {
     const full = await adminApi.getProblemFull(p.slug);
+
+    // Normalize test cases: the server returns either a hashed form
+    // (`expectedOutputHash`) or, for problems saved before Part 6, a
+    // plaintext `expectedOutput`. We can't reverse a hash, so for
+    // hidden tests we leave the expected output blank and let the
+    // admin re-enter it if they want to change the answer.
+    const normalizedTestCases: EditableTestCase[] = (full.testCases ?? []).map(
+      (tc: any) => ({
+        input: tc.input ?? '',
+        expectedOutput:
+          tc.isHidden === true
+            ? '' // can't display a hash; admin re-types to change it
+            : tc.expectedOutput ?? '',
+        isHidden: tc.isHidden === true,
+      })
+    );
+
     setEditing({
       title: full.title,
       slug: full.slug,
@@ -109,16 +126,13 @@ export const AdminProblems: React.FC = () => {
       functionName: full.functionName ?? 'solve',
       outputMode: full.outputMode ?? 'return',
       starterCode: {
-        javascript: full.starterCode.javascript ?? '',
-        python: full.starterCode.python ?? '',
+        javascript: full.starterCode?.javascript ?? '',
+        python: full.starterCode?.python ?? '',
       },
-      testCases: full.testCases.map((tc) => ({
-        input: tc.input,
-        expectedOutput: tc.expectedOutput,
-      })),
+      testCases: normalizedTestCases,
     });
     setTopicsText(full.topics.join(', '));
-    setStarterCodeText(JSON.stringify(full.starterCode, null, 2));
+    setStarterCodeText(JSON.stringify(full.starterCode ?? {}, null, 2));
     setOriginalSlug(full.slug);
     setError('');
   };
@@ -134,7 +148,6 @@ export const AdminProblems: React.FC = () => {
     setBusy(true);
     setError('');
 
-    // Parse starterCode JSON
     let starterCode: Record<string, string> = {};
     try {
       const parsed = JSON.parse(starterCodeText);
@@ -193,7 +206,11 @@ export const AdminProblems: React.FC = () => {
     );
     if (emptyExpected !== -1) {
       issues.push(
-        `Test #${emptyExpected + 1} is missing its expected output`
+        `Test #${emptyExpected + 1} is missing its expected output${
+          editing.testCases[emptyExpected].isHidden
+            ? ' (required even for hidden tests — the server hashes it)'
+            : ''
+        }`
       );
     }
 
@@ -215,7 +232,14 @@ export const AdminProblems: React.FC = () => {
       functionName: editing.functionName,
       outputMode: editing.outputMode,
       starterCode,
-      testCases: editing.testCases,
+      // The server hashes plaintext for hidden tests. We always send
+      // `expectedOutput`; the server decides whether to store it
+      // directly (visible) or hash it (hidden).
+      testCases: editing.testCases.map((tc) => ({
+        input: tc.input,
+        expectedOutput: tc.expectedOutput,
+        isHidden: tc.isHidden,
+      })),
     };
 
     try {
@@ -317,14 +341,13 @@ export const AdminProblems: React.FC = () => {
             />
           </div>
 
-          {/* Function name + output mode */}
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-text-secondary">
                 Function name
               </label>
               <Input
-                placeholder="e.g. sum, twoSum, reverseString"
+                placeholder="e.g. twoSum, reverseString"
                 value={editing.functionName}
                 onChange={(e) =>
                   setEditing({
@@ -356,11 +379,6 @@ export const AdminProblems: React.FC = () => {
                 <option value="return">Return value (recommended)</option>
                 <option value="print">Print to console</option>
               </select>
-              <p className="mt-1 text-[10px] text-text-muted">
-                {editing.outputMode === 'return'
-                  ? 'Student returns a value; the platform compares it to Expected Output.'
-                  : 'Student prints; the platform compares stdout to Expected Output.'}
-              </p>
             </div>
           </div>
 
@@ -384,11 +402,6 @@ export const AdminProblems: React.FC = () => {
               onChange={(e) => setStarterCodeText(e.target.value)}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
             />
-            <p className="mt-1 text-[10px] text-text-muted">
-              Students define only the function — do NOT include{' '}
-              <code>__input__</code> or <code>console.log</code> in the starter
-              code. The runner calls the function for them.
-            </p>
           </div>
 
           <div className="mt-4">
@@ -474,7 +487,7 @@ export const AdminProblems: React.FC = () => {
       <ConfirmDialog
         open={!!deleting}
         title="Delete problem?"
-        message={`This will permanently delete "${deleting?.title}". Existing submissions from users will remain but the problem will disappear.`}
+        message={`This will permanently delete "${deleting?.title}".`}
         confirmLabel="Delete"
         danger
         onConfirm={handleDelete}

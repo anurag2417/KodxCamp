@@ -2,30 +2,32 @@ import crypto from 'node:crypto';
 import { Problem } from '../models/Problem.model.js';
 import { judgeService } from './judge.service.js';
 import { ApiError } from '../utils/ApiError.js';
+
 type CanonicalizationId =
   | 'exact'
-  | 'trim-trailing-newline'
-  | 'trim-whitespace';
+  | 'trim-whitespace'
+  | 'trim-trailing-newline';
 
-function canonicalizeOutput(
-  output: string,
-  canonicalization: CanonicalizationId
-): string {
-  switch (canonicalization) {
-    case 'trim-trailing-newline':
-      return output.replace(/\r?\n$/, '');
-    case 'trim-whitespace':
-      return output.trim();
+function canonicalize(plaintext: string, mode: CanonicalizationId): string {
+  switch (mode) {
     case 'exact':
+      return plaintext;
+    case 'trim-whitespace':
+      return plaintext.trim();
+    case 'trim-trailing-newline':
     default:
-      return output;
+      return plaintext.replace(/\r?\n$/, '');
   }
 }
 
 interface TestCaseInput {
   input: string;
   isHidden: boolean;
+  // Visible tests: plaintext expected output.
   expectedOutput?: string;
+  // Hidden tests: either a pre-computed hash (from bulk import) OR
+  // plaintext expected output (from the admin editor, which the server
+  // hashes below). We accept both to keep the API flexible.
   expectedOutputHash?: string;
   canonicalization?: CanonicalizationId;
 }
@@ -51,6 +53,21 @@ async function nextProblemNumber(): Promise<number> {
   return (last?.number ?? 0) + 1;
 }
 
+export function hashExpectedOutput(
+  plaintext: string,
+  canonicalization: CanonicalizationId = 'trim-trailing-newline'
+): string {
+  const canon = canonicalize(plaintext, canonicalization);
+  return crypto.createHash('sha256').update(canon).digest('hex');
+}
+
+/**
+ * Normalize a test case before saving.
+ *
+ *  - Visible → store plaintext `expectedOutput` as given.
+ *  - Hidden → store `expectedOutputHash`. If the caller sent a hash,
+ *    keep it. If the caller sent plaintext, hash it now.
+ */
 function normalizeTestCase(
   tc: TestCaseInput,
   index: number
@@ -61,18 +78,27 @@ function normalizeTestCase(
   expectedOutputHash?: string;
   canonicalization?: CanonicalizationId;
 } {
+  const canon = tc.canonicalization ?? 'trim-trailing-newline';
+
   if (tc.isHidden) {
-    if (!tc.expectedOutputHash) {
+    let hash = tc.expectedOutputHash;
+
+    if (!hash && tc.expectedOutput) {
+      hash = hashExpectedOutput(tc.expectedOutput, canon);
+    }
+
+    if (!hash) {
       throw new ApiError(
         400,
-        `Test case #${index + 1}: hidden tests require expectedOutputHash`
+        `Test case #${index + 1}: hidden tests require expectedOutput (to hash) or expectedOutputHash`
       );
     }
+
     return {
       input: tc.input ?? '',
       isHidden: true,
-      expectedOutputHash: tc.expectedOutputHash,
-      canonicalization: tc.canonicalization ?? 'trim-trailing-newline',
+      expectedOutputHash: hash,
+      canonicalization: canon,
     };
   }
 
@@ -87,20 +113,6 @@ function normalizeTestCase(
     isHidden: false,
     expectedOutput: tc.expectedOutput,
   };
-}
-
-/**
- * Hash a plaintext expected output. Used by admin tooling that wants to
- * convert a plaintext answer into the hashed form before saving. The
- * client should never send plaintext for a hidden test through the
- * normal API — the Zod schema rejects it.
- */
-export function hashExpectedOutput(
-  plaintext: string,
-  canonicalization: CanonicalizationId = 'trim-trailing-newline'
-): string {
-  const canon = canonicalizeOutput(plaintext, canonicalization);
-  return crypto.createHash('sha256').update(canon).digest('hex');
 }
 
 export const problemService = {
@@ -118,18 +130,6 @@ export const problemService = {
     }));
   },
 
-  /**
-   * Public problem view — for students.
-   *
-   * Splits test cases into visible (with plaintext expected output) and
-   * hidden (with only a SHA-256 hash). The hidden test input IS sent to
-   * the client because the client must run it — there is no way around
-   * that in a browser-only judge. The hidden expected output never
-   * leaves the server.
-   *
-   * See the project brief §4.3.1 for the attack surface this does and
-   * does not close.
-   */
   async getBySlug(slug: string, userId?: string) {
     const problem = await Problem.findOne({ slug }).lean();
     if (!problem) throw new ApiError(404, 'Problem not found');
@@ -148,7 +148,7 @@ export const problemService = {
 
     problem.testCases.forEach((tc, i) => {
       if (tc.isHidden) {
-        if (!tc.expectedOutputHash) return; // skip malformed
+        if (!tc.expectedOutputHash) return;
         hiddenTestCases.push({
           id: `${problem._id}:${i}`,
           input: tc.input ?? '',
@@ -185,11 +185,6 @@ export const problemService = {
     };
   },
 
-  /**
-   * Admin view — includes every test case in raw form. Hidden tests are
-   * returned as-is (hash only) so the admin editor can display and
-   * re-save them.
-   */
   async getFullBySlug(slug: string) {
     const problem = await Problem.findOne({ slug }).lean();
     if (!problem) throw new ApiError(404, 'Problem not found');

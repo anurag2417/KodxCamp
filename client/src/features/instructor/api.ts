@@ -31,21 +31,33 @@ export interface ApiInstructorCourse {
   createdAt: string;
 }
 
+export interface ApiLessonTestCase {
+  input: string;
+  // Present for visible tests. Absent for hidden tests where the server
+  // only stores a hash and cannot return plaintext.
+  expectedOutput?: string;
+  expectedOutputHash?: string;
+  isHidden: boolean;
+  canonicalization?: 'trim-trailing-newline' | 'trim-all' | 'exact';
+}
+
+export interface ApiInstructorLesson {
+  _id: string;
+  courseId: string;
+  title: string;
+  slug: string;
+  order: number;
+  content: string;
+  starterCode: string;
+  solution: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
+  language: string;
+  testCases: ApiLessonTestCase[];
+}
+
 export interface ApiInstructorCourseFull extends ApiInstructorCourse {
-  lessons: Array<{
-    _id: string;
-    courseId: string;
-    title: string;
-    slug: string;
-    order: number;
-    content: string;
-    starterCode: string;
-    solution: string;
-    functionName: string;
-    outputMode: 'return' | 'print';
-    language: string;
-    testCases: { input: string; expectedOutput: string }[];
-  }>;
+  lessons: ApiInstructorLesson[];
   myRole: 'admin' | CourseTeamRole | null;
   permissions: ApiCoursePermissions;
 }
@@ -94,7 +106,6 @@ export const instructorApi = {
     return data.data;
   },
 
-  // Lessons
   createLesson: async (
     courseSlug: string,
     input: Record<string, unknown>
@@ -128,7 +139,6 @@ export const instructorApi = {
     return data.data;
   },
 
-  // Team
   listTeam: async (slug: string): Promise<ApiCourseTeamMember[]> => {
     const { data } = await api.get(`/instructor/courses/${slug}/team`);
     return data.data;
@@ -168,4 +178,3 @@ export const instructorApi = {
     return data.data;
   },
 };
-

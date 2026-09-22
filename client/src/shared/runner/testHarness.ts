@@ -2,22 +2,33 @@ import { runCode, type RunResult } from '@/shared/runner/index';
 
 export type OutputMode = 'return' | 'print';
 
-export interface TestCase {
+export interface VisibleTestCase {
   index: number;
   input: string;
   expectedOutput: string;
 }
 
-export interface TestResult {
+export interface VisibleTestResult {
+  kind: 'visible';
   index: number;
   passed: boolean;
   actualOutput?: string;
+  expectedOutput?: string;
   stderr?: string;
   runtimeMs: number;
 }
 
+export interface HiddenTestResult {
+  kind: 'hidden';
+  id: string;
+  passed: boolean;
+  runtimeMs: number;
+}
+
+export type AnyTestResult = VisibleTestResult | HiddenTestResult;
+
 export interface TestRunSummary {
-  results: TestResult[];
+  results: AnyTestResult[];
   passedTests: number;
   totalTests: number;
   allPassed: boolean;
@@ -25,60 +36,74 @@ export interface TestRunSummary {
 }
 
 export interface TestHarnessOptions {
-  /** Name of the function the student implements. */
   functionName: string;
-  /** Whether to compare the function's return value, or stdout. */
   outputMode: OutputMode;
 }
 
 export async function runTests(
   language: string,
   code: string,
-  testCases: TestCase[],
+  testCases: VisibleTestCase[],
   options: TestHarnessOptions
 ): Promise<TestRunSummary> {
-  const results: TestResult[] = [];
+  const results: VisibleTestResult[] = [];
   let totalRuntimeMs = 0;
 
   for (const tc of testCases) {
     const wrapped = wrapForExecution(language, code, tc.input, options);
-    const result = await runCode(language, wrapped, { timeoutMs: 5000 });
+    const result: RunResult = await runCode(language, wrapped, {
+      timeoutMs: 10000,
+    });
 
     totalRuntimeMs += result.runtimeMs;
 
-    const actual = options.outputMode === 'return' ? result.stdout : result.stdout;
+    const actual = result.stdout;
     const passed =
       result.ok && outputsMatch(actual, tc.expectedOutput, options.outputMode);
 
     results.push({
+      kind: 'visible',
       index: tc.index,
       passed,
       actualOutput: actual,
+      expectedOutput: tc.expectedOutput,
       stderr: result.stderr,
       runtimeMs: result.runtimeMs,
     });
   }
 
-  const passedTests = results.filter((r) => r.passed).length;
-
   return {
     results,
-    passedTests,
-    totalTests: testCases.length,
-    allPassed: passedTests === testCases.length,
+    passedTests: results.filter((r) => r.passed).length,
+    totalTests: results.length,
+    allPassed: results.every((r) => r.passed),
     totalRuntimeMs,
   };
 }
 
 /**
- * Compare the runner's output against expected.
+ * Combine visible + hidden results into one summary.
  *
- * Rules:
- *  1. Exact string match after trimming and normalizing line endings.
- *  2. If both parse as JSON, deep-equal comparison (so `[0,1]` === `[0, 1]`).
- *  3. If both parse as numbers, numeric equality.
- *  4. Otherwise, trimmed string equality.
+ * `hidden.results` is typed as `AnyTestResult[]` (rather than strictly
+ * `HiddenTestResult[]`) so the caller can pass an intermediate object
+ * that started life as `HiddenTestResult[]` and got widened. The
+ * runtime shape is identical either way.
  */
+export function combineSummaries(
+  visible: TestRunSummary,
+  hidden: { results: AnyTestResult[]; totalRuntimeMs: number }
+): TestRunSummary {
+  const results: AnyTestResult[] = [...visible.results, ...hidden.results];
+  const passedTests = results.filter((r) => r.passed).length;
+  return {
+    results,
+    passedTests,
+    totalTests: results.length,
+    allPassed: passedTests === results.length,
+    totalRuntimeMs: visible.totalRuntimeMs + hidden.totalRuntimeMs,
+  };
+}
+
 function outputsMatch(
   actual: string,
   expected: string,
@@ -89,7 +114,6 @@ function outputsMatch(
 
   if (a === e) return true;
 
-  // Try JSON deep-equal
   try {
     const pa = JSON.parse(a);
     const pe = JSON.parse(e);
@@ -98,7 +122,6 @@ function outputsMatch(
     /* not JSON on one or both sides */
   }
 
-  // Try numeric
   const na = Number(a);
   const ne = Number(e);
   if (!isNaN(na) && !isNaN(ne) && na === ne) return true;
@@ -129,27 +152,15 @@ function deepEqual(a: unknown, b: unknown): boolean {
   );
 }
 
-/**
- * Wrap the student's code with a driver that:
- *  - injects the test case input as function arguments
- *  - invokes the student's function
- *  - prints the result (JSON-serialized)
- *
- * The student writes ONLY the function. No `__input__`, no `console.log`.
- */
 function wrapForExecution(
   language: string,
   code: string,
   input: string,
   options: TestHarnessOptions
 ): string {
-  // If outputMode is 'print', the student is responsible for printing.
-  // We just prepend input and let their code run as-is.
   if (options.outputMode === 'print') {
     return wrapPrintMode(language, code, input);
   }
-
-  // Return mode: auto-invoke the function with parsed args.
   return wrapReturnMode(language, code, input, options.functionName);
 }
 
@@ -159,16 +170,24 @@ function parseArgs(input: string): { args: unknown[]; isArgsArray: boolean } {
 
   try {
     const parsed = JSON.parse(trimmed);
-    // If input is an array, treat its items as individual arguments.
-    // e.g. `[2, 3]` → sum(2, 3). If input is a bare value, pass it as one arg.
     if (Array.isArray(parsed)) {
       return { args: parsed, isArgsArray: true };
     }
     return { args: [parsed], isArgsArray: false };
   } catch {
-    // Non-JSON input → single string argument
-    return { args: [trimmed], isArgsArray: false };
+    /* fall through */
   }
+
+  try {
+    const parsed = JSON.parse(`[${trimmed}]`);
+    if (Array.isArray(parsed)) {
+      return { args: parsed, isArgsArray: true };
+    }
+  } catch {
+    /* fall through */
+  }
+
+  return { args: [trimmed], isArgsArray: false };
 }
 
 function serialize(value: unknown, language: string): string {
@@ -211,11 +230,10 @@ console.log(JSON.stringify(__KODX_RESULT__));
 # ── Auto-generated driver ───────────────────────────────
 import json as __json__
 __KODX_RESULT__ = ${functionName}(${argList})
-print(__json__.dumps(__KODX_RESULT__))
+print(__json__.dumps(__KODX_RESULT__, separators=(',', ':')))
 `;
   }
 
-  // Fallback: no wrapping
   return code;
 }
 
@@ -233,7 +251,9 @@ function wrapPrintMode(
   ) {
     if (args.length === 0) return code;
     const argList = args.map((a) => JSON.stringify(a)).join(', ');
-    return `const __input__ = ${args.length === 1 ? JSON.stringify(args[0]) : `[${argList}]`};
+    return `const __input__ = ${
+      args.length === 1 ? JSON.stringify(args[0]) : `[${argList}]`
+    };
 ${code}
 `;
   }
@@ -241,7 +261,9 @@ ${code}
   if (language === 'python' || language === 'dsa-python') {
     if (args.length === 0) return code;
     const argList = args.map((a) => serialize(a, language)).join(', ');
-    return `__input__ = ${args.length === 1 ? serialize(args[0], language) : `[${argList}]`}
+    return `__input__ = ${
+      args.length === 1 ? serialize(args[0], language) : `[${argList}]`
+    }
 ${code}
 `;
   }

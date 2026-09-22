@@ -1,6 +1,16 @@
 import { api } from '@/shared/lib/api';
 
-// ─── Types ───────────────────────────────────────
+// ─── Shared test case type ────────────────────────────────────────
+//
+// Admin and instructor editors send `isHidden` + `expectedOutput`.
+// The server hashes plaintext for hidden tests before saving. The
+// client never has to compute hashes itself.
+
+export interface EditableTestCase {
+  input: string;
+  expectedOutput: string;
+  isHidden: boolean;
+}
 
 export interface AdminStats {
   users: { total: number; instructors: number; admins: number; newLast7d: number };
@@ -64,7 +74,7 @@ export interface AdminLesson {
   functionName: string;
   outputMode: 'return' | 'print';
   language: string;
-  testCases: { input: string; expectedOutput: string }[];
+  testCases: EditableTestCase[];
 }
 
 export interface AdminProblem {
@@ -78,7 +88,7 @@ export interface AdminProblem {
   functionName: string;
   outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
-  testCases: { input: string; expectedOutput: string }[];
+  testCases: EditableTestCase[];
   createdAt: string;
 }
 
@@ -111,7 +121,7 @@ export interface AdminClass {
   meetLink: string;
 }
 
-// ─── Bulk import ────────────────────────────────
+// ─── Bulk import ────────────────────────────────────────────────
 
 export type BulkKind = 'problems' | 'projects' | 'courses';
 export type BulkMode = 'merge' | 'replace';
@@ -124,16 +134,15 @@ export interface BulkImportReport {
   totalProcessed: number;
 }
 
-// ─── API ─────────────────────────────────────────
+// ─── API ─────────────────────────────────────────────────────────
 
 export const adminApi = {
-  // ─── Stats ─────────────────────────────────────
+  // ... (unchanged — same as before)
   getStats: async (): Promise<AdminStats> => {
     const { data } = await api.get('/admin/stats');
     return data.data;
   },
 
-  // ─── Users ─────────────────────────────────────
   listUsers: async (
     params: {
       search?: string;
@@ -159,7 +168,6 @@ export const adminApi = {
     return data.data;
   },
 
-  // ─── Courses ───────────────────────────────────
   createCourse: async (input: {
     title: string;
     slug: string;
@@ -189,7 +197,6 @@ export const adminApi = {
     return data.data;
   },
 
-  // ─── Lessons ───────────────────────────────────
   createLesson: async (
     courseSlug: string,
     input: Partial<AdminLesson>
@@ -220,7 +227,6 @@ export const adminApi = {
     return data.data;
   },
 
-  // ─── Problems ──────────────────────────────────
   createProblem: async (input: Partial<AdminProblem>): Promise<AdminProblem> => {
     const { data } = await api.post('/admin/problems', input);
     return data.data;
@@ -244,7 +250,6 @@ export const adminApi = {
     return data.data;
   },
 
-  // ─── Projects ──────────────────────────────────
   createProject: async (input: Partial<AdminProject>): Promise<AdminProject> => {
     const { data } = await api.post('/admin/projects', input);
     return data.data;
@@ -268,7 +273,6 @@ export const adminApi = {
     return data.data;
   },
 
-  // ─── Classes ───────────────────────────────────
   listClasses: async (): Promise<AdminClass[]> => {
     const { data } = await api.get('/admin/classes');
     return data.data;
@@ -287,7 +291,6 @@ export const adminApi = {
     return data.data;
   },
 
-  // ─── Bulk import ───────────────────────────────
   bulkImport: async (input: {
     kind: BulkKind;
     mode: BulkMode;
@@ -298,4 +301,3 @@ export const adminApi = {
     return data.data;
   },
 };
-

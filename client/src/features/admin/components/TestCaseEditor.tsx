@@ -1,10 +1,12 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
+import { cn } from '@/shared/lib/utils';
 
 export interface EditableTestCase {
   input: string;
   expectedOutput: string;
+  isHidden: boolean;
 }
 
 interface Props {
@@ -18,18 +20,24 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
   };
 
   const add = () => {
-    onChange([...testCases, { input: '', expectedOutput: '' }]);
+    onChange([
+      ...testCases,
+      { input: '', expectedOutput: '', isHidden: false },
+    ]);
   };
 
   const remove = (i: number) => {
     onChange(testCases.filter((_, idx) => idx !== i));
   };
 
+  const visibleCount = testCases.filter((t) => !t.isHidden).length;
+  const hiddenCount = testCases.filter((t) => t.isHidden).length;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-text-muted">
-          {testCases.length} test case{testCases.length === 1 ? '' : 's'}
+          {visibleCount} visible · {hiddenCount} hidden
         </p>
         <Button type="button" size="sm" variant="secondary" onClick={add}>
           <Plus size={14} /> Add Test Case
@@ -41,17 +49,22 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
         <p className="font-semibold text-text-secondary">Input format (JSON)</p>
         <ul className="mt-1 list-inside list-disc space-y-0.5">
           <li>
-            Multiple values: <code className="font-mono text-text-primary">[2, 3]</code>
+            Multiple values:{' '}
+            <code className="font-mono text-text-primary">[2, 3]</code>
           </li>
           <li>
-            Single number: <code className="font-mono text-text-primary">5</code>
+            Single number:{' '}
+            <code className="font-mono text-text-primary">5</code>
           </li>
           <li>
-            String: <code className="font-mono text-text-primary">"hello"</code>
+            String:{' '}
+            <code className="font-mono text-text-primary">"hello"</code>
           </li>
           <li>
             Array of strings:{' '}
-            <code className="font-mono text-text-primary">{'["a","b","c"]'}</code>
+            <code className="font-mono text-text-primary">
+              {'["a","b","c"]'}
+            </code>
           </li>
           <li>
             Object:{' '}
@@ -59,33 +72,49 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
               {'{"name":"Ada","age":36}'}
             </code>
           </li>
-          <li>
-            Empty (no input): leave blank
-          </li>
+          <li>Empty (no input): leave blank</li>
         </ul>
-        <p className="mt-2">
-          The student's code reads it via{' '}
-          <code className="font-mono text-text-primary">__input__</code>. Arrays
-          are destructurable:{' '}
-          <code className="font-mono text-text-primary">
-            const [a, b] = __input__;
-          </code>
-        </p>
         <p className="mt-2 text-[var(--color-warning)]">
           💡 Cover edge cases with your test cases: empty input, negative
           numbers, large values, unexpected types.
+        </p>
+        <p className="mt-2">
+          🔒 Hidden tests are only visible to admins. Students see the input
+          during execution but never the expected output — only a
+          SHA-256 hash is stored on the server.
         </p>
       </div>
 
       {testCases.map((tc, i) => (
         <div
           key={i}
-          className="rounded-lg border border-border bg-surface-secondary p-3"
+          className={cn(
+            'rounded-lg border p-3',
+            tc.isHidden
+              ? 'border-brand-500/40 bg-brand-500/5'
+              : 'border-border bg-surface-secondary'
+          )}
         >
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold text-text-secondary">
-              Test #{i + 1}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-text-secondary">
+                Test #{i + 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => update(i, { isHidden: !tc.isHidden })}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors',
+                  tc.isHidden
+                    ? 'bg-brand-500/15 text-brand-500 hover:bg-brand-500/25'
+                    : 'bg-surface-tertiary text-text-muted hover:bg-surface-secondary'
+                )}
+                title={tc.isHidden ? 'Hidden from students' : 'Visible to students'}
+              >
+                {tc.isHidden ? <Lock size={10} /> : <Unlock size={10} />}
+                {tc.isHidden ? 'Hidden' : 'Visible'}
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => remove(i)}
@@ -103,13 +132,23 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
               onChange={(e) => update(i, { input: e.target.value })}
             />
             <Input
-              placeholder="Expected output — e.g. 5 or Hello, world"
+              placeholder={
+                tc.isHidden
+                  ? 'Expected output (hashed on save)'
+                  : 'Expected output — e.g. 5 or Hello, world'
+              }
               value={tc.expectedOutput}
               onChange={(e) => update(i, { expectedOutput: e.target.value })}
             />
           </div>
 
           {tc.input.trim() !== '' && <InputFormatHint input={tc.input} />}
+          {tc.isHidden && tc.expectedOutput.trim() !== '' && (
+            <p className="mt-2 text-[10px] text-brand-500">
+              ✓ The expected output will be hashed with SHA-256 before saving.
+              It will never be retrievable in plaintext.
+            </p>
+          )}
         </div>
       ))}
 

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { Progress } from '../models/Progress.model.js';
@@ -5,12 +6,32 @@ import { ApiError } from '../utils/ApiError.js';
 import { permissions } from './permissions.service.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
+type CanonicalizationId = 'trim-trailing-newline';
+
+function canonicalize(
+  value: string,
+  mode: CanonicalizationId
+): string {
+  if (mode === 'trim-trailing-newline') {
+    return value.replace(/\r?\n$/, '');
+  }
+  return value;
+}
+
 interface CourseInput {
   title: string;
   slug: string;
   description: string;
   language: string;
   thumbnail?: string;
+}
+
+interface TestCaseInput {
+  input: string;
+  isHidden: boolean;
+  expectedOutput?: string;
+  expectedOutputHash?: string;
+  canonicalization?: CanonicalizationId;
 }
 
 interface LessonInput {
@@ -23,7 +44,7 @@ interface LessonInput {
   functionName?: string;
   outputMode?: 'return' | 'print';
   language: string;
-  testCases?: { input: string; expectedOutput: string }[];
+  testCases?: TestCaseInput[];
 }
 
 function getUser(req: AuthRequest) {
@@ -31,9 +52,59 @@ function getUser(req: AuthRequest) {
   return { _id: u._id.toString(), role: u.role as string };
 }
 
-export const courseService = {
-  // ─── Public ────────────────────────────────────────
+function hashExpectedOutput(
+  plaintext: string,
+  canonicalization: CanonicalizationId = 'trim-trailing-newline'
+): string {
+  const canon = canonicalize(plaintext, canonicalization);
+  return crypto.createHash('sha256').update(canon).digest('hex');
+}
 
+function normalizeTestCase(
+  tc: TestCaseInput,
+  index: number
+): {
+  input: string;
+  isHidden: boolean;
+  expectedOutput?: string;
+  expectedOutputHash?: string;
+  canonicalization?: CanonicalizationId;
+} {
+  const canon = tc.canonicalization ?? 'trim-trailing-newline';
+
+  if (tc.isHidden) {
+    let hash = tc.expectedOutputHash;
+    if (!hash && tc.expectedOutput) {
+      hash = hashExpectedOutput(tc.expectedOutput, canon);
+    }
+    if (!hash) {
+      throw new ApiError(
+        400,
+        `Test case #${index + 1}: hidden tests require expectedOutput (to hash) or expectedOutputHash`
+      );
+    }
+    return {
+      input: tc.input ?? '',
+      isHidden: true,
+      expectedOutputHash: hash,
+      canonicalization: canon,
+    };
+  }
+
+  if (!tc.expectedOutput) {
+    throw new ApiError(
+      400,
+      `Test case #${index + 1}: visible tests require expectedOutput`
+    );
+  }
+  return {
+    input: tc.input ?? '',
+    isHidden: false,
+    expectedOutput: tc.expectedOutput,
+  };
+}
+
+export const courseService = {
   async listAll() {
     const courses = await Course.find({ published: true })
       .sort({ createdAt: 1 })
@@ -74,9 +145,44 @@ export const courseService = {
       .lean();
     if (!lesson) throw new ApiError(404, 'Lesson not found');
 
-    const visibleTestCases = (lesson.testCases ?? []).filter(() => true);
+    // Split test cases into visible and hidden.
+    const visibleTestCases: {
+      index: number;
+      input: string;
+      expectedOutput: string;
+    }[] = [];
+    const hiddenTestCases: {
+      id: string;
+      input: string;
+      expectedOutputHash: string;
+      canonicalization: CanonicalizationId;
+    }[] = [];
 
-    const safeLesson = { ...lesson, testCases: visibleTestCases };
+    (lesson.testCases ?? []).forEach((tc, i) => {
+      if (tc.isHidden) {
+        if (!tc.expectedOutputHash) return;
+        hiddenTestCases.push({
+          id: `${lesson._id}:${i}`,
+          input: tc.input ?? '',
+          expectedOutputHash: tc.expectedOutputHash,
+          canonicalization:
+            (tc.canonicalization as CanonicalizationId) ??
+            'trim-trailing-newline',
+        });
+      } else {
+        visibleTestCases.push({
+          index: visibleTestCases.length,
+          input: tc.input ?? '',
+          expectedOutput: tc.expectedOutput ?? '',
+        });
+      }
+    });
+
+    const safeLesson = {
+      ...lesson,
+      testCases: visibleTestCases,
+      hiddenTestCases,
+    };
 
     const safeCourse = {
       _id: course._id,
@@ -91,13 +197,6 @@ export const courseService = {
     return { course: safeCourse, lesson: safeLesson };
   },
 
-  // ─── Instructor-scoped list ────────────────────────
-
-  /**
-   * Courses the current user can work on.
-   * Admin → all courses (drafts included)
-   * Instructor → only courses they're on the team for
-   */
   async listForUser(req: AuthRequest) {
     const user = getUser(req);
     if (user.role === 'admin') {
@@ -126,8 +225,6 @@ export const courseService = {
     return withCounts;
   },
 
-  // ─── Instructor/admin: get full course with all lessons ────
-
   async getFullForEditor(req: AuthRequest, slug: string) {
     const user = getUser(req);
     const course = await Course.findOne({ slug }).lean();
@@ -144,7 +241,6 @@ export const courseService = {
       .sort({ order: 1 })
       .lean();
 
-    // Attach effective permission flags so the client can render accordingly
     const role = permissions.courseRole(user, permissionCourse);
 
     return {
@@ -161,12 +257,9 @@ export const courseService = {
     };
   },
 
-  // ─── Create course ─────────────────────────────────
-
   async createCourse(req: AuthRequest, input: CourseInput) {
     const user = getUser(req);
 
-    // Only admins create courses
     if (user.role !== 'admin') {
       throw new ApiError(403, 'Only admins can create courses');
     }
@@ -184,8 +277,6 @@ export const courseService = {
 
     return created.toObject();
   },
-
-  // ─── Update course ─────────────────────────────────
 
   async updateCourse(req: AuthRequest, slug: string, patch: Partial<CourseInput>) {
     const user = getUser(req);
@@ -211,8 +302,6 @@ export const courseService = {
     return course.toObject();
   },
 
-  // ─── Publish/unpublish ─────────────────────────────
-
   async setPublished(req: AuthRequest, slug: string, published: boolean) {
     const user = getUser(req);
     const course = await Course.findOne({ slug });
@@ -231,8 +320,6 @@ export const courseService = {
     await course.save();
     return course.toObject();
   },
-
-  // ─── Delete course ─────────────────────────────────
 
   async deleteCourse(req: AuthRequest, slug: string) {
     const user = getUser(req);
@@ -259,8 +346,6 @@ export const courseService = {
     return { ok: true };
   },
 
-  // ─── Lessons ───────────────────────────────────────
-
   async createLesson(req: AuthRequest, courseSlug: string, input: LessonInput) {
     const user = getUser(req);
     const course = await Course.findOne({ slug: courseSlug });
@@ -281,10 +366,14 @@ export const courseService = {
     }).lean();
     if (existing) throw new ApiError(409, 'Lesson slug already exists in this course');
 
+    const testCases = (input.testCases ?? []).map((tc, i) =>
+      normalizeTestCase(tc, i)
+    );
+
     const created = await Lesson.create({
       ...input,
       courseId: course._id.toString(),
-      testCases: input.testCases ?? [],
+      testCases,
       functionName: input.functionName ?? 'solve',
       outputMode: input.outputMode ?? 'print',
     });
@@ -324,9 +413,16 @@ export const courseService = {
       }
     }
 
+    const update: Record<string, unknown> = { ...patch };
+    if (patch.testCases) {
+      update.testCases = patch.testCases.map((tc, i) =>
+        normalizeTestCase(tc, i)
+      );
+    }
+
     const updated = await Lesson.findOneAndUpdate(
       { courseId: course._id.toString(), slug: lessonSlug },
-      patch,
+      update,
       { new: true, runValidators: true }
     ).lean();
     if (!updated) throw new ApiError(404, 'Lesson not found');
@@ -357,7 +453,7 @@ export const courseService = {
     return { ok: true };
   },
 
-  // ─── Team management ───────────────────────────────
+  // ─── Team management (unchanged) ───────────────────────────────
 
   async listTeam(req: AuthRequest, slug: string) {
     const user = getUser(req);
@@ -395,15 +491,11 @@ export const courseService = {
       throw new ApiError(403, 'Only the course lead can manage the team');
     }
 
-    // Prevent adding the creator (they're already implicit 'lead')
     if (memberUserId === course.createdBy) {
       throw new ApiError(400, 'This user is the course creator (already lead)');
     }
 
-    // Prevent duplicate
-    const existing = course.members.find(
-      (m) => m.userId === memberUserId
-    );
+    const existing = course.members.find((m) => m.userId === memberUserId);
     if (existing) {
       throw new ApiError(409, 'User is already on this team');
     }
@@ -437,9 +529,7 @@ export const courseService = {
       throw new ApiError(403, 'Only the course lead can manage the team');
     }
 
-    const member = course.members.find(
-      (m): boolean => m.userId === memberUserId
-    );
+    const member = course.members.find((m) => m.userId === memberUserId);
     if (!member) throw new ApiError(404, 'User is not on this team');
 
     member.role = role;
@@ -461,9 +551,7 @@ export const courseService = {
       throw new ApiError(403, 'Only the course lead can manage the team');
     }
 
-    course.members = course.members.filter(
-      (m): boolean => m.userId !== memberUserId
-    );
+    course.members = course.members.filter((m) => m.userId !== memberUserId);
     await course.save();
     return course.members;
   },

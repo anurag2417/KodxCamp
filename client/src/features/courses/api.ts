@@ -18,6 +18,19 @@ export interface ApiLessonSummary {
   language: string;
 }
 
+export interface ApiLessonTestCase {
+  index: number;
+  input: string;
+  expectedOutput: string;
+}
+
+export interface ApiLessonHiddenTestCase {
+  id: string;
+  input: string;
+  expectedOutputHash: string;
+  canonicalization: 'trim-trailing-newline' | 'trim-all' | 'exact';
+}
+
 export interface ApiLessonFull {
   _id: string;
   courseId: string;
@@ -29,7 +42,8 @@ export interface ApiLessonFull {
   functionName: string;
   outputMode: 'return' | 'print';
   language: string;
-  testCases: { input: string; expectedOutput: string }[];
+  testCases: ApiLessonTestCase[];
+  hiddenTestCases: ApiLessonHiddenTestCase[];
 }
 
 export const coursesApi = {
@@ -49,8 +63,9 @@ export const coursesApi = {
     courseSlug: string,
     lessonSlug: string
   ): Promise<{ course: ApiCourse; lesson: ApiLessonFull }> => {
-    const { data } = await api.get(`/courses/${courseSlug}/lessons/${lessonSlug}`);
+    const { data } = await api.get(
+      `/courses/${courseSlug}/lessons/${lessonSlug}`
+    );
     return data.data;
   },
 };
-

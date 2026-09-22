@@ -15,24 +15,32 @@ const visibleTestCaseSchema = z
   .object({
     input: z.string().default(''),
     isHidden: z.literal(false).default(false),
-    expectedOutput: z.string().min(1, 'Expected output is required'),
+    expectedOutput: z.string().min(1),
   })
   .strict();
 
-const hiddenTestCaseSchema = z
+const hiddenWithHashSchema = z
   .object({
     input: z.string().default(''),
     isHidden: z.literal(true),
-    expectedOutputHash: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/),
+    expectedOutputHash: z.string().regex(/^[0-9a-f]{64}$/),
     canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
   })
   .strict();
 
-const testCaseSchema = z.discriminatedUnion('isHidden', [
+const hiddenWithPlaintextSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(true),
+    expectedOutput: z.string().min(1),
+    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
+  })
+  .strict();
+
+const testCaseSchema = z.union([
   visibleTestCaseSchema,
-  hiddenTestCaseSchema,
+  hiddenWithHashSchema,
+  hiddenWithPlaintextSchema,
 ]);
 
 export const createCourseSchema = z.object({

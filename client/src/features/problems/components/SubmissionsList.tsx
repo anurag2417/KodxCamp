@@ -15,9 +15,7 @@ const statusLabel: Record<ApiSubmission['status'], string> = {
 
 export const SubmissionsList: React.FC<Props> = ({ submissions }) => {
   if (submissions.length === 0) {
-    return (
-      <p className="text-xs text-text-muted">No submissions yet.</p>
-    );
+    return <p className="text-xs text-text-muted">No submissions yet.</p>;
   }
 
   return (
@@ -31,14 +29,19 @@ export const SubmissionsList: React.FC<Props> = ({ submissions }) => {
           >
             <div className="flex items-center gap-2">
               {ok ? (
-                <CheckCircle2 size={14} className="text-[var(--color-success)]" />
+                <CheckCircle2
+                  size={14}
+                  className="text-[var(--color-success)]"
+                />
               ) : (
                 <XCircle size={14} className="text-[var(--color-error)]" />
               )}
               <span
                 className={cn(
                   'font-medium',
-                  ok ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'
+                  ok
+                    ? 'text-[var(--color-success)]'
+                    : 'text-[var(--color-error)]'
                 )}
               >
                 {statusLabel[s.status]}

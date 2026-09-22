@@ -11,7 +11,12 @@ import { CodeEditor } from '@/shared/components/editor/CodeEditor';
 import { Console } from '@/shared/components/editor/Console';
 import { RunBar } from '@/shared/components/editor/RunBar';
 import { LessonSidebar } from '@/features/courses/components/LessonSidebar';
-import { runTests } from '@/shared/runner/testHarness';
+import {
+  runTests,
+  combineSummaries,
+  type AnyTestResult,
+} from '@/shared/runner/testHarness';
+import { runHiddenTests } from '@/shared/runner/hiddenHarness';
 
 export const Lesson: React.FC = () => {
   const { courseSlug, lessonSlug } = useParams<{
@@ -44,7 +49,7 @@ export const Lesson: React.FC = () => {
   // Load progress
   useEffect(() => {
     if (!user || !data?.course) return;
-    progressApi.getForCourse(data.course._id).then(setProgress).catch(() => {});
+    progressApi.getForCourse(data.course._id).then(setProgress).catch(() => { });
   }, [user, data?.course]);
 
   const handleRunCode = async () => {
@@ -54,31 +59,56 @@ export const Lesson: React.FC = () => {
     setOutput('Running tests...');
     setTestsPassed(null);
 
-    const testCases = (data.lesson.testCases ?? []).map((tc, i) => ({
-      index: i,
+    const visibleCases = (data.lesson.testCases ?? []).map((tc) => ({
+      index: tc.index,
       input: tc.input,
       expectedOutput: tc.expectedOutput,
     }));
 
-    // Lessons default to "print" output mode if the field isn't set
     const outputMode = data.lesson.outputMode ?? 'print';
     const functionName = data.lesson.functionName ?? 'solve';
 
-    const summary = await runTests(
+    const visibleSummary = await runTests(
       data.lesson.language,
       code,
-      testCases,
+      visibleCases,
       { functionName, outputMode }
     );
 
-    const summaryLine = summary.allPassed
-      ? `✅ All ${summary.totalTests} test${
-          summary.totalTests === 1 ? '' : 's'
-        } passed (${summary.totalRuntimeMs}ms).`
-      : `❌ ${summary.passedTests}/${summary.totalTests} tests passed.`;
+    let hiddenSummary: {
+      results: AnyTestResult[];
+      totalRuntimeMs: number;
+    } = { results: [], totalRuntimeMs: 0 };
 
-    const failures = summary.results
-      .filter((r) => !r.passed)
+    const hiddenCases = data.lesson.hiddenTestCases ?? [];
+    if (hiddenCases.length > 0) {
+      const outcomes = await runHiddenTests(
+        data.lesson.language,
+        code,
+        hiddenCases,
+        { functionName, outputMode, timeoutMs: 10000 }
+      );
+      hiddenSummary = {
+        results: outcomes.map((o) => ({
+          kind: 'hidden' as const,
+          id: o.id,
+          passed: o.passed,
+          runtimeMs: 0,
+        })),
+        totalRuntimeMs: 0,
+      };
+    }
+
+    const combined = combineSummaries(visibleSummary, hiddenSummary);
+
+    const summaryLine = combined.allPassed
+      ? `✅ All ${combined.totalTests} test${combined.totalTests === 1 ? '' : 's'} passed (${combined.totalRuntimeMs}ms).`
+      : `❌ ${combined.passedTests}/${combined.totalTests} tests passed.`;
+
+    const failures = combined.results
+      .filter((r): r is Extract<typeof r, { kind: 'visible' }> =>
+        r.kind === 'visible' && !r.passed
+      )
       .slice(0, 3)
       .map((r) => {
         const detail = r.stderr
@@ -91,8 +121,8 @@ export const Lesson: React.FC = () => {
       .join('\n');
 
     setOutput(summaryLine + (failures ? `\n\n${failures}` : ''));
-    setStatus(summary.allPassed ? 'success' : 'error');
-    setTestsPassed(summary.allPassed);
+    setStatus(combined.allPassed ? 'success' : 'error');
+    setTestsPassed(combined.allPassed);
     setRunning(false);
   };
 

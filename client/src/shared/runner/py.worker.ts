@@ -1,7 +1,5 @@
 /// <reference lib="webworker" />
 
-import { canonicalize } from '@kodxcamp/shared';
-
 /**
  * Python sandbox worker — runs Pyodide off the main thread.
  *
@@ -10,9 +8,15 @@ import { canonicalize } from '@kodxcamp/shared';
  *  - `run-hidden` — hidden test. Hashes the output inside the worker
  *                   and posts back only `{ passed }`.
  *
- * This worker is bundled as a *classic* worker (see vite.config.ts →
- * `worker.format: 'iife'`). Classic workers can use `importScripts`,
- * which Pyodide's loader requires. ESM workers cannot.
+ * Pyodide is loaded from the official jsDelivr full distribution. The
+ * `full/` alias includes the standard library zip, the lockfile, and
+ * the built-in package index, so imports like `import numpy` work after
+ * `loadPackagesFromImports`.
+ *
+ * This worker must not use `importScripts`: Vite 5 emits module workers
+ * even when `worker.format: 'iife'` is set, and `importScripts` is
+ * disallowed in module workers. We load Pyodide's ESM entry point via a
+ * runtime-fetched Blob URL.
  *
  * The worker persists across runs; Pyodide loads once per page session.
  */
@@ -46,39 +50,30 @@ interface WorkerOutMsg {
 
 const postWorkerMessage = (msg: WorkerOutMsg) => self.postMessage(msg);
 
-interface PyodideInstance {
-  runPythonAsync: (code: string) => Promise<unknown>;
-  setStdout: (opts: { batched: (s: string) => void }) => void;
-  setStderr: (opts: { batched: (s: string) => void }) => void;
-}
-
 const PYODIDE_VERSION = '0.26.2';
-const PYODIDE_BASE = `/pyodide/v${PYODIDE_VERSION}/`;
+const PYODIDE_BASE = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 
-let pyodidePromise: Promise<PyodideInstance> | null = null;
+// ─── Inlined canonicalization ─────────────────────────────────────
+//
+// Mirrors `shared/src/testcase/canonicalize.ts`. Inlined because a
+// module worker cannot import from a workspace package without extra
+// runtime fetches. Keep these rules in sync with the shared copy.
 
-async function loadPyodideOnce(): Promise<PyodideInstance> {
-  if (pyodidePromise) return pyodidePromise;
-
-  pyodidePromise = (async () => {
-    importScripts(`${PYODIDE_BASE}pyodide.js`);
-
-    const loader = (
-      self as unknown as {
-        loadPyodide: (opts: { indexURL: string }) => Promise<PyodideInstance>;
-      }
-    ).loadPyodide;
-
-    if (!loader) {
-      throw new Error(
-        'Pyodide loader missing after importScripts. Verify /pyodide/v0.26.2/pyodide.js exists in the built app.'
-      );
-    }
-
-    return loader({ indexURL: PYODIDE_BASE });
-  })();
-
-  return pyodidePromise;
+function canonicalize(
+  output: string,
+  id: CanonicalizationId = 'trim-trailing-newline'
+): string {
+  switch (id) {
+    case 'trim-trailing-newline':
+      return output
+        .replace(/\r\n/g, '\n')
+        .replace(/[ \t]+$/gm, '')
+        .replace(/\n$/, '');
+    case 'trim-all':
+      return output.replace(/\r\n/g, '\n').trim();
+    case 'exact':
+      return output;
+  }
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -89,6 +84,57 @@ async function sha256Hex(text: string): Promise<string> {
     .join('');
 }
 
+// ─── Pyodide lifecycle ────────────────────────────────────────────
+
+interface PyodideInstance {
+  runPythonAsync: (code: string) => Promise<unknown>;
+  loadPackagesFromImports: (code: string) => Promise<void>;
+  setStdout: (opts: { batched: (s: string) => void }) => void;
+  setStderr: (opts: { batched: (s: string) => void }) => void;
+}
+
+let pyodidePromise: Promise<PyodideInstance> | null = null;
+
+async function loadPyodideOnce(): Promise<PyodideInstance> {
+  if (pyodidePromise) return pyodidePromise;
+
+  pyodidePromise = (async () => {
+    const pyodideUrl = `${PYODIDE_BASE}pyodide.mjs`;
+
+    const response = await fetch(pyodideUrl);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch ${pyodideUrl}: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const source = await response.text();
+    const blob = new Blob([source], { type: 'application/javascript' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    let mod: {
+      loadPyodide: (opts: { indexURL: string }) => Promise<PyodideInstance>;
+    };
+    try {
+      mod = (await import(/* @vite-ignore */ blobUrl)) as typeof mod;
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+
+    if (typeof mod.loadPyodide !== 'function') {
+      throw new Error(
+        `Pyodide ESM loader not found at ${pyodideUrl}. Verify the CDN URL.`
+      );
+    }
+
+    return mod.loadPyodide({ indexURL: PYODIDE_BASE });
+  })();
+
+  return pyodidePromise;
+}
+
+// ─── Execution ────────────────────────────────────────────────────
+
 interface PyExecution {
   ok: boolean;
   stdout: string;
@@ -97,6 +143,14 @@ interface PyExecution {
   runtimeMs: number;
 }
 
+/**
+ * Execute Python code and capture stdout/stderr.
+ *
+ * Before running, we call `loadPackagesFromImports` so the student's
+ * `import numpy` (or `from sympy import ...`) automatically pulls the
+ * matching Pyodide package. `loadPackagesFromImports` is cheap on
+ * repeated calls — Pyodide tracks which packages are already loaded.
+ */
 async function executePython(
   py: PyodideInstance,
   code: string
@@ -107,6 +161,16 @@ async function executePython(
 
   py.setStdout({ batched: (s) => stdoutChunks.push(s) });
   py.setStderr({ batched: (s) => stderrChunks.push(s) });
+
+  // Auto-install any packages the code imports. Pyodide knows the
+  // list of built-in packages (numpy, pandas, scipy, etc.); anything
+  // it can't resolve is left for the import to fail naturally so the
+  // student sees a clear ModuleNotFoundError.
+  try {
+    await py.loadPackagesFromImports(code);
+  } catch {
+    /* non-fatal — imports will fail at runtime if truly missing */
+  }
 
   try {
     await py.runPythonAsync(code);
@@ -129,11 +193,12 @@ async function executePython(
   }
 }
 
+// ─── Message handling ─────────────────────────────────────────────
+
 self.onmessage = async (e: MessageEvent<InMsg>) => {
   const { requestId } = e.data;
   const start = performance.now();
 
-  // Load Pyodide (shared across runs)
   let py: PyodideInstance;
   try {
     py = await loadPyodideOnce();
@@ -143,7 +208,9 @@ self.onmessage = async (e: MessageEvent<InMsg>) => {
       type: 'error',
       requestId,
       kind: 'runtime',
-      text: `Pyodide load failed: ${err instanceof Error ? err.message : String(err)}`,
+      text: `Pyodide load failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
       runtimeMs: Math.round(performance.now() - start),
     });
     return;
@@ -154,11 +221,7 @@ self.onmessage = async (e: MessageEvent<InMsg>) => {
     if (result.stdout)
       postWorkerMessage({ type: 'stdout', text: result.stdout, requestId });
     if (result.stderr && !result.ok)
-      postWorkerMessage({
-        type: 'stderr',
-        text: result.stderr,
-        requestId,
-      });
+      postWorkerMessage({ type: 'stderr', text: result.stderr, requestId });
     if (result.ok) {
       postWorkerMessage({
         type: 'done',

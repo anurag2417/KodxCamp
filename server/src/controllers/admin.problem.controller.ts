@@ -11,6 +11,16 @@ const canonicalizationSchema = z.enum([
   'exact',
 ]);
 
+// Three accepted shapes for a test case:
+//
+//   1. Visible:  { input, isHidden: false, expectedOutput: string }
+//   2. Hidden with pre-computed hash:
+//                { input, isHidden: true, expectedOutputHash: hex64 }
+//   3. Hidden with plaintext (admin UI):
+//                { input, isHidden: true, expectedOutput: string }
+//
+// The service hashes shape 3 before saving. Shapes 2 and 3 can't both
+// be present in the same test case.
 const visibleTestCaseSchema = z
   .object({
     input: z.string().default(''),
@@ -19,20 +29,28 @@ const visibleTestCaseSchema = z
   })
   .strict();
 
-const hiddenTestCaseSchema = z
+const hiddenWithHashSchema = z
   .object({
     input: z.string().default(''),
     isHidden: z.literal(true),
-    expectedOutputHash: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/, 'expectedOutputHash must be 64 hex chars'),
+    expectedOutputHash: z.string().regex(/^[0-9a-f]{64}$/),
     canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
   })
   .strict();
 
-const testCaseSchema = z.discriminatedUnion('isHidden', [
+const hiddenWithPlaintextSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(true),
+    expectedOutput: z.string().min(1, 'Expected output is required'),
+    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
+  })
+  .strict();
+
+const testCaseSchema = z.union([
   visibleTestCaseSchema,
-  hiddenTestCaseSchema,
+  hiddenWithHashSchema,
+  hiddenWithPlaintextSchema,
 ]);
 
 export const problemBodySchema = z.object({

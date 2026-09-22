@@ -16,12 +16,6 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@kodxcamp/shared'],
   },
-  // ─── Workers ────────────────────────────────────────────
-  // Use classic worker format so workers can use `importScripts`,
-  // which Pyodide's loader requires. ESM workers cannot importScripts.
-  worker: {
-    format: 'iife',
-  },
   server: {
     port: 5173,
     fs: {

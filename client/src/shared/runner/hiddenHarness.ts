@@ -2,17 +2,11 @@ import { runJavaScriptHidden } from './jsRunner';
 import { runPythonHidden } from './pythonRunner';
 import type { CanonicalizationId } from '@kodxcamp/shared';
 
-/**
- * A single hidden test case, as delivered by the server.
- *
- * The server does NOT send the plaintext expected output — only its
- * SHA-256 hash. See the project brief §4.3.1.
- */
+export type OutputMode = 'return' | 'print';
+
 export interface HiddenTestCase {
-  /** Stable id, `${problemId}:${index}` on the server. */
   id: string;
   input: string;
-  /** 64-char lowercase hex. SHA-256 of the canonicalized expected output. */
   expectedOutputHash: string;
   canonicalization: CanonicalizationId;
 }
@@ -23,20 +17,12 @@ export interface HiddenTestOutcome {
 }
 
 export interface HiddenRunOptions {
+  functionName?: string;
+  outputMode?: OutputMode;
   timeoutMs?: number;
   onProgress?: (outcome: HiddenTestOutcome, index: number) => void;
 }
 
-/**
- * Run every hidden test case against the student's code.
- *
- * For JavaScript and Python, the wrapping + hashing happens inside the
- * Worker. The main thread only sees `{ passed }` per test.
- *
- * For SQL and HTML the visible runner path is synchronous on the main
- * thread, so hidden tests for those languages fall back to main-thread
- * hashing. This is a documented limitation — see §4.3.1.
- */
 export async function runHiddenTests(
   language: string,
   code: string,
@@ -44,11 +30,14 @@ export async function runHiddenTests(
   options: HiddenRunOptions = {}
 ): Promise<HiddenTestOutcome[]> {
   const outcomes: HiddenTestOutcome[] = [];
-  const timeoutMs = options.timeoutMs ?? 5000;
+  const timeoutMs = options.timeoutMs ?? 10000;
 
   for (let i = 0; i < tests.length; i++) {
     const test = tests[i];
-    const outcome = await runOneHidden(language, code, test, timeoutMs);
+    const outcome = await runOneHidden(language, code, test, {
+      ...options,
+      timeoutMs,
+    });
     outcomes.push(outcome);
     options.onProgress?.(outcome, i);
   }
@@ -60,9 +49,9 @@ async function runOneHidden(
   language: string,
   code: string,
   test: HiddenTestCase,
-  timeoutMs: number
+  options: HiddenRunOptions
 ): Promise<HiddenTestOutcome> {
-  const wrapped = wrapHiddenInput(language, code, test.input);
+  const wrapped = wrapHiddenInput(language, code, test.input, options);
 
   if (
     language === 'javascript' ||
@@ -73,7 +62,7 @@ async function runOneHidden(
       wrapped,
       test.expectedOutputHash,
       test.canonicalization,
-      { timeoutMs }
+      { timeoutMs: options.timeoutMs ?? 10000 }
     );
     return { id: test.id, passed: result.passed };
   }
@@ -83,23 +72,21 @@ async function runOneHidden(
       wrapped,
       test.expectedOutputHash,
       test.canonicalization,
-      { timeoutMs }
+      { timeoutMs: options.timeoutMs ?? 10000 }
     );
     return { id: test.id, passed: result.passed };
   }
 
-  // SQL / HTML / React — no worker-level hashing today. Fail closed:
-  // mark the test as not passed rather than leaking the output. Once
-  // we have worker-wrapped runners for these languages, replace this
-  // with the same pattern used above.
   return { id: test.id, passed: false };
 }
 
 function wrapHiddenInput(
   language: string,
   code: string,
-  input: string
+  input: string,
+  options: HiddenRunOptions
 ): string {
+  const mode: OutputMode = options.outputMode ?? 'print';
   const isJs =
     language === 'javascript' ||
     language === 'typescript' ||
@@ -110,31 +97,68 @@ function wrapHiddenInput(
 
   const { args } = parseArgs(input);
 
+  if (mode === 'return') {
+    const functionName = options.functionName ?? 'solve';
+
+    if (isJs) {
+      const argList = args.map((a) => JSON.stringify(a)).join(', ');
+      return `${code}
+
+// ── Hidden-test driver ────────────────────────────────
+const __KODX_RESULT__ = ${functionName}(${argList});
+console.log(JSON.stringify(__KODX_RESULT__));
+`;
+    }
+
+    const argList = args.map((a) => pyLiteral(a)).join(', ');
+    return `${code}
+
+# ── Hidden-test driver ───────────────────────────────
+import json as __json__
+__KODX_RESULT__ = ${functionName}(${argList})
+print(__json__.dumps(__KODX_RESULT__, separators=(',', ':')))
+`;
+  }
+
+  if (args.length === 0) return code;
+
   if (isJs) {
     const argList = args.map((a) => JSON.stringify(a)).join(', ');
-    const inputLine = argList
-      ? `const __input__ = ${args.length === 1 ? JSON.stringify(args[0]) : `[${argList}]`};\n`
-      : '';
-    return `${inputLine}${code}`;
+    return `const __input__ = ${
+      args.length === 1 ? JSON.stringify(args[0]) : `[${argList}]`
+    };
+${code}
+`;
   }
 
   const argList = args.map((a) => pyLiteral(a)).join(', ');
-  const inputLine = argList
-    ? `__input__ = ${args.length === 1 ? pyLiteral(args[0]) : `[${argList}]`}\n`
-    : '';
-  return `${inputLine}${code}`;
+  return `__input__ = ${
+    args.length === 1 ? pyLiteral(args[0]) : `[${argList}]`
+  }
+${code}
+`;
 }
 
 function parseArgs(input: string): { args: unknown[] } {
   const trimmed = input.trim();
   if (trimmed === '') return { args: [] };
+
   try {
     const parsed = JSON.parse(trimmed);
     if (Array.isArray(parsed)) return { args: parsed };
     return { args: [parsed] };
   } catch {
-    return { args: [trimmed] };
+    /* fall through */
   }
+
+  try {
+    const parsed = JSON.parse(`[${trimmed}]`);
+    if (Array.isArray(parsed)) return { args: parsed };
+  } catch {
+    /* fall through */
+  }
+
+  return { args: [trimmed] };
 }
 
 function pyLiteral(value: unknown): string {

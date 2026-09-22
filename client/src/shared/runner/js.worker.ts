@@ -1,25 +1,31 @@
 /// <reference lib="webworker" />
 
-import { canonicalize } from '@kodxcamp/shared';
-
 /**
  * JavaScript sandbox worker.
  *
  * Two modes:
  *  - `run`        — visible test / playground. Returns raw stdout.
  *  - `run-hidden` — hidden test. Hashes the output inside the worker
- *                   and posts back only `{ passed }`. Raw stdout
- *                   never crosses the worker boundary.
+ *                   and posts back only `{ passed }`.
+ *
+ * Anything the worker needs must be inlined. Do NOT add top-level
+ * `import` statements — that forces Vite to emit a module worker,
+ * which breaks the classic-worker configuration in `vite.config.ts`.
  */
 
-type InMsg =
+type WorkerCanonicalizationId =
+  | 'trim-trailing-newline'
+  | 'trim-all'
+  | 'exact';
+
+type JsWorkerInMsg =
   | { type: 'run'; code: string }
   | {
       type: 'run-hidden';
       requestId: string;
       code: string;
       expectedOutputHash: string;
-      canonicalization: 'trim-trailing-newline' | 'trim-all' | 'exact';
+      canonicalization: WorkerCanonicalizationId;
     };
 
 type OutMsg =
@@ -35,10 +41,37 @@ type OutMsg =
 
 const post = (msg: OutMsg) => (self as unknown as Worker).postMessage(msg);
 
-// ─── Shared execution core ──────────────────────────────────────
+// ─── Inlined canonicalization ─────────────────────────────────────
 //
-// Both modes run the same wrapped code. `captureOutput` decides what
-// to do with it: post it (visible) or hash it (hidden).
+// Mirrors `shared/src/testcase/canonicalize.ts`. Inlined because we
+// cannot import in a classic worker.
+
+function workerCanonicalize(
+  output: string,
+  id: WorkerCanonicalizationId = 'trim-trailing-newline'
+): string {
+  switch (id) {
+    case 'trim-trailing-newline':
+      return output
+        .replace(/\r\n/g, '\n')
+        .replace(/[ \t]+$/gm, '')
+        .replace(/\n$/, '');
+    case 'trim-all':
+      return output.replace(/\r\n/g, '\n').trim();
+    case 'exact':
+      return output;
+  }
+}
+
+async function workerSha256Hex(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// ─── Execution ────────────────────────────────────────────────────
 
 interface ExecutionResult {
   ok: boolean;
@@ -75,7 +108,6 @@ async function execute(code: string): Promise<ExecutionResult> {
     debug: capture('[debug] '),
   };
 
-  // Compile
   let fn: (console: typeof sandboxConsole) => Promise<unknown>;
   try {
     fn = new Function(
@@ -97,7 +129,6 @@ async function execute(code: string): Promise<ExecutionResult> {
     };
   }
 
-  // Execute
   try {
     const returnValue = await fn(sandboxConsole);
     if (returnValue !== undefined) {
@@ -122,17 +153,9 @@ async function execute(code: string): Promise<ExecutionResult> {
   }
 }
 
-async function sha256Hex(text: string): Promise<string> {
-  const data = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
+// ─── Message handling ─────────────────────────────────────────────
 
-// ─── Message handling ───────────────────────────────────────────
-
-self.onmessage = async (e: MessageEvent<InMsg>) => {
+self.onmessage = async (e: MessageEvent<JsWorkerInMsg>) => {
   if (e.data.type === 'run') {
     const result = await execute(e.data.code);
 
@@ -157,8 +180,8 @@ self.onmessage = async (e: MessageEvent<InMsg>) => {
 
     let passed = false;
     if (result.ok) {
-      const canonical = canonicalize(result.stdout, canonicalization);
-      const actualHash = await sha256Hex(canonical);
+      const canonical = workerCanonicalize(result.stdout, canonicalization);
+      const actualHash = await workerSha256Hex(canonical);
       passed = actualHash === expectedOutputHash;
     }
 

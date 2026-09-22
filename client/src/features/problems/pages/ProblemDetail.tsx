@@ -3,7 +3,18 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useProblem } from '@/features/problems/hooks/useProblem';
-import { runTests, type TestResult } from '@/shared/runner/testHarness';
+import {
+  runTests,
+  combineSummaries,
+  type AnyTestResult,
+  type TestRunSummary,
+  type VisibleTestCase,
+} from '@/shared/runner/testHarness';
+import {
+  runHiddenTests,
+  type HiddenTestCase,
+  type HiddenTestOutcome,
+} from '@/shared/runner/hiddenHarness';
 import { preloadPython } from '@/shared/runner/pythonRunner';
 import { problemsApi, type ApiSubmission } from '@/features/problems/api';
 import { useAuthStore } from '@/shared/store/auth.store';
@@ -14,6 +25,7 @@ import { ProblemPanel } from '@/features/problems/components/ProblemPanel';
 import { TestPanel } from '@/features/problems/components/TestPanel';
 import { EditorToolbar } from '@/features/problems/components/EditorToolbar';
 import { AcceptanceOverlay } from '@/features/problems/components/AcceptanceOverlay';
+import { useToast } from '@/shared/hooks/useToast';
 
 const LANGUAGES = ['javascript', 'python'] as const;
 type Lang = (typeof LANGUAGES)[number];
@@ -22,32 +34,34 @@ export const ProblemDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const { problem, loading, error, reload } = useProblem(slug);
   const user = useAuthStore((s) => s.user);
+  const toast = useToast();
 
   const [language, setLanguage] = useState<Lang>('javascript');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState<TestResult[]>();
+  const [results, setResults] = useState<AnyTestResult[]>();
   const [accepted, setAccepted] = useState(false);
   const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
   const [showAcceptance, setShowAcceptance] = useState(false);
   const [pyReady, setPyReady] = useState(false);
 
-  // Warm Python in the background so first run feels instant
   useEffect(() => {
     void preloadPython().then(() => setPyReady(true));
   }, []);
 
-  // Reset editor state when the problem or language changes
+  // Reset editor state when the problem id or language changes.
+  // Keyed on `problem?._id` (not `problem`) so a background refetch
+  // doesn't wipe in-progress results.
   useEffect(() => {
     if (!problem) return;
     const starter = problem.starterCode?.[language] ?? '';
     setCode(starter);
     setResults(undefined);
     setAccepted(false);
-  }, [problem, language]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [problem?._id, language]);
 
-  // Load submissions (uncached — simple, refetched on problem change)
   useEffect(() => {
     if (!user || !problem) return;
     let cancelled = false;
@@ -62,47 +76,134 @@ export const ProblemDetail: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [user, problem]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, problem?._id]);
 
   const testCases = useMemo(() => problem?.testCases ?? [], [problem]);
+  const hiddenTestCases = useMemo(
+    () => problem?.hiddenTestCases ?? [],
+    [problem]
+  );
 
   async function execute(isSubmit: boolean) {
     if (!problem) return;
-    if (isSubmit && !user) return;
+    if (isSubmit && !user) {
+      toast.info('Log in to submit your solution.');
+      return;
+    }
 
     setBusy(true);
     setResults(undefined);
     setAccepted(false);
 
-    const summary = await runTests(language, code, testCases, {
-      functionName: problem.functionName,
-      outputMode: problem.outputMode,
-    });
+    const visibleCases: VisibleTestCase[] = testCases.map((tc) => ({
+      index: tc.index,
+      input: tc.input,
+      expectedOutput: tc.expectedOutput,
+    }));
 
-    setResults(summary.results);
-    setAccepted(summary.allPassed);
-    setTotalRuntimeMs(summary.totalRuntimeMs);
+    const visibleSummary: TestRunSummary = await runTests(
+      language,
+      code,
+      visibleCases,
+      {
+        functionName: problem.functionName,
+        outputMode: problem.outputMode,
+      }
+    );
+
+    // Hidden tests run only on Submit — not on Run — so the pass/fail
+    // vector isn't leaked during exploration.
+    let hiddenSummary: {
+      results: AnyTestResult[];
+      totalRuntimeMs: number;
+    } = {
+      results: [],
+      totalRuntimeMs: 0,
+    };
+
+    if (isSubmit && hiddenTestCases.length > 0) {
+      const hiddenInputs: HiddenTestCase[] = hiddenTestCases.map((tc) => ({
+        id: tc.id,
+        input: tc.input,
+        expectedOutputHash: tc.expectedOutputHash,
+        canonicalization: tc.canonicalization,
+      }));
+
+      const started = performance.now();
+      const outcomes: HiddenTestOutcome[] = await runHiddenTests(
+        language,
+        code,
+        hiddenInputs,
+        {
+          functionName: problem.functionName,
+          outputMode: problem.outputMode,
+          timeoutMs: 10000,
+        }
+      );
+
+      hiddenSummary = {
+        results: outcomes.map((o) => ({
+          kind: 'hidden' as const,
+          id: o.id,
+          passed: o.passed,
+          runtimeMs: 0,
+        })),
+        totalRuntimeMs: Math.round(performance.now() - started),
+      };
+    }
+
+    const combined = combineSummaries(visibleSummary, hiddenSummary);
+
+    setResults(combined.results);
+    setAccepted(combined.allPassed);
+    setTotalRuntimeMs(combined.totalRuntimeMs);
 
     if (isSubmit) {
+      const sessionId =
+        typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
       try {
         await problemsApi.submit({
           problemId: problem._id,
           language,
           code,
-          status: summary.allPassed ? 'accepted' : 'wrong_answer',
-          passedTests: summary.passedTests,
-          totalTests: summary.totalTests,
-          runtimeMs: summary.totalRuntimeMs,
+          sessionId,
+          visibleResults: combined.results
+            .filter(
+              (r): r is Extract<AnyTestResult, { kind: 'visible' }> =>
+                r.kind === 'visible'
+            )
+            .map((r) => ({ index: r.index, passed: r.passed })),
+          hiddenResults: combined.results
+            .filter(
+              (r): r is Extract<AnyTestResult, { kind: 'hidden' }> =>
+                r.kind === 'hidden'
+            )
+            .map((r) => ({ id: r.id, passed: r.passed })),
+          runtimeMs: combined.totalRuntimeMs,
         });
+
         const fresh = await problemsApi.submissions(problem._id);
         setSubmissions(fresh);
 
-        // Show the celebration overlay only on all-pass
-        if (summary.allPassed) {
+        if (combined.allPassed) {
           setShowAcceptance(true);
+        } else if (hiddenTestCases.length > 0) {
+          const hiddenPassed = combined.results
+            .filter((r) => r.kind === 'hidden')
+            .filter((r) => r.passed).length;
+          toast.warning(
+            `${hiddenPassed}/${hiddenTestCases.length} hidden tests passed. Keep going.`,
+            'Not accepted'
+          );
         }
-      } catch {
-        /* surfaced in the result panel */
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Failed to record submission';
+        toast.error(message, 'Submission failed');
       }
     }
 
@@ -141,7 +242,6 @@ export const ProblemDetail: React.FC = () => {
     <>
       <div className="flex h-[calc(100vh-64px)] w-full">
         <PanelGroup direction="horizontal" className="h-full flex-1">
-          {/* Left: problem panel */}
           <Panel defaultSize={42} minSize={28}>
             <div className="h-full bg-bg">
               <ProblemPanel problem={problem} submissions={submissions} />
@@ -150,7 +250,6 @@ export const ProblemDetail: React.FC = () => {
 
           <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
 
-          {/* Right: editor + test panel */}
           <Panel defaultSize={58} minSize={35}>
             <PanelGroup direction="vertical">
               <Panel defaultSize={65} minSize={30}>
@@ -180,6 +279,7 @@ export const ProblemDetail: React.FC = () => {
               <Panel defaultSize={35} minSize={15}>
                 <TestPanel
                   testCases={testCases}
+                  hiddenCount={hiddenTestCases.length}
                   results={results}
                   running={busy}
                   accepted={accepted}
