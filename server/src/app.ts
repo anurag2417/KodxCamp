@@ -85,7 +85,7 @@ export function createApp() {
   // API 404s must return JSON, not index.html
   app.use('/api', notFound);
 
-  // Optional: monolith mode — serve built client if present
+  // In production, serve the built client (monolith mode)
   if (env.NODE_ENV === 'production') {
     const clientDist = path.resolve(process.cwd(), '..', 'client', 'dist');
     if (fs.existsSync(clientDist)) {
