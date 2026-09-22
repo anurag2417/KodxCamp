@@ -1,7 +1,20 @@
-import type { RunResult, RunnerOptions } from '@/shared/runner/types';
+import type { RunResult, RunnerOptions } from './types';
+
+/**
+ * Runs Python code via a persistent Web Worker running Pyodide.
+ *
+ * Design:
+ *  - ONE worker is kept alive across all runs on the page.
+ *  - Pyodide loads once per page (~3-5s) and persists.
+ *  - On timeout, the worker is terminated and recreated on the next call.
+ *  - `preloadPython()` warms it in the background on page mount.
+ *
+ * Worker format: classic (iife) — required for `importScripts` in the worker.
+ * Do NOT pass `{ type: 'module' }` to `new Worker()`.
+ */
 
 type WorkerMessage = {
-  type: 'stdout' | 'stderr' | 'done' | 'error';
+  type: 'stdout' | 'stderr' | 'done' | 'error' | 'ready';
   text?: string;
   requestId?: string;
   runtimeMs?: number;
@@ -69,7 +82,6 @@ function attachListeners(w: Worker) {
   });
 
   w.addEventListener('error', (err) => {
-    // Kill the worker; next call recreates it
     try {
       w.terminate();
     } catch {
@@ -93,6 +105,7 @@ function attachListeners(w: Worker) {
 async function ensureWorker(): Promise<Worker> {
   if (worker) return worker;
   const Ctor = await getWorkerCtor();
+  // Classic worker (no `{ type: 'module' }`) — required by Pyodide.
   worker = new Ctor();
   attachListeners(worker);
   return worker;
@@ -100,7 +113,7 @@ async function ensureWorker(): Promise<Worker> {
 
 /**
  * Warm the Python worker in the background.
- * Call from a page mount so the first real run feels instant.
+ * Call from a page mount so the first run feels instant.
  */
 export async function preloadPython(): Promise<void> {
   try {
@@ -124,6 +137,10 @@ export async function preloadPython(): Promise<void> {
   } catch {
     /* Non-fatal */
   }
+}
+
+export function isPythonReady(): boolean {
+  return worker !== null;
 }
 
 export async function runPython(

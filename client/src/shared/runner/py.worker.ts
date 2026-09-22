@@ -3,8 +3,11 @@
 /**
  * Python sandbox worker — runs Pyodide off the main thread.
  *
- * The parent terminates this worker on timeout, which kills running code
- * even inside `while True: pass`.
+ * This worker is bundled as a *classic* worker (see vite.config.ts →
+ * `worker.format: 'iife'`). Classic workers can use `importScripts`,
+ * which Pyodide's loader requires. ESM workers cannot.
+ *
+ * The worker persists across runs; Pyodide loads once per page session.
  */
 
 interface RunMsg {
@@ -13,15 +16,15 @@ interface RunMsg {
   requestId: string;
 }
 
-export interface OutMsg {
-  type: 'stdout' | 'stderr' | 'done' | 'error';
+interface WorkerOutMsg {
+  type: 'stdout' | 'stderr' | 'done' | 'error' | 'ready';
   text?: string;
   requestId?: string;
   runtimeMs?: number;
   kind?: 'runtime' | 'syntax';
 }
 
-const post = (msg: OutMsg) => (self as unknown as Worker).postMessage(msg);
+const postWorkerMessage = (msg: WorkerOutMsg) => self.postMessage(msg);
 
 interface PyodideInstance {
   runPythonAsync: (code: string) => Promise<unknown>;
@@ -38,11 +41,21 @@ async function loadPyodideOnce(): Promise<PyodideInstance> {
   if (pyodidePromise) return pyodidePromise;
 
   pyodidePromise = (async () => {
-    const mod = await import(
-      /* @vite-ignore */ `${PYODIDE_BASE}pyodide.mjs`
-    );
-    const loadPyodide = (mod as { loadPyodide: (opts: { indexURL: string }) => Promise<PyodideInstance> }).loadPyodide;
-    const py = await loadPyodide({ indexURL: PYODIDE_BASE });
+    // Load the Pyodide script tag into the worker's global scope.
+    // After this, `loadPyodide` is available on `self`.
+    importScripts(`${PYODIDE_BASE}pyodide.js`);
+
+    const loader = (self as unknown as {
+      loadPyodide: (opts: { indexURL: string }) => Promise<PyodideInstance>;
+    }).loadPyodide;
+
+    if (!loader) {
+      throw new Error(
+        'Pyodide loader missing after importScripts. Verify /pyodide/v0.26.2/pyodide.js exists in the built app.'
+      );
+    }
+
+    const py = await loader({ indexURL: PYODIDE_BASE });
     return py;
   })();
 
@@ -58,8 +71,9 @@ self.onmessage = async (e: MessageEvent<RunMsg>) => {
   let py: PyodideInstance;
   try {
     py = await loadPyodideOnce();
+    postWorkerMessage({ type: 'ready', requestId });
   } catch (err) {
-    post({
+    postWorkerMessage({
       type: 'error',
       requestId,
       kind: 'runtime',
@@ -79,12 +93,12 @@ self.onmessage = async (e: MessageEvent<RunMsg>) => {
     await py.runPythonAsync(code);
 
     const stdout = stdoutChunks.join('\n');
-    if (stdout) post({ type: 'stdout', text: stdout, requestId });
+    if (stdout) postWorkerMessage({ type: 'stdout', text: stdout, requestId });
 
     const stderr = stderrChunks.join('\n');
-    if (stderr) post({ type: 'stderr', text: stderr, requestId });
+    if (stderr) postWorkerMessage({ type: 'stderr', text: stderr, requestId });
 
-    post({
+    postWorkerMessage({
       type: 'done',
       requestId,
       runtimeMs: Math.round(performance.now() - start),
@@ -95,9 +109,9 @@ self.onmessage = async (e: MessageEvent<RunMsg>) => {
     const isSyntax = msg.includes('SyntaxError');
 
     const stdout = stdoutChunks.join('\n');
-    if (stdout) post({ type: 'stdout', text: stdout, requestId });
+    if (stdout) postWorkerMessage({ type: 'stdout', text: stdout, requestId });
 
-    post({
+    postWorkerMessage({
       type: 'error',
       requestId,
       kind: isSyntax ? 'syntax' : 'runtime',
