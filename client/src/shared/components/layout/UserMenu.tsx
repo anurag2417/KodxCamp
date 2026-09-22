@@ -7,19 +7,23 @@ import {
   Trophy,
   LogOut,
   ChevronDown,
+  type LucideIcon,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { useAuthStore } from '@/shared/store/auth.store';
-import { cn } from '@/shared/lib/utils';
+import { useAuthStore } from '../../store/auth.store';
+import { cn } from '../../lib/utils';
 
-export const UserMenu: React.FC = () => {
+interface Props {
+  /** When true, render light-colored trigger for use over a dark background. */
+  transparent?: boolean;
+}
+
+export const UserMenu: React.FC<Props> = ({ transparent }) => {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
@@ -59,8 +63,11 @@ export const UserMenu: React.FC = () => {
       <button
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-tertiary',
-          open && 'bg-surface-tertiary'
+          'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors',
+          transparent
+            ? 'text-white hover:bg-white/10'
+            : 'text-text-secondary hover:bg-surface-tertiary',
+          open && (transparent ? 'bg-white/10' : 'bg-surface-tertiary')
         )}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -68,10 +75,18 @@ export const UserMenu: React.FC = () => {
         <span className="grid h-7 w-7 place-items-center rounded-full bg-brand-500 text-xs font-bold text-white">
           {initials || <UserIcon size={14} />}
         </span>
-        <span className="hidden max-w-[10rem] truncate md:inline">
+        <span
+          className={cn(
+            'hidden max-w-[10rem] truncate md:inline',
+            transparent ? 'text-white' : ''
+          )}
+        >
           {user.name}
         </span>
-        <ChevronDown size={14} className="text-text-muted" />
+        <ChevronDown
+          size={14}
+          className={transparent ? 'text-white/70' : 'text-text-muted'}
+        />
       </button>
 
       {open && (
@@ -87,9 +102,24 @@ export const UserMenu: React.FC = () => {
           </div>
 
           <div className="p-1">
-            <MenuItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" onClose={() => setOpen(false)} />
-            <MenuItem to="/progress" icon={TrendingUp} label="Progress" onClose={() => setOpen(false)} />
-            <MenuItem to="/achievements" icon={Trophy} label="Achievements" onClose={() => setOpen(false)} />
+            <MenuItem
+              to="/dashboard"
+              icon={LayoutDashboard}
+              label="Dashboard"
+              onClose={() => setOpen(false)}
+            />
+            <MenuItem
+              to="/progress"
+              icon={TrendingUp}
+              label="Progress"
+              onClose={() => setOpen(false)}
+            />
+            <MenuItem
+              to="/achievements"
+              icon={Trophy}
+              label="Achievements"
+              onClose={() => setOpen(false)}
+            />
           </div>
 
           <div className="border-t border-border p-1">
