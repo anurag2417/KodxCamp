@@ -51,7 +51,7 @@ export const Pricing: React.FC = () => {
               <span className="text-4xl font-bold text-text-primary">$0</span>
               <span className="ml-2 text-sm text-text-muted">/ forever</span>
             </p>
-            <Link to="/register" className="mt-6 block">
+            <Link to="/signup" className="mt-6 block">
               <Button size="lg" className="w-full">
                 Get Started
               </Button>

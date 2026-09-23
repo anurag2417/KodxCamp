@@ -15,10 +15,14 @@ import {
   updateTeamMemberSchema,
   teamMemberParamsSchema,
 } from '../controllers/instructor.course.controller.js';
+import {
+  instructorInvitationController,
+  createInvitationSchema,
+  invitationParamsSchema,
+} from '../controllers/instructor.invitation.controller.js';
 
 const router = Router();
 
-// Every instructor route requires auth + instructor/admin role
 router.use(requireAuth, requireInstructor);
 
 // ─── Courses ──────────────────────────────────────
@@ -66,7 +70,7 @@ router.delete(
   instructorCourseController.removeLesson
 );
 
-// ─── Team ─────────────────────────────────────────
+// ─── Team (existing, by user id) ──────────────────
 router.get(
   '/courses/:slug/team',
   validate(courseSlugSchema),
@@ -86,6 +90,23 @@ router.delete(
   '/courses/:slug/team/:userId',
   validate(teamMemberParamsSchema),
   instructorCourseController.removeTeamMember
+);
+
+// ─── Invitations (new) ────────────────────────────
+router.get(
+  '/courses/:slug/invitations',
+  validate(courseSlugSchema),
+  instructorInvitationController.list
+);
+router.post(
+  '/courses/:slug/invitations',
+  validate(createInvitationSchema),
+  instructorInvitationController.create
+);
+router.delete(
+  '/courses/:slug/invitations/:invitationId',
+  validate(invitationParamsSchema),
+  instructorInvitationController.revoke
 );
 
 export default router;

@@ -61,7 +61,7 @@ export const Hero: React.FC = () => {
 
           <div className="hero-fade-in mt-10 flex flex-wrap items-center gap-3" style={{ animationDelay: '900ms' }}>
             <MagneticButton>
-              <Link to="/register">
+              <Link to="/signup">
                 <Button size="lg" className="group shadow-2xl shadow-brand-500/40">
                   Start Learning Free
                   <ArrowRight

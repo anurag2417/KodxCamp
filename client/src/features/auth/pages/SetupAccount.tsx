@@ -1,25 +1,34 @@
-import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { User, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { AuthLayout } from '../components/AuthLayout';
 import { AuthField } from '../components/AuthField';
 import { Seo } from '../../../shared/components/seo/Seo';
+import { authApi } from '../api';
 import { useAuthStore } from '../../../shared/store/auth.store';
 
-export const Register: React.FC = () => {
+export const SetupAccount: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const setSession = useAuthStore((s) => s.setSession);
+
+  const setupToken = searchParams.get('setupToken') ?? '';
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const register = useAuthStore((s) => s.register);
-  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!setupToken) {
+      navigate('/signup', { replace: true });
+    }
+  }, [setupToken, navigate]);
 
   const passwordStrength = (() => {
     let s = 0;
-    if (password.length >= 6) s++;
-    if (password.length >= 10) s++;
+    if (password.length >= 8) s++;
+    if (password.length >= 12) s++;
     if (/[A-Z]/.test(password) && /[a-z]/.test(password)) s++;
     if (/\d/.test(password)) s++;
     return s;
@@ -28,15 +37,24 @@ export const Register: React.FC = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     setBusy(true);
     try {
-      await register(name, email, password);
-      navigate('/dashboard');
+      const { user } = await authApi.setPassword({
+        setupToken,
+        name: name.trim(),
+        password,
+      });
+      setSession(user);
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
-        setError('Registration failed. Try a different email.');
+        setError('Could not complete signup. Please try again.');
       }
       setBusy(false);
     }
@@ -44,21 +62,18 @@ export const Register: React.FC = () => {
 
   return (
     <>
-      <Seo
-        title="Create account"
-        description="Create your free KodxCamp account and start learning to code today."
-      />
+      <Seo title="Finish your account" description="Set a name and password." />
       <AuthLayout
-        title="Create your account"
-        subtitle="Free forever. Start writing code in under a minute."
+        title="Almost there"
+        subtitle="Set your name and password to finish creating your account."
         footer={
           <>
-            Already have an account?{' '}
+            Having trouble?{' '}
             <Link
-              to="/login"
+              to="/signup"
               className="font-medium text-brand-500 hover:underline"
             >
-              Sign in
+              Start over
             </Link>
           </>
         }
@@ -78,31 +93,20 @@ export const Register: React.FC = () => {
           />
 
           <AuthField
-            label="Email"
-            icon={Mail}
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-
-          <AuthField
             label="Password"
             icon={Lock}
             type="password"
             isPassword
             autoComplete="new-password"
-            placeholder="At least 6 characters"
+            placeholder="At least 8 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             hint={
               password.length > 0
                 ? undefined
-                : 'Use 6 or more characters. Mixing letters and numbers helps.'
+                : 'Use 8 or more characters. Mixing letters, numbers, and symbols helps.'
             }
           />
 

@@ -11,7 +11,12 @@ import { AdminProblems } from '@/features/admin/pages/AdminProblems';
 import { AdminProjects } from '@/features/admin/pages/AdminProjects';
 import { AdminUsers } from '@/features/admin/pages/AdminUsers';
 import { Login } from '@/features/auth/pages/Login';
-import { Register } from '@/features/auth/pages/Register';
+import { Signup } from '@/features/auth/pages/Signup';
+import { VerifyOtp } from '@/features/auth/pages/VerifyOtp';
+import { SetupAccount } from '@/features/auth/pages/SetupAccount';
+import { ForgotPassword } from '@/features/auth/pages/ForgotPassword';
+import { ResetPassword } from '@/features/auth/pages/ResetPassword';
+import { AcceptInvitation } from '@/features/auth/pages/AcceptInvitation';
 import { ClassDetail } from '@/features/classes/pages/ClassDetail';
 import { Classes } from '@/features/classes/pages/Classes';
 import { MyRecordings } from '@/features/classes/pages/MyRecordings';
@@ -55,12 +60,28 @@ export function AppRouter() {
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Routes>
+        {/* ─── Auth ─────────────────────────────────────────── */}
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/signup/verify" element={<VerifyOtp />} />
+        <Route path="/signup/setup" element={<SetupAccount />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route
+          path="/reset-password/:token"
+          element={<ResetPassword />}
+        />
+        <Route
+          path="/invitations/:token"
+          element={<AcceptInvitation />}
+        />
+
+        {/* Legacy route — redirects to the new signup flow. */}
+        <Route path="/register" element={<Navigate to="/signup" replace />} />
+
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Home />} />
 
-          {/* Courses */}
+          {/* ─── Courses ───────────────────────────────────── */}
           <Route path="courses" element={<Courses />} />
           <Route path="courses/:slug" element={<CourseDetail />} />
           <Route
@@ -68,14 +89,14 @@ export function AppRouter() {
             element={<Lesson />}
           />
 
-          {/* Practice */}
+          {/* ─── Practice ──────────────────────────────────── */}
           <Route path="practice" element={<Practice />} />
           <Route path="practice/:slug" element={<ProblemDetail />} />
 
-          {/* Playground */}
+          {/* ─── Playground ────────────────────────────────── */}
           <Route path="playground" element={<Playground />} />
 
-          {/* Projects — the static "mine" route MUST come before :slug */}
+          {/* ─── Projects ──────────────────────────────────── */}
           <Route path="projects" element={<Projects />} />
           <Route
             path="projects/mine"
@@ -87,7 +108,7 @@ export function AppRouter() {
           />
           <Route path="projects/:slug" element={<ProjectDetail />} />
 
-          {/* Classes — static "mine" route MUST come before :slug */}
+          {/* ─── Classes ───────────────────────────────────── */}
           <Route path="classes" element={<Classes />} />
           <Route
             path="classes/mine"
@@ -99,7 +120,7 @@ export function AppRouter() {
           />
           <Route path="classes/:slug" element={<ClassDetail />} />
 
-          {/* User-only */}
+          {/* ─── User-only ─────────────────────────────────── */}
           <Route
             path="dashboard"
             element={
@@ -133,7 +154,7 @@ export function AppRouter() {
             }
           />
 
-          {/* Instructor */}
+          {/* ─── Instructor ────────────────────────────────── */}
           <Route
             path="instructor"
             element={
@@ -149,7 +170,7 @@ export function AppRouter() {
             />
           </Route>
 
-          {/* Admin */}
+          {/* ─── Admin ─────────────────────────────────────── */}
           <Route
             path="admin"
             element={
@@ -164,7 +185,10 @@ export function AppRouter() {
             <Route path="classes" element={<AdminClasses />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="bulk-import" element={<AdminBulkImport />} />
-            <Route path="courses" element={<Navigate to="/instructor" replace />} />
+            <Route
+              path="courses"
+              element={<Navigate to="/instructor" replace />}
+            />
             <Route
               path="courses/:slug"
               element={<Navigate to="/instructor" replace />}

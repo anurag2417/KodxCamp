@@ -47,7 +47,7 @@ export const Home: React.FC = () => (
             card, no trial, no fine print.
           </p>
           <div className="mt-12 flex flex-wrap justify-center gap-3">
-            <Link to="/register">
+            <Link to="/signup">
               <Button size="lg" className="group shadow-2xl shadow-brand-500/40">
                 Start Learning Free
                 <ArrowRight

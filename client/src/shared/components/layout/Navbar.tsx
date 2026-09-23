@@ -110,7 +110,7 @@ export const Navbar: React.FC = () => {
                     Login
                   </Button>
                 </Link>
-                <Link to="/register" className="hidden sm:inline-flex">
+                <Link to="/signup" className="hidden sm:inline-flex">
                   <Button size="sm">Get Started</Button>
                 </Link>
               </>

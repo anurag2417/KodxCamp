@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, ArrowRight, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { AuthLayout } from '../components/AuthLayout';
 import { AuthField } from '../components/AuthField';
@@ -10,52 +10,43 @@ import { useAuthStore } from '../../../shared/store/auth.store';
 import { isFirebaseConfigured } from '../lib/firebase';
 import { getGoogleIdToken } from '../lib/googleSignIn';
 
-export const Login: React.FC = () => {
+export const Signup: React.FC = () => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
-  const login = useAuthStore((s) => s.login);
-  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
   const navigate = useNavigate();
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
+
+  const googleEnabled = isFirebaseConfigured();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      await login(email.trim().toLowerCase(), password);
-      navigate('/dashboard');
+      await authApi.register(email.trim().toLowerCase());
+      navigate(
+        `/signup/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`
+      );
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const body = err.response?.data as
           | {
-              reason?: string;
-              data?: { email?: string; setupToken?: string };
               message?: string;
+              details?: { path: string; message: string }[];
             }
           | undefined;
 
-        if (body?.reason === 'email_unverified') {
-          navigate(
-            `/signup/verify?email=${encodeURIComponent(
-              body.data?.email ?? email
-            )}`
-          );
-          return;
+        if (body?.details?.length) {
+          setError(body.details.map((d) => d.message).join('\n'));
+        } else if (body?.message) {
+          setError(body.message);
+        } else {
+          setError('Could not send the code. Please try again.');
         }
-        if (body?.reason === 'profile_incomplete' && body.data?.setupToken) {
-          navigate(
-            `/signup/setup?setupToken=${encodeURIComponent(
-              body.data.setupToken
-            )}`
-          );
-          return;
-        }
-        setError(body?.message ?? 'Invalid email or password');
       } else {
-        setError('Invalid email or password');
+        setError('Could not send the code. Please try again.');
       }
       setBusy(false);
     }
@@ -72,33 +63,31 @@ export const Login: React.FC = () => {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
       } else if (err instanceof Error) {
-        setError(err.message || 'Google sign-in was cancelled.');
+        setError(err.message || 'Google sign-up was cancelled.');
       } else {
-        setError('Google sign-in failed.');
+        setError('Google sign-up failed.');
       }
       setGoogleBusy(false);
     }
   };
 
-  const googleEnabled = isFirebaseConfigured();
-
   return (
     <>
       <Seo
-        title="Login"
-        description="Sign in to KodxCamp and continue your learning journey."
+        title="Create account"
+        description="Create your free KodxCamp account and start learning to code today."
       />
       <AuthLayout
-        title="Welcome back"
-        subtitle="Sign in to continue where you left off."
+        title="Create your account"
+        subtitle="Sign up in seconds with Google, or verify your email."
         footer={
           <>
-            New to KodxCamp?{' '}
+            Already have an account?{' '}
             <Link
-              to="/signup"
+              to="/login"
               className="font-medium text-brand-500 hover:underline"
             >
-              Create a free account
+              Sign in
             </Link>
           </>
         }
@@ -144,29 +133,8 @@ export const Login: React.FC = () => {
               autoFocus={!googleEnabled}
             />
 
-            <AuthField
-              label="Password"
-              icon={Lock}
-              type="password"
-              isPassword
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-
-            <div className="-mt-2 text-right">
-              <Link
-                to="/forgot-password"
-                className="text-xs font-medium text-brand-500 hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
             {error && (
-              <div className="auth-shake rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 px-3.5 py-2.5 text-sm font-medium text-[var(--color-error)]">
+              <div className="auth-shake whitespace-pre-line rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 px-3.5 py-2.5 text-sm font-medium text-[var(--color-error)]">
                 {error}
               </div>
             )}
@@ -179,11 +147,11 @@ export const Login: React.FC = () => {
               {busy ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Signing in…
+                  Sending code…
                 </>
               ) : (
                 <>
-                  Sign in
+                  Send verification code
                   <ArrowRight
                     size={16}
                     className="transition-transform group-hover:translate-x-1"
@@ -192,6 +160,18 @@ export const Login: React.FC = () => {
               )}
             </button>
           </form>
+
+          <p className="text-center text-xs text-text-muted">
+            By signing up you agree to our{' '}
+            <Link to="/terms" className="text-brand-500 hover:underline">
+              Terms
+            </Link>{' '}
+            and{' '}
+            <Link to="/privacy" className="text-brand-500 hover:underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </div>
       </AuthLayout>
     </>

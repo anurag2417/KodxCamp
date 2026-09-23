@@ -1,16 +1,16 @@
 import { create } from 'zustand';
 import type { IUser } from '@kodxcamp/shared';
-import { api } from '@/shared/lib/api';
+import { authApi } from '@/features/auth/api';
 
 type AuthUser = Omit<IUser, 'password'>;
 
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
-  /** True once the initial `fetchMe` on app boot has settled. */
   bootstrapped: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
+  setSession: (user: AuthUser) => void;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
   clearUser: () => void;
@@ -24,28 +24,28 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (email, password) => {
     set({ loading: true });
     try {
-      const { data } = await api.post('/auth/login', { email, password });
-      // Server: ApiResponse.success(res, { user, accessToken })
-      // → data = { success, message, data: { user, accessToken } }
-      set({ user: data.data.user, bootstrapped: true });
+      const { user } = await authApi.login(email, password);
+      set({ user, bootstrapped: true });
     } finally {
       set({ loading: false });
     }
   },
 
-  register: async (name, email, password) => {
+  loginWithGoogle: async (idToken) => {
     set({ loading: true });
     try {
-      const { data } = await api.post('/auth/register', { name, email, password });
-      set({ user: data.data.user, bootstrapped: true });
+      const { user } = await authApi.loginWithGoogle(idToken);
+      set({ user, bootstrapped: true });
     } finally {
       set({ loading: false });
     }
   },
+
+  setSession: (user) => set({ user, bootstrapped: true }),
 
   logout: async () => {
     try {
-      await api.post('/auth/logout');
+      await authApi.logout();
     } finally {
       set({ user: null });
     }
@@ -53,9 +53,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   fetchMe: async () => {
     try {
-      const { data } = await api.get('/auth/me');
-      // Server: ApiResponse.success(res, user) → data = { ..., data: user }
-      set({ user: data.data });
+      const user = await authApi.me();
+      set({ user });
     } catch {
       set({ user: null });
     } finally {

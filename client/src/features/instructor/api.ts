@@ -59,6 +59,50 @@ export interface ApiInstructorCourseFull extends ApiInstructorCourse {
   permissions: ApiCoursePermissions;
 }
 
+// ─── Invitations ─────────────────────────────────────────────────
+
+export type InvitationStatus =
+  | 'pending'
+  | 'accepted'
+  | 'revoked'
+  | 'expired';
+
+export interface ApiInvitation {
+  _id: string;
+  courseId: string;
+  email: string;
+  role: CourseTeamRole;
+  invitedBy: string;
+  status: InvitationStatus;
+  expiresAt: string;
+  acceptedAt?: string;
+  acceptedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResolvedInvitation {
+  invitation: {
+    _id: string;
+    email: string;
+    role: CourseTeamRole;
+    status: InvitationStatus;
+    expiresAt: string;
+  };
+  course: {
+    _id: string;
+    title: string;
+    slug: string;
+    description: string;
+    language: string;
+  };
+  isExpired: boolean;
+  isAlreadyAccepted: boolean;
+  isRevoked: boolean;
+}
+
+// ─── Instructor API ──────────────────────────────────────────────
+
 export const instructorApi = {
   listMyCourses: async (): Promise<ApiInstructorCourse[]> => {
     const { data } = await api.get('/instructor/courses');
@@ -103,6 +147,7 @@ export const instructorApi = {
     return data.data;
   },
 
+  // ─── Lessons ───────────────────────────────────────────────
   createLesson: async (
     courseSlug: string,
     input: Record<string, unknown>
@@ -136,6 +181,7 @@ export const instructorApi = {
     return data.data;
   },
 
+  // ─── Team (by user id) ────────────────────────────────────
   listTeam: async (slug: string): Promise<ApiCourseTeamMember[]> => {
     const { data } = await api.get(`/instructor/courses/${slug}/team`);
     return data.data;
@@ -172,6 +218,48 @@ export const instructorApi = {
     const { data } = await api.delete(
       `/instructor/courses/${slug}/team/${userId}`
     );
+    return data.data;
+  },
+
+  // ─── Invitations ──────────────────────────────────────────
+  listInvitations: async (slug: string): Promise<ApiInvitation[]> => {
+    const { data } = await api.get(`/instructor/courses/${slug}/invitations`);
+    return data.data;
+  },
+
+  createInvitation: async (
+    slug: string,
+    email: string,
+    role: CourseTeamRole
+  ): Promise<{ invitationId: string }> => {
+    const { data } = await api.post(
+      `/instructor/courses/${slug}/invitations`,
+      { email, role }
+    );
+    return data.data;
+  },
+
+  revokeInvitation: async (
+    slug: string,
+    invitationId: string
+  ): Promise<{ ok: boolean }> => {
+    const { data } = await api.delete(
+      `/instructor/courses/${slug}/invitations/${invitationId}`
+    );
+    return data.data;
+  },
+};
+
+// ─── Invitation API (public + authenticated accept) ──────────────
+
+export const invitationApi = {
+  resolve: async (token: string): Promise<ResolvedInvitation> => {
+    const { data } = await api.get(`/invitations/${token}`);
+    return data.data;
+  },
+
+  accept: async (token: string): Promise<{ courseSlug: string }> => {
+    const { data } = await api.post(`/invitations/${token}/accept`);
     return data.data;
   },
 };

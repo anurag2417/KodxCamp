@@ -9,6 +9,7 @@ import achievementRoutes from './achievement.routes.js';
 import analyticsRoutes from './analytics.routes.js';
 import adminRoutes from './admin.routes.js';
 import instructorRoutes from './instructor.routes.js';
+import invitationRoutes from './invitation.routes.js';
 import { csrfMiddleware } from '../middleware/csrf.middleware.js';
 
 const router = Router();
@@ -34,5 +35,6 @@ router.use('/classes', classRoutes);
 router.use('/achievements', achievementRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/admin', adminRoutes);
+router.use('/invitations', invitationRoutes);
 
 export default router;

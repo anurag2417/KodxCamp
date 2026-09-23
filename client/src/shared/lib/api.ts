@@ -27,7 +27,7 @@ api.interceptors.response.use(
       if (
         typeof window !== 'undefined' &&
         !window.location.pathname.startsWith('/login') &&
-        !window.location.pathname.startsWith('/register')
+        !window.location.pathname.startsWith('/signup')
       ) {
         window.location.href = '/login';
       }

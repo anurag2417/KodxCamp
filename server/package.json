@@ -11,6 +11,7 @@
     "seed": "tsx src/scripts/seed.ts",
     "make-admin": "tsx src/scripts/make-admin.ts",
     "migrate:rbac": "tsx src/scripts/migrate-courses-for-rbac.ts",
+    "migrate:auth": "tsx src/scripts/migrate-auth-fields.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -23,6 +24,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "express-rate-limit": "^7.4.1",
+    "firebase-admin": "^14.4.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.8.1",

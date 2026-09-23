@@ -11,6 +11,10 @@ import {
   startEmailQueueJob,
   stopEmailQueueJob,
 } from './jobs/emailQueue.job.js';
+import {
+  startInvitationCleanupJob,
+  stopInvitationCleanupJob,
+} from './jobs/invitationCleanup.job.js';
 
 async function bootstrap() {
   try {
@@ -29,8 +33,11 @@ async function bootstrap() {
       env: env.NODE_ENV,
       clientUrl: env.CLIENT_URL,
     });
+
+    // Background jobs
     startClassLifecycleJob();
     startEmailQueueJob();
+    startInvitationCleanupJob();
   });
 
   let shuttingDown = false;
@@ -42,6 +49,7 @@ async function bootstrap() {
 
     stopClassLifecycleJob();
     stopEmailQueueJob();
+    stopInvitationCleanupJob();
 
     const killTimer = setTimeout(() => {
       logger.error('Forced shutdown after 10s');
