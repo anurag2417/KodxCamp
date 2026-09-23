@@ -7,6 +7,10 @@ import {
   startClassLifecycleJob,
   stopClassLifecycleJob,
 } from './jobs/classLifecycle.job.js';
+import {
+  startEmailQueueJob,
+  stopEmailQueueJob,
+} from './jobs/emailQueue.job.js';
 
 async function bootstrap() {
   try {
@@ -26,6 +30,7 @@ async function bootstrap() {
       clientUrl: env.CLIENT_URL,
     });
     startClassLifecycleJob();
+    startEmailQueueJob();
   });
 
   let shuttingDown = false;
@@ -36,6 +41,7 @@ async function bootstrap() {
     logger.info(`${signal} received — shutting down gracefully`);
 
     stopClassLifecycleJob();
+    stopEmailQueueJob();
 
     const killTimer = setTimeout(() => {
       logger.error('Forced shutdown after 10s');

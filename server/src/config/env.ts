@@ -16,6 +16,14 @@ const envSchema = z.object({
     .pipe(z.array(z.string().url())),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   PUBLIC_UPLOAD_BASE_URL: z.string().url().optional(),
+
+  // ─── Email ────────────────────────────────────────────────────
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+  EMAIL_ENABLED: z.coerce.boolean().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
