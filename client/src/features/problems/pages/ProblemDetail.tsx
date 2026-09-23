@@ -32,6 +32,18 @@ const LANGUAGE_LABELS: Record<string, string> = {
   tailwind: 'Tailwind',
 };
 
+/**
+ * Fallback starter for Java when a problem doesn't declare one.
+ * Java problems always run in `Main.main` or a `Main.<functionName>`
+ * static method, depending on the problem's output mode.
+ */
+const JAVA_FALLBACK_STARTER = `public class Main {
+  public static void main(String[] args) {
+    // TODO
+  }
+}
+`;
+
 function toMonacoLanguage(lang: string): string {
   switch (lang) {
     case 'html-css':
@@ -64,13 +76,22 @@ export const ProblemDetail: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const toast = useToast();
 
+  /**
+   * Languages available for this problem. Derived from `starterCode`
+   * keys, plus Java (which is always offered even if the problem has
+   * no Java starter — a fallback is inserted at render time).
+   */
   const languages = useMemo(() => {
-    if (!problem?.starterCode) return [];
-    return Object.keys(problem.starterCode).map((id) => ({
+    if (!problem) return [];
+    const configured = Object.keys(problem.starterCode ?? {}).map((id) => ({
       id,
       label: LANGUAGE_LABELS[id] ?? id,
     }));
-  }, [problem?.starterCode]);
+    if (!configured.some((l) => l.id === 'java')) {
+      configured.push({ id: 'java', label: 'Java' });
+    }
+    return configured;
+  }, [problem]);
 
   const [language, setLanguage] = useState<string>('javascript');
   const [code, setCode] = useState('');
@@ -110,9 +131,13 @@ export const ProblemDetail: React.FC = () => {
     };
   }, [language]);
 
+  // Populate the editor when the problem or language changes.
   useEffect(() => {
     if (!problem) return;
-    const starter = problem.starterCode?.[language] ?? '';
+    const configured = problem.starterCode?.[language];
+    const starter =
+      configured ??
+      (language === 'java' ? JAVA_FALLBACK_STARTER : '');
     setCode(starter);
     setSummary(undefined);
     setAccepted(false);

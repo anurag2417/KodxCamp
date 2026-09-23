@@ -2,13 +2,13 @@ import { runCode, type RunResult } from '@/shared/runner/index';
 
 export type OutputMode = 'return' | 'print';
 
-// ─── Visible-test types ───────────────────────────────────────────
+// ─── Test types ───────────────────────────────────────────────────
 
 export interface VisibleTestCase {
   index: number;
   input: string;
   expectedOutput: string;
-  /** Display flag. Hides the input/output from the student's panel. */
+  /** Display flag. Hides input/output from the student's test panel. */
   isHidden?: boolean;
 }
 
@@ -23,8 +23,6 @@ export interface VisibleTestResult {
   isHidden?: boolean;
 }
 
-// ─── Summary ──────────────────────────────────────────────────────
-
 export interface TestRunSummary {
   results: VisibleTestResult[];
   passedTests: number;
@@ -34,20 +32,12 @@ export interface TestRunSummary {
 }
 
 export interface TestHarnessOptions {
-  /** Name of the function the student implements. */
+  /** Name of the function the student implements (or `main` for Java). */
   functionName: string;
   /** Whether to compare the function's return value, or stdout. */
   outputMode: OutputMode;
 }
 
-/**
- * Run every test case sequentially against the student's code.
- *
- * The `isHidden` flag on a test case is a display concern only — it
- * does not affect execution. Hidden tests still run and their
- * pass/fail still counts toward the final verdict. The UI decides
- * whether to reveal the input/output to the student.
- */
 export async function runTests(
   language: string,
   code: string,
@@ -147,36 +137,12 @@ function wrapForExecution(
   input: string,
   options: TestHarnessOptions
 ): string {
-  // Java problems must use print mode — CheerpJ runs a main method,
-  // not a function. Return mode isn't supported for Java.
-  if (language === 'java' && options.outputMode === 'return') {
-    return `// ERROR: Java problems must use outputMode: 'print'.
-// Write a public class Main with a static main(String[] args)
-// method that prints the answer to stdout using System.out.println.
-public class Main {
-  public static void main(String[] args) {
-    System.err.println(
-      "KodxCamp: Java problems must use outputMode: 'print'."
-    );
-  }
-}
-`;
-  }
-
   if (options.outputMode === 'print') {
     return wrapPrintMode(language, code, input);
   }
   return wrapReturnMode(language, code, input, options.functionName);
 }
 
-/**
- * Parse a test case's `input` string into a list of arguments.
- *
- * Handles three shapes:
- *   1. Valid JSON array → items become individual arguments.
- *   2. Comma-separated values that aren't a single JSON value.
- *   3. Anything else → single string argument.
- */
 function parseArgs(input: string): { args: unknown[]; isArgsArray: boolean } {
   const trimmed = input.trim();
   if (trimmed === '') return { args: [], isArgsArray: false };
@@ -204,19 +170,6 @@ function parseArgs(input: string): { args: unknown[]; isArgsArray: boolean } {
 }
 
 // ─── Literal serializers ──────────────────────────────────────────
-
-function serialize(value: unknown, language: string): string {
-  if (language === 'python' || language === 'dsa-python') {
-    return pyLiteral(value);
-  }
-  if (language === 'ruby') {
-    return rubyLiteral(value);
-  }
-  if (language === 'java') {
-    return javaLiteral(value);
-  }
-  return JSON.stringify(value);
-}
 
 function pyLiteral(value: unknown): string {
   const json = JSON.stringify(value);
@@ -249,8 +202,7 @@ function javaLiteral(value: unknown): string {
   if (value === true) return 'true';
   if (value === false) return 'false';
   if (typeof value === 'number') {
-    if (Number.isInteger(value)) return String(value);
-    return `${value}`;
+    return Number.isInteger(value) ? String(value) : String(value);
   }
   if (typeof value === 'string') {
     const escaped = value
@@ -262,6 +214,19 @@ function javaLiteral(value: unknown): string {
     return `"${escaped}"`;
   }
   if (Array.isArray(value)) {
+    const first = value.find((v) => v !== null && v !== undefined);
+    if (typeof first === 'number' && Number.isInteger(first)) {
+      return `new int[]{${value.map((v) => javaLiteral(v)).join(', ')}}`;
+    }
+    if (typeof first === 'number') {
+      return `new double[]{${value.map((v) => javaLiteral(v)).join(', ')}}`;
+    }
+    if (typeof first === 'boolean') {
+      return `new boolean[]{${value.map((v) => javaLiteral(v)).join(', ')}}`;
+    }
+    if (typeof first === 'string') {
+      return `new String[]{${value.map((v) => javaLiteral(v)).join(', ')}}`;
+    }
     return `new Object[]{${value.map((v) => javaLiteral(v)).join(', ')}}`;
   }
   return 'null';
@@ -313,10 +278,85 @@ puts __KODX_RESULT__.to_json
 `;
   }
 
+  // Java — reflective driver. Output is wrapped in markers so the
+  // runtime can distinguish it from CheerpJ's own console noise.
   if (language === 'java') {
+    const argList = args.map((a) => javaLiteral(a)).join(', ');
     return `${code}
 
-// Java return mode is not supported. Use outputMode: 'print'.
+// ── Auto-generated driver ────────────────────────────────
+class KodxEntry {
+  public static void main(String[] args) throws Exception {
+    Object result = Main.${functionName}(${argList});
+    System.out.println("<<<KODX_OUTPUT>>>");
+    System.out.println(__toJson__(result));
+    System.out.println("<<<KODX_END>>>");
+  }
+
+  static String __toJson__(Object o) {
+    if (o == null) return "null";
+    if (o instanceof String) return "\\"" + __escape__((String) o) + "\\"";
+    if (o instanceof Character) return "\\"" + __escape__(o.toString()) + "\\"";
+    if (o instanceof Number || o instanceof Boolean) return o.toString();
+    if (o instanceof int[]) {
+      int[] a = (int[]) o;
+      StringBuilder sb = new StringBuilder("[");
+      for (int i = 0; i < a.length; i++) { if (i > 0) sb.append(","); sb.append(a[i]); }
+      return sb.append("]").toString();
+    }
+    if (o instanceof long[]) {
+      long[] a = (long[]) o;
+      StringBuilder sb = new StringBuilder("[");
+      for (int i = 0; i < a.length; i++) { if (i > 0) sb.append(","); sb.append(a[i]); }
+      return sb.append("]").toString();
+    }
+    if (o instanceof double[]) {
+      double[] a = (double[]) o;
+      StringBuilder sb = new StringBuilder("[");
+      for (int i = 0; i < a.length; i++) { if (i > 0) sb.append(","); sb.append(a[i]); }
+      return sb.append("]").toString();
+    }
+    if (o instanceof boolean[]) {
+      boolean[] a = (boolean[]) o;
+      StringBuilder sb = new StringBuilder("[");
+      for (int i = 0; i < a.length; i++) { if (i > 0) sb.append(","); sb.append(a[i]); }
+      return sb.append("]").toString();
+    }
+    if (o instanceof Object[]) {
+      Object[] a = (Object[]) o;
+      StringBuilder sb = new StringBuilder("[");
+      for (int i = 0; i < a.length; i++) { if (i > 0) sb.append(","); sb.append(__toJson__(a[i])); }
+      return sb.append("]").toString();
+    }
+    if (o instanceof Iterable) {
+      StringBuilder sb = new StringBuilder("[");
+      boolean first = true;
+      for (Object item : (Iterable<?>) o) {
+        if (!first) sb.append(",");
+        sb.append(__toJson__(item));
+        first = false;
+      }
+      return sb.append("]").toString();
+    }
+    return "\\"" + __escape__(o.toString()) + "\\"";
+  }
+
+  static String __escape__(String s) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      switch (c) {
+        case '"': sb.append("\\\\\\""); break;
+        case '\\\\': sb.append("\\\\\\\\"); break;
+        case '\\n': sb.append("\\\\n"); break;
+        case '\\r': sb.append("\\\\r"); break;
+        case '\\t': sb.append("\\\\t"); break;
+        default: sb.append(c);
+      }
+    }
+    return sb.toString();
+  }
+}
 `;
   }
 
@@ -366,20 +406,35 @@ ${code}
 `;
   }
 
+  // Java — delegate to Main.main, wrapping its stdout in markers so the
+  // runtime can separate the student's output from CheerpJ's own logs.
   if (language === 'java') {
     const argsLiteral =
       args.length === 0
-        ? 'new Object[]{}'
-        : args.length === 1
-          ? `new Object[]{${javaLiteral(args[0])}}`
-          : `new Object[]{${args.map((a) => javaLiteral(a)).join(', ')}}`;
+        ? 'new String[]{}'
+        : `new String[]{${args
+            .map((a) =>
+              typeof a === 'string'
+                ? javaLiteral(a)
+                : javaLiteral(String(a))
+            )
+            .join(', ')}}`;
 
     return `${code}
 
-// ── Auto-generated input binding ─────────────────────────
-// The test input is available as KodxInput.args (Object[]).
-class KodxInput {
-  public static final Object[] args = ${argsLiteral};
+// ── Auto-generated entry point ──────────────────────────
+class KodxEntry {
+  public static void main(String[] args) throws Exception {
+    System.out.println("<<<KODX_OUTPUT>>>");
+    try {
+      Main.main(args);
+    } finally {
+      System.out.println("<<<KODX_END>>>");
+    }
+  }
+
+  // The test input, available if the student's code wants it.
+  public static final String[] __input__ = ${argsLiteral};
 }
 `;
   }

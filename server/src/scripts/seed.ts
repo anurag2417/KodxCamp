@@ -234,7 +234,7 @@ const courses: CourseSeed[] = [
 // the input/output from the student while they work.
 
 const problems = [
-  {
+    {
     number: 1,
     title: 'Add Two Numbers',
     slug: 'add-two-numbers',
@@ -248,6 +248,13 @@ const problems = [
       javascript: 'function addTwo(a, b) {\n  // TODO: return a + b\n}',
       python: 'def addTwo(a, b):\n    # TODO: return a + b\n    pass',
       ruby: 'def add_two(a, b)\n  # TODO: return a + b\nend',
+      java: `public class Main {
+  public static int addTwo(int a, int b) {
+    // TODO: return a + b
+    return 0;
+  }
+}
+`,
     },
     testCases: [
       { input: '[2, 3]', expectedOutput: '5', isHidden: false },
@@ -274,6 +281,13 @@ const problems = [
       python:
         'def findMax(nums):\n    # TODO: return the largest number in nums\n    pass',
       ruby: 'def find_max(nums)\n  # TODO: return the largest number in nums\nend',
+      java: `public class Main {
+  public static int findMax(int[] nums) {
+    // TODO: return the largest number in nums
+    return 0;
+  }
+}
+`,
     },
     testCases: [
       {
@@ -291,34 +305,7 @@ const problems = [
       { input: '[[0, -1, -2]]', expectedOutput: '0', isHidden: true },
       { input: '[[100, 100, 100]]', expectedOutput: '100', isHidden: true },
     ],
-  },
-  {
-    number: 3,
-    title: 'Say Hello',
-    slug: 'say-hello',
-    difficulty: 'easy' as const,
-    topics: ['basics', 'output'],
-    statement:
-      'This is a print-mode problem. Write a program that prints exactly `Hello, KodxCamp!` to stdout.\n\n**Example**\n```\nOutput: Hello, KodxCamp!\n```',
-    functionName: 'main',
-    outputMode: 'print' as const,
-    starterCode: {
-      javascript: '// Print the greeting below\n',
-      python: '# Print the greeting below\n',
-      ruby: '# Print the greeting below\n',
-      java: `public class Main {
-  public static void main(String[] args) {
-    // Print the greeting below
   }
-}
-`,
-    },
-    testCases: [
-      { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
-      { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
-      { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
-    ],
-  },
 ];
 
 // ─── Projects ─────────────────────────────────────────────────────

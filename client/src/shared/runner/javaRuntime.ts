@@ -2,9 +2,8 @@
  * Java runtime — CheerpJ.
  *
  * IMPORTANT: CheerpJ does not run inside a Web Worker. It requires
- * DOM access and its public API (`cheerpjRunMain`, `cheerpjRunJar`)
- * operates on the page context. Because of this, the Java runtime
- * runs on the main thread.
+ * DOM access and its public API operates on the page context.
+ * Because of this, the Java runtime runs on the main thread.
  *
  * The CheerpJ runtime is initialized lazily on first use. Init
  * downloads ~30 MB of JDK and JVM assets. This cost is paid once per
@@ -12,23 +11,26 @@
  *
  * NOTE ON THE GLOBAL API: CheerpJ's loader.js does NOT attach a
  * `window.cheerpJ` namespace object. It attaches flat functions
- * directly onto `window`: `cheerpjInit`, `cheerpjRunMain`,
- * `cheerpjRunJar`, `cheerpjAddStringFile`, etc. Always check/call
- * those directly rather than `window.cheerPJ.*`.
+ * directly onto `window`.
  *
  * NOTE ON COMPILATION: CheerpJ is a bytecode interpreter, not a
  * compiler. To run `.java` source, we invoke `com.sun.tools.javac.Main`
  * from a compiler jar that we host ourselves at
- * `client/public/jdk-compiler.jar`. CheerpJ fetches it via Range
- * requests from `/app/jdk-compiler.jar`. Vite's dev server needs a
- * small plugin to add Range support — see `client/vite.config.ts`.
+ * `client/public/jdk-compiler.jar`.
+ *
+ * ENTRY POINT CONTRACT: the test harness wraps the student's code with
+ * a class named `KodxEntry`. The runtime always invokes `KodxEntry.main`,
+ * which either calls `Main.main` (print mode) or `Main.<functionName>(...)`
+ * and prints the JSON result (return mode).
+ *
+ * OUTPUT EXTRACTION: the harness surrounds the student's output with
+ * the markers `<<<KODX_OUTPUT>>>` and `<<<KODX_END>>>`. CheerpJ writes
+ * its own boot messages, HMR banner noise, and classpath probes to the
+ * same console channel, so we slice the capture between the markers to
+ * isolate the real program output.
  */
 
 // ─── Global type declarations ─────────────────────────────────────
-//
-// CheerpJ's loader.js (loaded via <script> in index.html) attaches
-// these directly to `window`. Declared here since there's no
-// official @types package for CheerpJ.
 
 declare global {
   interface Window {
@@ -43,36 +45,16 @@ declare global {
   }
 }
 
-// ─── Compiler jar ─────────────────────────────────────────────────
-//
-// CheerpJ is a bytecode interpreter. `javac` lives in `tools.jar`,
-// which CheerpJ does not ship. We serve a copy ourselves from
-// `client/public/jdk-compiler.jar`. CheerpJ resolves `/app/` to the
-// web server root, so the file is reachable at:
-//
-//   dev:  http://localhost:5173/jdk-compiler.jar
-//   prod: <origin>/jdk-compiler.jar
-//
-// The server MUST respond with:
-//   - Accept-Ranges: bytes
-//   - Content-Range on 206 responses
-//
-// See `client/vite.config.ts` for the dev-server Range plugin.
-
 const COMPILER_JAR_PATH = '/app/jdk-compiler.jar';
+
+const OUTPUT_START_MARKER = '<<<KODX_OUTPUT>>>';
+const OUTPUT_END_MARKER = '<<<KODX_END>>>';
 
 // ─── CheerpJ lifecycle ────────────────────────────────────────────
 
 let initPromise: Promise<void> | null = null;
 let initialized = false;
 
-/**
- * Initialize CheerpJ. Idempotent.
- *
- * The global `window.cheerpjInit` (and friends) are populated by the
- * script tag in `client/index.html`. We wait for it to appear, then
- * call it.
- */
 async function loadCheerpJOnce(): Promise<void> {
   if (initialized) return;
   if (initPromise) return initPromise;
@@ -89,10 +71,7 @@ async function loadCheerpJOnce(): Promise<void> {
       );
     }
 
-    await window.cheerpjInit({
-      javaHeapSize: 512,
-    });
-
+    await window.cheerpjInit({ javaHeapSize: 512 });
     initialized = true;
   })();
 
@@ -111,67 +90,6 @@ export function isJavaReady(): boolean {
   return initialized;
 }
 
-// ─── Capture helper class ─────────────────────────────────────────
-//
-// CheerpJ's API doesn't expose a stdout hook the way Pyodide does. We
-// use a small Java bootstrap that redirects System.out / System.err
-// to in-memory buffers, reflectively invokes the student's `main`,
-// and emits the buffers as base64 sentinels for the JS side to read
-// back.
-
-const CAPTURE_HELPER_CLASS = 'KodxCapture';
-
-const CAPTURE_HELPER_SOURCE = `
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-
-public class KodxCapture {
-    public static void main(String[] args) throws Exception {
-        // args[0] = fully qualified class name to invoke
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ByteArrayOutputStream err = new ByteArrayOutputStream();
-        PrintStream origOut = System.out;
-        PrintStream origErr = System.err;
-
-        System.setOut(new PrintStream(out, true, "UTF-8"));
-        System.setErr(new PrintStream(err, true, "UTF-8"));
-
-        int exit = 0;
-        try {
-            Class<?> clazz = Class.forName(args[0]);
-            java.lang.reflect.Method main = clazz.getMethod("main", String[].class);
-            String[] rest = new String[args.length - 1];
-            System.arraycopy(args, 1, rest, 0, rest.length);
-            main.invoke(null, (Object) rest);
-        } catch (Throwable t) {
-            t.printStackTrace();
-            exit = 1;
-        } finally {
-            System.setOut(origOut);
-            System.setErr(origErr);
-        }
-
-        String outB64 = java.util.Base64.getEncoder().encodeToString(out.toByteArray());
-        String errB64 = java.util.Base64.getEncoder().encodeToString(err.toByteArray());
-        // Sentinels so we can find them in the captured main-thread stdout.
-        System.out.println("__KODX_STDOUT_B64__" + outB64);
-        System.out.println("__KODX_STDERR_B64__" + errB64);
-        System.out.println("__KODX_EXIT__" + exit);
-    }
-}
-`;
-
-let helperInjected = false;
-
-async function ensureCaptureHelper(): Promise<void> {
-  if (helperInjected) return;
-  window.cheerpjAddStringFile!(
-    '/str/' + CAPTURE_HELPER_CLASS + '.java',
-    CAPTURE_HELPER_SOURCE
-  );
-  helperInjected = true;
-}
-
 // ─── Execution ────────────────────────────────────────────────────
 
 interface JavaExecution {
@@ -183,30 +101,25 @@ interface JavaExecution {
 }
 
 /**
- * Run a single Java class named `Main` in `code`.
+ * Compile and run the wrapped code.
  *
- * Two-step flow:
- *   1. Compile — invoke `com.sun.tools.javac.Main` from the compiler
- *      jar at /app/jdk-compiler.jar. Produces Main.class and
- *      KodxCapture.class in /files/.
- *   2. Run — invoke `KodxCapture` reflectively, which calls
- *      `Main.main` with the appropriate args.
- *
- * CheerpJ operates on bytecode; it does not compile `.java` source on
- * the fly, so the compile step is required.
+ * The harness has already produced a full Java program containing the
+ * student's `public class Main` plus a non-public `class KodxEntry`
+ * that holds the entry point and emits output markers.
  */
 export async function runJava(code: string): Promise<JavaExecution> {
   const start = performance.now();
 
   try {
     await loadCheerpJOnce();
-    await ensureCaptureHelper();
 
-    // 1. Write the student's code as Main.java.
+    // 1. Write the wrapped code to /str/Main.java. The file name must
+    //    match the public class name.
     window.cheerpjAddStringFile!('/str/Main.java', code);
 
-    // 2. Redirect the page's console to capture CheerpJ's output.
-    //    Covers both javac diagnostics and System.out from KodxCapture.
+    // 2. Intercept console output during compile + run. CheerpJ routes
+    //    System.out through console.log, so this captures both javac
+    //    diagnostics and the program's output.
     const captured: string[] = [];
     const originalLog = console.log;
     const originalInfo = console.info;
@@ -224,18 +137,16 @@ export async function runJava(code: string): Promise<JavaExecution> {
 
     let exitCode = 0;
     try {
-      // 2a. Compile Main.java and the capture helper.
       const compileExit = await window.cheerpjRunMain!(
         'com.sun.tools.javac.Main',
         `${COMPILER_JAR_PATH}:/app/`,
         '/str/Main.java',
-        '/str/' + CAPTURE_HELPER_CLASS + '.java',
         '-d',
         '/files/'
       );
 
       if (compileExit !== 0) {
-        const diagnostics = captured.join('\n').trim();
+        const diagnostics = extractProgramOutput(captured) || captured.join('\n').trim();
         return {
           ok: false,
           stdout: '',
@@ -245,11 +156,9 @@ export async function runJava(code: string): Promise<JavaExecution> {
         };
       }
 
-      // 2b. Run the compiled KodxCapture class against /files/.
       exitCode = await window.cheerpjRunMain!(
-        CAPTURE_HELPER_CLASS,
-        '/files/:/app/',
-        'Main'
+        'KodxEntry',
+        '/files/:/app/'
       );
     } finally {
       console.log = originalLog;
@@ -258,21 +167,14 @@ export async function runJava(code: string): Promise<JavaExecution> {
       console.error = originalError;
     }
 
-    // 3. Parse the sentinel lines from the captured output.
-    const joined = captured.join('\n');
-    const stdoutMatch = joined.match(/__KODX_STDOUT_B64__([A-Za-z0-9+/=]*)/);
-    const stderrMatch = joined.match(/__KODX_STDERR_B64__([A-Za-z0-9+/=]*)/);
-    const exitMatch = joined.match(/__KODX_EXIT__(\d+)/);
+    // 3. Extract the marker-delimited program output.
+    const programOutput = extractProgramOutput(captured);
 
-    const stdout = stdoutMatch ? base64Decode(stdoutMatch[1]) : '';
-    const stderr = stderrMatch ? base64Decode(stderrMatch[1]) : '';
-    const exitedWith = exitMatch ? Number(exitMatch[1]) : exitCode;
-
-    if (exitedWith !== 0) {
+    if (exitCode !== 0) {
       return {
         ok: false,
-        stdout,
-        stderr: stderr || 'Java runtime error',
+        stdout: '',
+        stderr: programOutput || captured.join('\n').trim() || 'Java runtime error',
         kind: 'runtime',
         runtimeMs: Math.round(performance.now() - start),
       };
@@ -280,8 +182,8 @@ export async function runJava(code: string): Promise<JavaExecution> {
 
     return {
       ok: true,
-      stdout,
-      stderr,
+      stdout: programOutput,
+      stderr: '',
       runtimeMs: Math.round(performance.now() - start),
     };
   } catch (err) {
@@ -300,17 +202,24 @@ export async function runJava(code: string): Promise<JavaExecution> {
   }
 }
 
-// ─── Utilities ────────────────────────────────────────────────────
+/**
+ * Slice the captured console output between the two markers emitted by
+ * the harness's `KodxEntry` class.
+ *
+ * Returns an empty string if either marker is missing (which means the
+ * program never ran to completion).
+ */
+function extractProgramOutput(captured: string[]): string {
+  const joined = captured.join('\n');
 
-function base64Decode(b64: string): string {
-  try {
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return '';
-  }
+  const startIdx = joined.indexOf(OUTPUT_START_MARKER);
+  if (startIdx === -1) return '';
+
+  const endIdx = joined.indexOf(OUTPUT_END_MARKER, startIdx + OUTPUT_START_MARKER.length);
+  if (endIdx === -1) return '';
+
+  const inner = joined.slice(startIdx + OUTPUT_START_MARKER.length, endIdx);
+  // Trim leading and trailing newline/whitespace introduced by
+  // println lines around the marker.
+  return inner.replace(/^\s*\n/, '').replace(/\n\s*$/, '').trim();
 }
