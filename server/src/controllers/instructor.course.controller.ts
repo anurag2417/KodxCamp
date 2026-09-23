@@ -5,43 +5,17 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
-const canonicalizationSchema = z.enum([
-  'trim-trailing-newline',
-  'trim-all',
-  'exact',
-]);
-
-const visibleTestCaseSchema = z
+/**
+ * One test-case shape. See `admin.problem.controller.ts` for the
+ * semantics of `isHidden`.
+ */
+const testCaseSchema = z
   .object({
     input: z.string().default(''),
-    isHidden: z.literal(false).default(false),
-    expectedOutput: z.string().min(1),
+    expectedOutput: z.string().min(1, 'Expected output is required'),
+    isHidden: z.boolean().default(false),
   })
   .strict();
-
-const hiddenWithHashSchema = z
-  .object({
-    input: z.string().default(''),
-    isHidden: z.literal(true),
-    expectedOutputHash: z.string().regex(/^[0-9a-f]{64}$/),
-    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
-  })
-  .strict();
-
-const hiddenWithPlaintextSchema = z
-  .object({
-    input: z.string().default(''),
-    isHidden: z.literal(true),
-    expectedOutput: z.string().min(1),
-    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
-  })
-  .strict();
-
-const testCaseSchema = z.union([
-  visibleTestCaseSchema,
-  hiddenWithHashSchema,
-  hiddenWithPlaintextSchema,
-]);
 
 export const createCourseSchema = z.object({
   body: z.object({

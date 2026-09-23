@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { env } from '../config/env.js';
 import { Course } from '../models/Course.model.js';
@@ -19,20 +18,11 @@ type CourseLanguage =
   | 'ruby'
   | 'java'
   | 'sql';
-type CanonicalizationId = 'trim-trailing-newline';
 
 interface RawTestCase {
   input: string;
   expectedOutput: string;
   isHidden: boolean;
-}
-
-interface MaterializedTestCase {
-  input: string;
-  isHidden: boolean;
-  expectedOutput?: string;
-  expectedOutputHash?: string;
-  canonicalization?: CanonicalizationId;
 }
 
 interface LessonSeed {
@@ -50,43 +40,6 @@ interface CourseSeed {
   description: string;
   language: CourseLanguage;
   lessons: LessonSeed[];
-}
-
-// ─── Hidden-test helpers ──────────────────────────────────────────
-
-function canonicalize(value: string, canon: CanonicalizationId): string {
-  switch (canon) {
-    case 'trim-trailing-newline':
-      return value.replace(/\r?\n$/, '');
-    default:
-      return value;
-  }
-}
-
-function hashExpected(
-  plaintext: string,
-  canon: CanonicalizationId = 'trim-trailing-newline'
-): string {
-  return crypto
-    .createHash('sha256')
-    .update(canonicalize(plaintext, canon))
-    .digest('hex');
-}
-
-function materializeTestCase(tc: RawTestCase): MaterializedTestCase {
-  if (!tc.isHidden) {
-    return {
-      input: tc.input,
-      isHidden: false,
-      expectedOutput: tc.expectedOutput,
-    };
-  }
-  return {
-    input: tc.input,
-    isHidden: true,
-    expectedOutputHash: hashExpected(tc.expectedOutput),
-    canonicalization: 'trim-trailing-newline',
-  };
 }
 
 // ─── Course seed data ─────────────────────────────────────────────
@@ -279,10 +232,6 @@ const courses: CourseSeed[] = [
 ];
 
 // ─── DSA practice problems ────────────────────────────────────────
-//
-// Multi-language starters. Each problem declares `starterCode` for
-// every language the picker should offer. Java problems use
-// `outputMode: 'print'` because Java writes to stdout via System.out.
 
 const problems = [
   {
@@ -365,21 +314,9 @@ const problems = [
 `,
     },
     testCases: [
-      {
-        input: '',
-        expectedOutput: 'Hello, KodxCamp!',
-        isHidden: false,
-      },
-      {
-        input: '',
-        expectedOutput: 'Hello, KodxCamp!',
-        isHidden: true,
-      },
-      {
-        input: '',
-        expectedOutput: 'Hello, KodxCamp!',
-        isHidden: true,
-      },
+      { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
+      { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
+      { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
     ],
   },
 ];
@@ -732,18 +669,14 @@ async function seed() {
         starterCode: l.starterCode,
         solution: l.solution,
         language: c.language,
-        testCases: (l.testCases ?? []).map(materializeTestCase),
+        testCases: l.testCases ?? [],
       });
     }
     console.log(`  ✅ ${c.title} (${c.lessons.length} lessons)`);
   }
 
   for (const p of problems) {
-    const materialized = {
-      ...p,
-      testCases: p.testCases.map(materializeTestCase),
-    };
-    await Problem.create(materialized);
+    await Problem.create(p);
     console.log(`  ✅ Problem: ${p.title}`);
   }
 

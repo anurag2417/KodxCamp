@@ -5,53 +5,18 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
-const canonicalizationSchema = z.enum([
-  'trim-trailing-newline',
-  'trim-all',
-  'exact',
-]);
-
-// Three accepted shapes for a test case:
-//
-//   1. Visible:  { input, isHidden: false, expectedOutput: string }
-//   2. Hidden with pre-computed hash:
-//                { input, isHidden: true, expectedOutputHash: hex64 }
-//   3. Hidden with plaintext (admin UI):
-//                { input, isHidden: true, expectedOutput: string }
-//
-// The service hashes shape 3 before saving. Shapes 2 and 3 can't both
-// be present in the same test case.
-const visibleTestCaseSchema = z
+/**
+ * One test case shape. Every test case stores plaintext `expectedOutput`.
+ * `isHidden` is a display flag — it hides the input/output from the
+ * student's test panel but does not affect execution or grading.
+ */
+const testCaseSchema = z
   .object({
     input: z.string().default(''),
-    isHidden: z.literal(false).default(false),
     expectedOutput: z.string().min(1, 'Expected output is required'),
+    isHidden: z.boolean().default(false),
   })
   .strict();
-
-const hiddenWithHashSchema = z
-  .object({
-    input: z.string().default(''),
-    isHidden: z.literal(true),
-    expectedOutputHash: z.string().regex(/^[0-9a-f]{64}$/),
-    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
-  })
-  .strict();
-
-const hiddenWithPlaintextSchema = z
-  .object({
-    input: z.string().default(''),
-    isHidden: z.literal(true),
-    expectedOutput: z.string().min(1, 'Expected output is required'),
-    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
-  })
-  .strict();
-
-const testCaseSchema = z.union([
-  visibleTestCaseSchema,
-  hiddenWithHashSchema,
-  hiddenWithPlaintextSchema,
-]);
 
 export const problemBodySchema = z.object({
   body: z.object({
@@ -71,7 +36,9 @@ export const problemBodySchema = z.object({
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
     outputMode: z.enum(['return', 'print']).default('return'),
     starterCode: z.record(z.string()).default({}),
-    testCases: z.array(testCaseSchema).min(1, 'At least one test case is required'),
+    testCases: z
+      .array(testCaseSchema)
+      .min(1, 'At least one test case is required'),
   }),
 });
 

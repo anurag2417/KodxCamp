@@ -4,103 +4,16 @@ import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { z } from 'zod';
-import crypto from 'node:crypto';
 
 // ─── Zod schemas ──────────────────────────────────────────────────
 
-const canonicalizationSchema = z.enum([
-  'trim-trailing-newline',
-  'trim-all',
-  'exact',
-]);
-
-function canonicalize(
-  value: string,
-  mode: 'trim-trailing-newline' | 'trim-all' | 'exact'
-): string {
-  if (mode === 'trim-all') return value.trim();
-  if (mode === 'trim-trailing-newline') return value.replace(/\r?\n$/, '');
-  return value;
-}
-
-const visibleTestCaseSchema = z
+const testCaseSchema = z
   .object({
     input: z.string().default(''),
-    isHidden: z.literal(false).default(false),
     expectedOutput: z.string().min(1),
+    isHidden: z.boolean().default(false),
   })
   .strict();
-
-const hiddenWithHashSchema = z
-  .object({
-    input: z.string().default(''),
-    isHidden: z.literal(true),
-    expectedOutputHash: z.string().regex(/^[0-9a-f]{64}$/),
-    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
-  })
-  .strict();
-
-const hiddenWithPlaintextSchema = z
-  .object({
-    input: z.string().default(''),
-    isHidden: z.literal(true),
-    expectedOutput: z.string().min(1),
-    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
-  })
-  .strict();
-
-const testCaseSchema = z.union([
-  visibleTestCaseSchema,
-  hiddenWithHashSchema,
-  hiddenWithPlaintextSchema,
-]);
-
-/**
- * Materialize a test case for saving.
- *
- * The bulk importer accepts plaintext `expectedOutput` for hidden
- * tests — the hash is computed here, in-process, and the plaintext is
- * discarded. This is safe because the bulk importer is admin-only and
- * runs server-side; it does not go through the client at all.
- */
-function materializeTestCase(raw: unknown) {
-  const tc = raw as {
-    input: string;
-    isHidden: boolean;
-    expectedOutput?: string;
-    expectedOutputHash?: string;
-    canonicalization?: 'trim-trailing-newline' | 'trim-all' | 'exact';
-  };
-
-  if (!tc.isHidden) {
-    return {
-      input: tc.input ?? '',
-      isHidden: false,
-      expectedOutput: tc.expectedOutput ?? '',
-    };
-  }
-
-  if (tc.expectedOutputHash) {
-    return {
-      input: tc.input ?? '',
-      isHidden: true,
-      expectedOutputHash: tc.expectedOutputHash,
-      canonicalization: tc.canonicalization ?? 'trim-trailing-newline',
-    };
-  }
-
-  const canon = tc.canonicalization ?? 'trim-trailing-newline';
-  const hash = crypto
-    .createHash('sha256')
-    .update(canonicalize(tc.expectedOutput!, canon))
-    .digest('hex');
-  return {
-    input: tc.input ?? '',
-    isHidden: true,
-    expectedOutputHash: hash,
-    canonicalization: canon,
-  };
-}
 
 const problemSchema = z.object({
   title: z.string().min(2).max(150),
@@ -125,15 +38,7 @@ const problemSchema = z.object({
 
 const projectFileSchema = z.object({
   name: z.string().min(1),
-  language: z.enum([
-    'html',
-    'css',
-    'javascript',
-    'jsx',
-    'sql',
-    'json',
-    'markdown',
-  ]),
+  language: z.enum(['html', 'css', 'javascript', 'jsx', 'sql', 'json', 'markdown']),
   content: z.string().default(''),
   isEntry: z.boolean().optional(),
 });
@@ -143,14 +48,7 @@ const projectSchema = z.object({
   slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/),
   description: z.string().min(5).max(500),
   longDescription: z.string().default(''),
-  category: z.enum([
-    'frontend',
-    'react',
-    'api',
-    'sql',
-    'dataviz',
-    'javascript',
-  ]),
+  category: z.enum(['frontend', 'react', 'api', 'sql', 'dataviz', 'javascript']),
   difficulty: z.enum(['beginner', 'intermediate', 'advanced']),
   topics: z.array(z.string()).default([]),
   files: z.array(projectFileSchema).min(1),
@@ -299,21 +197,12 @@ export const bulkService = {
     }
 
     for (const item of deduped) {
-      const doc = item as {
-        slug: string;
-        number?: number;
-        testCases: unknown[];
-      };
-      const materialized = {
-        ...doc,
-        testCases: (doc.testCases ?? []).map(materializeTestCase),
-      };
-
+      const doc = item as { slug: string; number?: number };
       const existing = await Problem.findOne({ slug: doc.slug });
 
       if (existing) {
         if (mode === 'merge') {
-          const { number, ...rest } = materialized;
+          const { number, ...rest } = doc;
           Object.assign(existing, rest);
           if (number !== undefined && number !== existing.number) {
             const clash = await Problem.findOne({ number }).lean();
@@ -331,7 +220,7 @@ export const bulkService = {
           report.updated++;
         } else {
           const num = doc.number ?? (await nextProblemNumber());
-          await Problem.create({ ...materialized, number: num });
+          await Problem.create({ ...doc, number: num });
           report.created++;
         }
       } else {
@@ -345,7 +234,7 @@ export const bulkService = {
           });
           continue;
         }
-        await Problem.create({ ...materialized, number: num });
+        await Problem.create({ ...doc, number: num });
         report.created++;
       }
     }
@@ -426,22 +315,17 @@ export const bulkService = {
       const courseData = item as z.infer<typeof courseSchema>;
       const existing = await Course.findOne({ slug: courseData.slug });
 
-      const materializedLessons = courseData.lessons.map((l) => ({
-        ...l,
-        testCases: (l.testCases ?? []).map(materializeTestCase),
-      }));
-
       if (existing && mode === 'merge') {
         Object.assign(existing, {
           title: courseData.title,
           description: courseData.description,
           language: courseData.language,
-          totalLessons: materializedLessons.length,
+          totalLessons: courseData.lessons.length,
         });
         await existing.save();
 
         await Lesson.deleteMany({ courseId: existing._id.toString() });
-        for (const l of materializedLessons) {
+        for (const l of courseData.lessons) {
           await Lesson.create({
             ...l,
             courseId: existing._id.toString(),
@@ -455,9 +339,9 @@ export const bulkService = {
           slug: courseData.slug,
           description: courseData.description,
           language: courseData.language,
-          totalLessons: materializedLessons.length,
+          totalLessons: courseData.lessons.length,
         });
-        for (const l of materializedLessons) {
+        for (const l of courseData.lessons) {
           await Lesson.create({
             ...l,
             courseId: created._id.toString(),
