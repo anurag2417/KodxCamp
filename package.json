@@ -9,14 +9,16 @@
     "shared"
   ],
   "scripts": {
-    "postinstall": "node scripts/install-linux-binaries.cjs",
     "dev": "npm run build:shared && concurrently -n api,web -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build:shared && npm run build:server && npm run build:client",
     "build:shared": "npm run build -w shared",
     "build:server": "npm run build -w server",
     "build:client": "npm run build -w client",
     "start": "npm run start -w server",
-    "test": "npm test -w client",
+    "test": "npm run test -w shared && npm run test -w server && npm run test -w client",
+    "test:shared": "npm run test -w shared",
+    "test:server": "npm run test -w server",
+    "test:client": "npm run test -w client",
     "clean": "rimraf node_modules client/node_modules server/node_modules shared/node_modules shared/dist server/dist client/dist"
   },
   "devDependencies": {
