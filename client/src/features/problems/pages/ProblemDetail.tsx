@@ -8,9 +8,9 @@ import {
   type TestRunSummary,
   type VisibleTestCase,
 } from '@/shared/runner/testHarness';
-import { getAdapter } from '@/shared/runner/adapters';
 import { problemsApi, type ApiSubmission } from '@/features/problems/api';
 import { useAuthStore } from '@/shared/store/auth.store';
+import { useLanguagePreload } from '@/shared/hooks/useLanguagePreload';
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { ErrorState } from '@/shared/components/ui/ErrorState';
 import { CodeEditor } from '@/shared/components/editor/CodeEditor';
@@ -32,11 +32,6 @@ const LANGUAGE_LABELS: Record<string, string> = {
   tailwind: 'Tailwind',
 };
 
-/**
- * Fallback starter for Java when a problem doesn't declare one.
- * Java problems always run in `Main.main` or a `Main.<functionName>`
- * static method, depending on the problem's output mode.
- */
 const JAVA_FALLBACK_STARTER = `public class Main {
   public static void main(String[] args) {
     // TODO
@@ -76,11 +71,6 @@ export const ProblemDetail: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const toast = useToast();
 
-  /**
-   * Languages available for this problem. Derived from `starterCode`
-   * keys, plus Java (which is always offered even if the problem has
-   * no Java starter — a fallback is inserted at render time).
-   */
   const languages = useMemo(() => {
     if (!problem) return [];
     const configured = Object.keys(problem.starterCode ?? {}).map((id) => ({
@@ -101,7 +91,11 @@ export const ProblemDetail: React.FC = () => {
   const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
   const [showAcceptance, setShowAcceptance] = useState(false);
-  const [runtimeReady, setRuntimeReady] = useState(true);
+
+  // Warm up every language on the problem in the background. The
+  // active language goes to the front of the queue.
+  const languageIds = useMemo(() => languages.map((l) => l.id), [languages]);
+  const { status: preloadStatus } = useLanguagePreload(languageIds, language);
 
   useEffect(() => {
     if (languages.length > 0 && !languages.some((l) => l.id === language)) {
@@ -111,33 +105,10 @@ export const ProblemDetail: React.FC = () => {
   }, [languages]);
 
   useEffect(() => {
-    const adapter = getAdapter(language);
-    if (!adapter?.init) {
-      setRuntimeReady(true);
-      return;
-    }
-    setRuntimeReady(adapter.isReady());
-    let cancelled = false;
-    adapter
-      .init()
-      .then(() => {
-        if (!cancelled) setRuntimeReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) setRuntimeReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [language]);
-
-  // Populate the editor when the problem or language changes.
-  useEffect(() => {
     if (!problem) return;
     const configured = problem.starterCode?.[language];
     const starter =
-      configured ??
-      (language === 'java' ? JAVA_FALLBACK_STARTER : '');
+      configured ?? (language === 'java' ? JAVA_FALLBACK_STARTER : '');
     setCode(starter);
     setSummary(undefined);
     setAccepted(false);
@@ -270,7 +241,7 @@ export const ProblemDetail: React.FC = () => {
                     onSubmit={() => void execute(true)}
                     running={busy}
                     canSubmit={!!user}
-                    ready={runtimeReady}
+                    preloadStatus={preloadStatus}
                   />
                   <div className="flex-1">
                     <CodeEditor
