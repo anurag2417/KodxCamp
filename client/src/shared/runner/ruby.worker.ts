@@ -1,6 +1,13 @@
 /// <reference lib="webworker" />
 
-type RubyCanonicalizationId = 'trim-trailing-newline' | 'trim-all' | 'exact';
+/**
+ * Ruby sandbox worker — runs ruby.wasm off the main thread.
+ *
+ * The loader and the WASM binary live in two different packages:
+ *   - @ruby/wasm-wasi        → ESM loader (browser/+esm)
+ *   - @ruby/4.0-wasm-wasi    → ruby+stdlib.wasm
+ * Version must match. 2.10.1 is the current stable pairing.
+ */
 
 interface RunMsg {
   type: 'run';
@@ -8,67 +15,19 @@ interface RunMsg {
   requestId: string;
 }
 
-interface RunHiddenMsg {
-  type: 'run-hidden';
-  code: string;
-  requestId: string;
-  expectedOutputHash: string;
-  canonicalization: RubyCanonicalizationId;
-}
-
-type RubyInMsg = RunMsg | RunHiddenMsg;
-
 interface WorkerOutMsg {
-  type: 'stdout' | 'stderr' | 'done' | 'error' | 'ready' | 'hidden-result';
+  type: 'stdout' | 'stderr' | 'done' | 'error' | 'ready';
   text?: string;
   requestId?: string;
   runtimeMs?: number;
   kind?: 'runtime' | 'syntax';
-  passed?: boolean;
 }
 
 const postRubyWorkerMessage = (msg: WorkerOutMsg) => self.postMessage(msg);
 
-// ─── Ruby base URLs ───────────────────────────────────────────────
-//
-// The loader and the WASM binary live in two different packages:
-//   - @ruby/wasm-wasi        → ESM loader (browser/+esm)
-//   - @ruby/4.0-wasm-wasi    → ruby+stdlib.wasm
-//
-// Version must match. 2.10.1 is the current stable pairing.
-
 const RUBY_VERSION = '2.10.1';
 const RUBY_LOADER_BASE = `https://cdn.jsdelivr.net/npm/@ruby/wasm-wasi@${RUBY_VERSION}/dist/`;
 const RUBY_BINARY_BASE = `https://cdn.jsdelivr.net/npm/@ruby/4.0-wasm-wasi@${RUBY_VERSION}/dist/`;
-
-// ─── Inlined canonicalization ─────────────────────────────────────
-
-function canonicalize(
-  output: string,
-  id: RubyCanonicalizationId = 'trim-trailing-newline'
-): string {
-  switch (id) {
-    case 'trim-trailing-newline':
-      return output
-        .replace(/\r\n/g, '\n')
-        .replace(/[ \t]+$/gm, '')
-        .replace(/\n$/, '');
-    case 'trim-all':
-      return output.replace(/\r\n/g, '\n').trim();
-    case 'exact':
-      return output;
-  }
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const data = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-// ─── ruby.wasm lifecycle ──────────────────────────────────────────
 
 interface RubyVM {
   eval: (code: string, options?: { filename?: string }) => Promise<unknown>;
@@ -88,17 +47,9 @@ async function loadRubyOnce(): Promise<RubyVM> {
   rubyPromise = (async () => {
     const loaderUrl = `${RUBY_LOADER_BASE}browser/+esm`;
 
-    // Import the ESM loader directly from jsDelivr. /* @vite-ignore */
-    // stops Vite from trying to resolve this at build time; resolution
-    // happens in the browser at runtime instead.
-    //
-    // IMPORTANT: do NOT fetch this as text and re-load it via a Blob
-    // URL. A blob: URL has no real origin, so any root-relative nested
-    // import inside the loader (e.g. "/npm/@bjorn3/browser_wasi_shim@x/+esm")
-    // resolves against your own page's origin instead of jsdelivr's,
-    // and fails with "Error resolving module specifier". Importing the
-    // https:// URL directly preserves the correct origin for those
-    // nested imports.
+    // Import the ESM loader directly from jsDelivr. Do NOT fetch this
+    // as text and re-load via a Blob URL — a blob: URL has no real
+    // origin, so nested root-relative imports inside the loader fail.
     let mod: RubyWasiModule;
     try {
       mod = (await import(/* @vite-ignore */ loaderUrl)) as RubyWasiModule;
@@ -116,7 +67,6 @@ async function loadRubyOnce(): Promise<RubyVM> {
       );
     }
 
-    // Fetch the WASM binary from the separate package.
     const wasmUrl = `${RUBY_BINARY_BASE}ruby+stdlib.wasm`;
     const wasmResponse = await fetch(wasmUrl);
     if (!wasmResponse.ok) {
@@ -133,8 +83,6 @@ async function loadRubyOnce(): Promise<RubyVM> {
 
   return rubyPromise;
 }
-
-// ─── Execution ────────────────────────────────────────────────────
 
 interface RubyExecution {
   ok: boolean;
@@ -238,9 +186,9 @@ function base64Decode(b64: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-// ─── Message handling ─────────────────────────────────────────────
+self.onmessage = async (e: MessageEvent<RunMsg>) => {
+  if (e.data.type !== 'run') return;
 
-self.onmessage = async (e: MessageEvent<RubyInMsg>) => {
   const { requestId } = e.data;
   const start = performance.now();
 
@@ -261,44 +209,23 @@ self.onmessage = async (e: MessageEvent<RubyInMsg>) => {
     return;
   }
 
-  if (e.data.type === 'run') {
-    const result = await executeRuby(vm, e.data.code);
-    if (result.stdout)
-      postRubyWorkerMessage({ type: 'stdout', text: result.stdout, requestId });
-    if (result.stderr && !result.ok)
-      postRubyWorkerMessage({ type: 'stderr', text: result.stderr, requestId });
-    if (result.ok) {
-      postRubyWorkerMessage({
-        type: 'done',
-        requestId,
-        runtimeMs: result.runtimeMs,
-      });
-    } else {
-      postRubyWorkerMessage({
-        type: 'error',
-        requestId,
-        kind: result.kind ?? 'runtime',
-        text: result.stderr,
-        runtimeMs: result.runtimeMs,
-      });
-    }
-    return;
-  }
-
-  if (e.data.type === 'run-hidden') {
-    const result = await executeRuby(vm, e.data.code);
-
-    let passed = false;
-    if (result.ok) {
-      const canonical = canonicalize(result.stdout, e.data.canonicalization);
-      const actualHash = await sha256Hex(canonical);
-      passed = actualHash === e.data.expectedOutputHash;
-    }
-
+  const result = await executeRuby(vm, e.data.code);
+  if (result.stdout)
+    postRubyWorkerMessage({ type: 'stdout', text: result.stdout, requestId });
+  if (result.stderr && !result.ok)
+    postRubyWorkerMessage({ type: 'stderr', text: result.stderr, requestId });
+  if (result.ok) {
     postRubyWorkerMessage({
-      type: 'hidden-result',
+      type: 'done',
       requestId,
-      passed,
+      runtimeMs: result.runtimeMs,
+    });
+  } else {
+    postRubyWorkerMessage({
+      type: 'error',
+      requestId,
+      kind: result.kind ?? 'runtime',
+      text: result.stderr,
       runtimeMs: result.runtimeMs,
     });
   }

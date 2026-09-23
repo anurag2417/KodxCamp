@@ -14,7 +14,7 @@ type Tab = 'description' | 'submissions';
 
 export const ProblemPanel: React.FC<Props> = ({ problem, submissions }) => {
   const [tab, setTab] = useState<Tab>('description');
-  const hiddenCount = problem.hiddenTestCases?.length ?? 0;
+  const hiddenCount = problem.testCases.filter((tc) => tc.isHidden).length;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -104,7 +104,8 @@ const DescriptionView: React.FC<{
       {hiddenCount > 0 && (
         <p className="mt-3 text-text-muted">
           {hiddenCount} hidden test{hiddenCount === 1 ? '' : 's'} will run when
-          you submit. Their inputs and expected outputs are not shown.
+          you click Run or Submit. Their inputs and expected outputs are not
+          shown while you work, but their pass/fail counts toward your verdict.
         </p>
       )}
     </div>

@@ -1,31 +1,15 @@
 /// <reference lib="webworker" />
 
-// Keep worker helpers module-scoped so they cannot collide with declarations
-// from other script files during TypeScript compilation.
-export {};
-
 /**
  * Python sandbox worker — runs Pyodide off the main thread.
- *
- * Two modes:
- *  - `run`        — visible test / playground. Returns raw stdout.
- *  - `run-hidden` — hidden test. Hashes the output inside the worker
- *                   and posts back only `{ passed }`.
- *
- * Pyodide is loaded from the official jsDelivr full distribution. The
- * `full/` alias includes the standard library zip, the lockfile, and
- * the built-in package index, so imports like `import numpy` work after
- * `loadPackagesFromImports`.
  *
  * This worker must not use `importScripts`: Vite 5 emits module workers
  * even when `worker.format: 'iife'` is set, and `importScripts` is
  * disallowed in module workers. We load Pyodide's ESM entry point via a
- * runtime-fetched Blob URL.
+ * runtime-fetched Blob URL, matching the pattern in ruby.worker.ts.
  *
  * The worker persists across runs; Pyodide loads once per page session.
  */
-
-type CanonicalizationId = 'trim-trailing-newline' | 'trim-all' | 'exact';
 
 interface RunMsg {
   type: 'run';
@@ -33,62 +17,18 @@ interface RunMsg {
   requestId: string;
 }
 
-interface RunHiddenMsg {
-  type: 'run-hidden';
-  code: string;
-  requestId: string;
-  expectedOutputHash: string;
-  canonicalization: CanonicalizationId;
-}
-
-type InMsg = RunMsg | RunHiddenMsg;
-
 interface WorkerOutMsg {
-  type: 'stdout' | 'stderr' | 'done' | 'error' | 'ready' | 'hidden-result';
+  type: 'stdout' | 'stderr' | 'done' | 'error' | 'ready';
   text?: string;
   requestId?: string;
   runtimeMs?: number;
   kind?: 'runtime' | 'syntax';
-  passed?: boolean;
 }
 
 const postWorkerMessage = (msg: WorkerOutMsg) => self.postMessage(msg);
 
 const PYODIDE_VERSION = '0.26.2';
 const PYODIDE_BASE = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
-
-// ─── Inlined canonicalization ─────────────────────────────────────
-//
-// Mirrors `shared/src/testcase/canonicalize.ts`. Inlined because a
-// module worker cannot import from a workspace package without extra
-// runtime fetches. Keep these rules in sync with the shared copy.
-
-function canonicalizeOutput(
-  output: string,
-  id: CanonicalizationId = 'trim-trailing-newline'
-): string {
-  switch (id) {
-    case 'trim-trailing-newline':
-      return output
-        .replace(/\r\n/g, '\n')
-        .replace(/[ \t]+$/gm, '')
-        .replace(/\n$/, '');
-    case 'trim-all':
-      return output.replace(/\r\n/g, '\n').trim();
-    case 'exact':
-      return output;
-  }
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const data = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-// ─── Pyodide lifecycle ────────────────────────────────────────────
 
 interface PyodideInstance {
   runPythonAsync: (code: string) => Promise<unknown>;
@@ -137,8 +77,6 @@ async function loadPyodideOnce(): Promise<PyodideInstance> {
   return pyodidePromise;
 }
 
-// ─── Execution ────────────────────────────────────────────────────
-
 interface PyExecution {
   ok: boolean;
   stdout: string;
@@ -147,14 +85,6 @@ interface PyExecution {
   runtimeMs: number;
 }
 
-/**
- * Execute Python code and capture stdout/stderr.
- *
- * Before running, we call `loadPackagesFromImports` so the student's
- * `import numpy` (or `from sympy import ...`) automatically pulls the
- * matching Pyodide package. `loadPackagesFromImports` is cheap on
- * repeated calls — Pyodide tracks which packages are already loaded.
- */
 async function executePython(
   py: PyodideInstance,
   code: string
@@ -166,14 +96,10 @@ async function executePython(
   py.setStdout({ batched: (s) => stdoutChunks.push(s) });
   py.setStderr({ batched: (s) => stderrChunks.push(s) });
 
-  // Auto-install any packages the code imports. Pyodide knows the
-  // list of built-in packages (numpy, pandas, scipy, etc.); anything
-  // it can't resolve is left for the import to fail naturally so the
-  // student sees a clear ModuleNotFoundError.
   try {
     await py.loadPackagesFromImports(code);
   } catch {
-    /* non-fatal — imports will fail at runtime if truly missing */
+    /* non-fatal — imports fail at runtime if truly missing */
   }
 
   try {
@@ -197,10 +123,10 @@ async function executePython(
   }
 }
 
-// ─── Message handling ─────────────────────────────────────────────
+self.onmessage = async (e: MessageEvent<RunMsg>) => {
+  if (e.data.type !== 'run') return;
 
-self.onmessage = async (e: MessageEvent<InMsg>) => {
-  const { requestId } = e.data;
+  const { code, requestId } = e.data;
   const start = performance.now();
 
   let py: PyodideInstance;
@@ -220,47 +146,23 @@ self.onmessage = async (e: MessageEvent<InMsg>) => {
     return;
   }
 
-  if (e.data.type === 'run') {
-    const result = await executePython(py, e.data.code);
-    if (result.stdout)
-      postWorkerMessage({ type: 'stdout', text: result.stdout, requestId });
-    if (result.stderr && !result.ok)
-      postWorkerMessage({ type: 'stderr', text: result.stderr, requestId });
-    if (result.ok) {
-      postWorkerMessage({
-        type: 'done',
-        requestId,
-        runtimeMs: result.runtimeMs,
-      });
-    } else {
-      postWorkerMessage({
-        type: 'error',
-        requestId,
-        kind: result.kind ?? 'runtime',
-        text: result.stderr,
-        runtimeMs: result.runtimeMs,
-      });
-    }
-    return;
-  }
-
-  if (e.data.type === 'run-hidden') {
-    const result = await executePython(py, e.data.code);
-
-    let passed = false;
-    if (result.ok) {
-      const canonical = canonicalizeOutput(
-        result.stdout,
-        e.data.canonicalization
-      );
-      const actualHash = await sha256Hex(canonical);
-      passed = actualHash === e.data.expectedOutputHash;
-    }
-
+  const result = await executePython(py, code);
+  if (result.stdout)
+    postWorkerMessage({ type: 'stdout', text: result.stdout, requestId });
+  if (result.stderr && !result.ok)
+    postWorkerMessage({ type: 'stderr', text: result.stderr, requestId });
+  if (result.ok) {
     postWorkerMessage({
-      type: 'hidden-result',
+      type: 'done',
       requestId,
-      passed,
+      runtimeMs: result.runtimeMs,
+    });
+  } else {
+    postWorkerMessage({
+      type: 'error',
+      requestId,
+      kind: result.kind ?? 'runtime',
+      text: result.stderr,
       runtimeMs: result.runtimeMs,
     });
   }

@@ -1,23 +1,7 @@
 import type { RunResult } from '../types';
-import type { CanonicalizationId } from '@kodxcamp/shared';
-import type {
-  RunnerAdapter,
-  AdapterRunOptions,
-  HiddenRunResult,
-} from './types';
-import {
-  runJavaCode,
-  runJavaHiddenCode,
-  preloadJava,
-  isJavaReady,
-} from '../javaRunner';
+import type { RunnerAdapter, AdapterRunOptions } from './types';
+import { runJavaCode, preloadJava, isJavaReady } from '../javaRunner';
 
-/**
- * Java adapter (CheerpJ).
- *
- * Java runs on the main thread, so hidden tests fail closed — see
- * HIDDEN-TESTS.md and the comment in javaRuntime.ts for the reasoning.
- */
 export const javaAdapter: RunnerAdapter = {
   id: 'java',
   label: 'Java',
@@ -34,16 +18,6 @@ export const javaAdapter: RunnerAdapter = {
     _input: string,
     opts: AdapterRunOptions
   ): Promise<RunResult> {
-    return runJavaCode(code, { timeoutMs: opts.timeoutMs ?? 30_000 });
-  },
-
-  async runHidden(
-    _code: string,
-    _input: string,
-    _expectedOutputHash: string,
-    _canonicalization: CanonicalizationId,
-    _opts: AdapterRunOptions
-  ): Promise<HiddenRunResult> {
-    return runJavaHiddenCode();
+    return runJavaCode(code, { timeoutMs: opts.timeoutMs ?? 60000 });
   },
 };

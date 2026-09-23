@@ -22,20 +22,8 @@ export interface ApiProblemTestCase {
   index: number;
   input: string;
   expectedOutput: string;
-}
-
-/**
- * A hidden test case. The server sends the input so the client can run
- * it, but never sends the expected output — only a SHA-256 hash of it.
- * See the project brief §4.3.1.
- */
-export interface ApiHiddenTestCase {
-  /** Stable id: `${problemId}:${index}` on the server. */
-  id: string;
-  input: string;
-  /** 64-char lowercase hex. SHA-256 of the canonicalized expected output. */
-  expectedOutputHash: string;
-  canonicalization: 'trim-trailing-newline' | 'trim-all' | 'exact';
+  /** Display flag. Hide input/output from the student's test panel. */
+  isHidden: boolean;
 }
 
 export interface ApiProblemFull {
@@ -49,10 +37,7 @@ export interface ApiProblemFull {
   functionName: string;
   outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
-  /** Visible test cases — plaintext in, plaintext out. */
   testCases: ApiProblemTestCase[];
-  /** Hidden test cases — hash-only. */
-  hiddenTestCases: ApiHiddenTestCase[];
   solved?: boolean;
 }
 
@@ -66,24 +51,10 @@ export interface ApiSubmission {
   passedTests: number;
   totalTests: number;
   runtimeMs?: number;
-  sessionId?: string;
-  hiddenResults?: { id: string; passed: boolean }[];
   createdAt: string;
 }
 
-// ─── Submission payload ───────────────────────────────────────────
-
-export interface SubmitStructuredInput {
-  problemId: string;
-  language: string;
-  code: string;
-  sessionId: string;
-  visibleResults: { index: number; passed: boolean }[];
-  hiddenResults: { id: string; passed: boolean }[];
-  runtimeMs?: number;
-}
-
-export interface SubmitLegacyInput {
+export interface SubmitInput {
   problemId: string;
   language: string;
   code: string;
@@ -92,8 +63,6 @@ export interface SubmitLegacyInput {
   totalTests: number;
   runtimeMs?: number;
 }
-
-export type SubmitInput = SubmitStructuredInput | SubmitLegacyInput;
 
 export const problemsApi = {
   list: async (): Promise<ApiProblemSummary[]> => {
@@ -107,7 +76,7 @@ export const problemsApi = {
   },
 
   /**
-   * @deprecated — use `submit` with the structured payload instead.
+   * @deprecated — use `submit` with the legacy payload.
    */
   validate: async (input: {
     problemId: string;

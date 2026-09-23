@@ -9,12 +9,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import type { ApiProblemTestCase } from '@/features/problems/api';
-import type { AnyTestResult } from '@/shared/runner/testHarness';
+import type { VisibleTestResult } from '@/shared/runner/testHarness';
 
 interface Props {
   testCases: ApiProblemTestCase[];
-  hiddenCount: number;
-  results?: AnyTestResult[];
+  results?: VisibleTestResult[];
   running?: boolean;
   accepted?: boolean;
   totalRuntimeMs?: number;
@@ -22,7 +21,6 @@ interface Props {
 
 export const TestPanel: React.FC<Props> = ({
   testCases,
-  hiddenCount,
   results,
   running,
   accepted,
@@ -57,12 +55,6 @@ export const TestPanel: React.FC<Props> = ({
             )}
           >
             Testcase
-            {hiddenCount > 0 && (
-              <span className="ml-1.5 inline-flex items-center gap-1 text-text-muted">
-                <Lock size={10} />
-                {hiddenCount}
-              </span>
-            )}
           </button>
           {showingResult && (
             <button
@@ -109,7 +101,6 @@ export const TestPanel: React.FC<Props> = ({
           ) : (
             <TestCaseView
               testCases={testCases}
-              hiddenCount={hiddenCount}
               activeIdx={activeIdx}
               onChange={setActiveIdx}
             />
@@ -120,16 +111,15 @@ export const TestPanel: React.FC<Props> = ({
   );
 };
 
-// ─── Testcase tab ─────────────────────────────────────────────────
-
 const TestCaseView: React.FC<{
   testCases: ApiProblemTestCase[];
-  hiddenCount: number;
   activeIdx: number;
   onChange: (idx: number) => void;
-}> = ({ testCases, hiddenCount, activeIdx, onChange }) => {
+}> = ({ testCases, activeIdx, onChange }) => {
   const tc = testCases[activeIdx];
-  const totalTabs = testCases.length + (hiddenCount > 0 ? 1 : 0);
+  if (!tc) {
+    return <p className="text-xs text-text-muted">No test cases.</p>;
+  }
 
   return (
     <div>
@@ -139,79 +129,59 @@ const TestCaseView: React.FC<{
             key={i}
             onClick={() => onChange(i)}
             className={cn(
-              'rounded-md px-2.5 py-1 text-xs font-medium panel-transition',
+              'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium panel-transition',
               i === activeIdx
                 ? 'bg-surface-tertiary text-text-primary'
                 : 'text-text-muted hover:bg-surface-secondary hover:text-text-secondary'
             )}
           >
             Case {i + 1}
+            {testCases[i].isHidden && <Lock size={10} />}
           </button>
         ))}
-        {hiddenCount > 0 && (
-          <button
-            onClick={() => onChange(-1)}
-            className={cn(
-              'rounded-md px-2.5 py-1 text-xs font-medium panel-transition',
-              activeIdx === -1
-                ? 'bg-surface-tertiary text-text-primary'
-                : 'text-text-muted hover:bg-surface-secondary hover:text-text-secondary'
-            )}
-          >
-            <span className="inline-flex items-center gap-1">
-              <Lock size={10} />
-              Hidden ({hiddenCount})
-            </span>
-          </button>
-        )}
       </div>
 
-      {activeIdx === -1 ? (
-        <div className="rounded-lg border border-border bg-surface-secondary p-4">
-          <p className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-            <Lock size={12} /> {hiddenCount} hidden test{hiddenCount === 1 ? '' : 's'}
-          </p>
-          <p className="mt-2 text-xs text-text-muted">
-            Hidden test inputs and expected outputs are not shown. When you
-            submit, they run in your browser against your code, and only the
-            pass/fail result reaches the server. See the platform docs for
-            how hidden tests work.
-          </p>
-        </div>
-      ) : tc ? (
-        <div className="space-y-3">
-          {tc.input && (
+      <div className="space-y-3">
+        {tc.isHidden ? (
+          <div className="rounded-lg border border-border bg-surface-secondary p-4">
+            <p className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
+              <Lock size={12} /> Hidden test
+            </p>
+            <p className="mt-2 text-xs text-text-muted">
+              The input and expected output are hidden while you work. This
+              test still runs when you click Run or Submit, and its result
+              counts toward your verdict.
+            </p>
+          </div>
+        ) : (
+          <>
+            {tc.input && (
+              <div>
+                <p className="mb-1 text-xs font-semibold text-text-secondary">
+                  Input
+                </p>
+                <pre className="rounded-lg bg-surface-secondary px-3 py-2 font-mono text-xs text-text-primary">
+                  {tc.input}
+                </pre>
+              </div>
+            )}
             <div>
               <p className="mb-1 text-xs font-semibold text-text-secondary">
-                Input
+                Expected Output
               </p>
               <pre className="rounded-lg bg-surface-secondary px-3 py-2 font-mono text-xs text-text-primary">
-                {tc.input}
+                {tc.expectedOutput}
               </pre>
             </div>
-          )}
-          <div>
-            <p className="mb-1 text-xs font-semibold text-text-secondary">
-              Expected Output
-            </p>
-            <pre className="rounded-lg bg-surface-secondary px-3 py-2 font-mono text-xs text-text-primary">
-              {tc.expectedOutput}
-            </pre>
-          </div>
-        </div>
-      ) : (
-        <p className="text-xs text-text-muted">No test cases.</p>
-      )}
-      {/* Silence unused warning if only hidden tests exist */}
-      {totalTabs === 0 && null}
+          </>
+        )}
+      </div>
     </div>
   );
 };
 
-// ─── Result tab ───────────────────────────────────────────────────
-
 const ResultView: React.FC<{
-  results: AnyTestResult[];
+  results: VisibleTestResult[];
   accepted: boolean;
   totalRuntimeMs: number;
 }> = ({ results, accepted, totalRuntimeMs }) => {
@@ -246,16 +216,15 @@ const ResultView: React.FC<{
 
       <div className="space-y-2">
         {results.map((r, i) => (
-          <ResultRow key={r.kind === 'visible' ? `v-${r.index}` : `h-${r.id}`} r={r} i={i} />
+          <ResultRow key={r.index} r={r} i={i} />
         ))}
       </div>
     </div>
   );
 };
 
-const ResultRow: React.FC<{ r: AnyTestResult; i: number }> = ({ r, i }) => {
-  const isHidden = r.kind === 'hidden';
-  const label = isHidden ? 'Hidden' : `Test ${r.index + 1}`;
+const ResultRow: React.FC<{ r: VisibleTestResult; i: number }> = ({ r, i }) => {
+  const hidden = Boolean(r.isHidden);
 
   return (
     <div
@@ -269,8 +238,8 @@ const ResultRow: React.FC<{ r: AnyTestResult; i: number }> = ({ r, i }) => {
     >
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 font-semibold text-text-primary">
-          {isHidden && <Lock size={11} className="text-text-muted" />}
-          {label}
+          {hidden && <Lock size={11} className="text-text-muted" />}
+          Test {r.index + 1}
         </span>
         <span
           className={cn(
@@ -280,15 +249,11 @@ const ResultRow: React.FC<{ r: AnyTestResult; i: number }> = ({ r, i }) => {
               : 'text-[var(--color-error)]'
           )}
         >
-          {r.passed ? (
-            <CheckCircle2 size={12} />
-          ) : (
-            <XCircle size={12} />
-          )}
+          {r.passed ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
           {r.passed ? 'Passed' : 'Failed'}
         </span>
       </div>
-      {!r.passed && !isHidden && r.kind === 'visible' && (
+      {!r.passed && !hidden && (
         <div className="mt-2 space-y-1">
           {r.stderr ? (
             <pre className="whitespace-pre-wrap font-mono text-[10px] text-[var(--color-error)]">
@@ -304,7 +269,7 @@ const ResultRow: React.FC<{ r: AnyTestResult; i: number }> = ({ r, i }) => {
           )}
         </div>
       )}
-      {!r.passed && isHidden && (
+      {!r.passed && hidden && (
         <p className="mt-2 text-[10px] text-text-muted">
           Hidden test failed. Input and expected output are not shown.
         </p>

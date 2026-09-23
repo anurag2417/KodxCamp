@@ -5,16 +5,9 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useProblem } from '@/features/problems/hooks/useProblem';
 import {
   runTests,
-  combineSummaries,
-  type AnyTestResult,
   type TestRunSummary,
   type VisibleTestCase,
 } from '@/shared/runner/testHarness';
-import {
-  runHiddenTests,
-  type HiddenTestCase,
-  type HiddenTestOutcome,
-} from '@/shared/runner/hiddenHarness';
 import { getAdapter } from '@/shared/runner/adapters';
 import { problemsApi, type ApiSubmission } from '@/features/problems/api';
 import { useAuthStore } from '@/shared/store/auth.store';
@@ -27,10 +20,6 @@ import { EditorToolbar } from '@/features/problems/components/EditorToolbar';
 import { AcceptanceOverlay } from '@/features/problems/components/AcceptanceOverlay';
 import { useToast } from '@/shared/hooks/useToast';
 
-/**
- * Human-readable labels for each language id.
- * Used to populate the EditorToolbar.
- */
 const LANGUAGE_LABELS: Record<string, string> = {
   javascript: 'JavaScript',
   typescript: 'TypeScript',
@@ -43,9 +32,6 @@ const LANGUAGE_LABELS: Record<string, string> = {
   tailwind: 'Tailwind',
 };
 
-/**
- * Map a language id to the Monaco editor language identifier.
- */
 function toMonacoLanguage(lang: string): string {
   switch (lang) {
     case 'html-css':
@@ -78,7 +64,6 @@ export const ProblemDetail: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const toast = useToast();
 
-  // Languages available for this problem — derived from starterCode keys.
   const languages = useMemo(() => {
     if (!problem?.starterCode) return [];
     return Object.keys(problem.starterCode).map((id) => ({
@@ -90,14 +75,13 @@ export const ProblemDetail: React.FC = () => {
   const [language, setLanguage] = useState<string>('javascript');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState<AnyTestResult[]>();
+  const [summary, setSummary] = useState<TestRunSummary | undefined>();
   const [accepted, setAccepted] = useState(false);
   const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
   const [showAcceptance, setShowAcceptance] = useState(false);
   const [runtimeReady, setRuntimeReady] = useState(true);
 
-  // Pick the first available language once the problem loads.
   useEffect(() => {
     if (languages.length > 0 && !languages.some((l) => l.id === language)) {
       setLanguage(languages[0].id);
@@ -105,7 +89,6 @@ export const ProblemDetail: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [languages]);
 
-  // Warm the runtime for the current language when it changes.
   useEffect(() => {
     const adapter = getAdapter(language);
     if (!adapter?.init) {
@@ -114,22 +97,24 @@ export const ProblemDetail: React.FC = () => {
     }
     setRuntimeReady(adapter.isReady());
     let cancelled = false;
-    adapter.init().then(() => {
-      if (!cancelled) setRuntimeReady(true);
-    }).catch(() => {
-      if (!cancelled) setRuntimeReady(true);
-    });
+    adapter
+      .init()
+      .then(() => {
+        if (!cancelled) setRuntimeReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimeReady(true);
+      });
     return () => {
       cancelled = true;
     };
   }, [language]);
 
-  // Reset editor state when the problem id or language changes.
   useEffect(() => {
     if (!problem) return;
     const starter = problem.starterCode?.[language] ?? '';
     setCode(starter);
-    setResults(undefined);
+    setSummary(undefined);
     setAccepted(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problem?._id, language]);
@@ -152,10 +137,6 @@ export const ProblemDetail: React.FC = () => {
   }, [user, problem?._id]);
 
   const testCases = useMemo(() => problem?.testCases ?? [], [problem]);
-  const hiddenTestCases = useMemo(
-    () => problem?.hiddenTestCases ?? [],
-    [problem]
-  );
 
   async function execute(isSubmit: boolean) {
     if (!problem) return;
@@ -165,110 +146,42 @@ export const ProblemDetail: React.FC = () => {
     }
 
     setBusy(true);
-    setResults(undefined);
+    setSummary(undefined);
     setAccepted(false);
 
     const visibleCases: VisibleTestCase[] = testCases.map((tc) => ({
       index: tc.index,
       input: tc.input,
       expectedOutput: tc.expectedOutput,
+      isHidden: tc.isHidden,
     }));
 
-    const visibleSummary: TestRunSummary = await runTests(
-      language,
-      code,
-      visibleCases,
-      {
-        functionName: problem.functionName,
-        outputMode: problem.outputMode,
-      }
-    );
+    const result = await runTests(language, code, visibleCases, {
+      functionName: problem.functionName,
+      outputMode: problem.outputMode,
+    });
 
-    let hiddenSummary: {
-      results: AnyTestResult[];
-      totalRuntimeMs: number;
-    } = {
-      results: [],
-      totalRuntimeMs: 0,
-    };
-
-    if (isSubmit && hiddenTestCases.length > 0) {
-      const hiddenInputs: HiddenTestCase[] = hiddenTestCases.map((tc) => ({
-        id: tc.id,
-        input: tc.input,
-        expectedOutputHash: tc.expectedOutputHash,
-        canonicalization: tc.canonicalization,
-      }));
-
-      const started = performance.now();
-      const outcomes: HiddenTestOutcome[] = await runHiddenTests(
-        language,
-        code,
-        hiddenInputs,
-        {
-          functionName: problem.functionName,
-          outputMode: problem.outputMode,
-          timeoutMs: 30000,
-        }
-      );
-
-      hiddenSummary = {
-        results: outcomes.map((o) => ({
-          kind: 'hidden' as const,
-          id: o.id,
-          passed: o.passed,
-          runtimeMs: 0,
-        })),
-        totalRuntimeMs: Math.round(performance.now() - started),
-      };
-    }
-
-    const combined = combineSummaries(visibleSummary, hiddenSummary);
-
-    setResults(combined.results);
-    setAccepted(combined.allPassed);
-    setTotalRuntimeMs(combined.totalRuntimeMs);
+    setSummary(result);
+    setAccepted(result.allPassed);
+    setTotalRuntimeMs(result.totalRuntimeMs);
 
     if (isSubmit) {
-      const sessionId =
-        typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
       try {
         await problemsApi.submit({
           problemId: problem._id,
           language,
           code,
-          sessionId,
-          visibleResults: combined.results
-            .filter(
-              (r): r is Extract<AnyTestResult, { kind: 'visible' }> =>
-                r.kind === 'visible'
-            )
-            .map((r) => ({ index: r.index, passed: r.passed })),
-          hiddenResults: combined.results
-            .filter(
-              (r): r is Extract<AnyTestResult, { kind: 'hidden' }> =>
-                r.kind === 'hidden'
-            )
-            .map((r) => ({ id: r.id, passed: r.passed })),
-          runtimeMs: combined.totalRuntimeMs,
+          status: result.allPassed ? 'accepted' : 'wrong_answer',
+          passedTests: result.passedTests,
+          totalTests: result.totalTests,
+          runtimeMs: result.totalRuntimeMs,
         });
 
         const fresh = await problemsApi.submissions(problem._id);
         setSubmissions(fresh);
 
-        if (combined.allPassed) {
+        if (result.allPassed) {
           setShowAcceptance(true);
-        } else if (hiddenTestCases.length > 0) {
-          const hiddenPassed = combined.results
-            .filter((r) => r.kind === 'hidden')
-            .filter((r) => r.passed).length;
-          toast.warning(
-            `${hiddenPassed}/${hiddenTestCases.length} hidden tests passed. Keep going.`,
-            'Not accepted'
-          );
         }
       } catch (err) {
         const message =
@@ -349,8 +262,7 @@ export const ProblemDetail: React.FC = () => {
               <Panel defaultSize={35} minSize={15}>
                 <TestPanel
                   testCases={testCases}
-                  hiddenCount={hiddenTestCases.length}
-                  results={results}
+                  results={summary?.results}
                   running={busy}
                   accepted={accepted}
                   totalRuntimeMs={totalRuntimeMs}

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   problemsApi,
   type ApiSubmission,
+  type SubmitInput,
 } from '@/features/problems/api';
 import { progressApi } from '@/features/progress/api';
 import { projectsApi } from '@/features/projects/api';
@@ -11,8 +12,7 @@ export function useSubmitSolution() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: Parameters<typeof problemsApi.submit>[0]) =>
-      problemsApi.submit(input),
+    mutationFn: (input: SubmitInput) => problemsApi.submit(input),
     onSuccess: (data, variables) => {
       qc.setQueryData<ApiSubmission[]>(
         queryKeys.problems.submissions(variables.problemId),

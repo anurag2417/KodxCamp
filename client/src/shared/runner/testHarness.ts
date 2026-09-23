@@ -8,37 +8,25 @@ export interface VisibleTestCase {
   index: number;
   input: string;
   expectedOutput: string;
+  /** Display flag. Hides the input/output from the student's panel. */
+  isHidden?: boolean;
 }
 
 export interface VisibleTestResult {
-  kind: 'visible';
   index: number;
   passed: boolean;
   actualOutput?: string;
   expectedOutput?: string;
   stderr?: string;
   runtimeMs: number;
+  /** Display flag. When true, the UI elides input/output details. */
+  isHidden?: boolean;
 }
-
-// ─── Hidden-test types ────────────────────────────────────────────
-//
-// A hidden result carries ONLY a boolean. There is deliberately no
-// field for `actualOutput` or `stderr` — the type system prevents
-// accidental leaking of hidden output into the UI.
-
-export interface HiddenTestResult {
-  kind: 'hidden';
-  id: string;
-  passed: boolean;
-  runtimeMs: number;
-}
-
-export type AnyTestResult = VisibleTestResult | HiddenTestResult;
 
 // ─── Summary ──────────────────────────────────────────────────────
 
 export interface TestRunSummary {
-  results: AnyTestResult[];
+  results: VisibleTestResult[];
   passedTests: number;
   totalTests: number;
   allPassed: boolean;
@@ -53,8 +41,12 @@ export interface TestHarnessOptions {
 }
 
 /**
- * Run every visible test case sequentially against the student's code.
- * Returns full output for each test — this is the "learning" path.
+ * Run every test case sequentially against the student's code.
+ *
+ * The `isHidden` flag on a test case is a display concern only — it
+ * does not affect execution. Hidden tests still run and their
+ * pass/fail still counts toward the final verdict. The UI decides
+ * whether to reveal the input/output to the student.
  */
 export async function runTests(
   language: string,
@@ -78,13 +70,13 @@ export async function runTests(
       result.ok && outputsMatch(actual, tc.expectedOutput, options.outputMode);
 
     results.push({
-      kind: 'visible',
       index: tc.index,
       passed,
       actualOutput: actual,
       expectedOutput: tc.expectedOutput,
       stderr: result.stderr,
       runtimeMs: result.runtimeMs,
+      isHidden: tc.isHidden,
     });
   }
 
@@ -97,29 +89,7 @@ export async function runTests(
   };
 }
 
-/**
- * Combine visible + hidden results into one summary.
- *
- * `hidden.results` is typed as `AnyTestResult[]` so the caller can pass
- * an intermediate object that started life as `HiddenTestResult[]` and
- * got widened. The runtime shape is identical either way.
- */
-export function combineSummaries(
-  visible: TestRunSummary,
-  hidden: { results: AnyTestResult[]; totalRuntimeMs: number }
-): TestRunSummary {
-  const results: AnyTestResult[] = [...visible.results, ...hidden.results];
-  const passedTests = results.filter((r) => r.passed).length;
-  return {
-    results,
-    passedTests,
-    totalTests: results.length,
-    allPassed: passedTests === results.length,
-    totalRuntimeMs: visible.totalRuntimeMs + hidden.totalRuntimeMs,
-  };
-}
-
-// ─── Output comparison (visible tests only) ───────────────────────
+// ─── Output comparison ────────────────────────────────────────────
 
 function outputsMatch(
   actual: string,
@@ -203,16 +173,9 @@ public class Main {
  * Parse a test case's `input` string into a list of arguments.
  *
  * Handles three shapes:
- *
  *   1. Valid JSON array → items become individual arguments.
- *      `"[2, 3]"`        → args = [2, 3]
- *      `"[[1,2], 3]"`    → args = [[1,2], 3]
- *
- *   2. Comma-separated values that aren't a single JSON value:
- *      `"[2,7,11,15], 9"` → args = [[2,7,11,15], 9]
- *
+ *   2. Comma-separated values that aren't a single JSON value.
  *   3. Anything else → single string argument.
- *      `"hello"`          → args = ["hello"]
  */
 function parseArgs(input: string): { args: unknown[]; isArgsArray: boolean } {
   const trimmed = input.trim();
@@ -255,9 +218,6 @@ function serialize(value: unknown, language: string): string {
   return JSON.stringify(value);
 }
 
-/**
- * Python literal serializer: JSON with True/False/None swapped in.
- */
 function pyLiteral(value: unknown): string {
   const json = JSON.stringify(value);
   return json
@@ -266,11 +226,6 @@ function pyLiteral(value: unknown): string {
     .replace(/\bnull\b/g, 'None');
 }
 
-/**
- * Ruby literal serializer: emits valid Ruby syntax for the JSON-ish
- * values we pass to user code (numbers, strings, booleans, nil, arrays,
- * hashes).
- */
 function rubyLiteral(value: unknown): string {
   if (value === null || value === undefined) return 'nil';
   if (value === true) return 'true';
@@ -289,19 +244,6 @@ function rubyLiteral(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/**
- * Java literal serializer: emits valid Java expressions.
- *
- * Limitations:
- *   - Objects become `null` — Java's static typing makes it impossible
- *     to build a generic map literal without knowing the target type.
- *   - Arrays become `Object[]`. For numeric arrays the caller will need
- *     a cast or explicit loop.
- *
- * In practice, Java problems in KodxCamp use print mode, not return
- * mode, so this helper is rarely hit. It exists for completeness so
- * that `wrapPrintMode`'s input binding works.
- */
 function javaLiteral(value: unknown): string {
   if (value === null || value === undefined) return 'null';
   if (value === true) return 'true';
@@ -322,7 +264,6 @@ function javaLiteral(value: unknown): string {
   if (Array.isArray(value)) {
     return `new Object[]{${value.map((v) => javaLiteral(v)).join(', ')}}`;
   }
-  // Objects: not supported in v1.
   return 'null';
 }
 
@@ -336,7 +277,6 @@ function wrapReturnMode(
 ): string {
   const { args } = parseArgs(input);
 
-  // JavaScript / TypeScript / DSA-JS
   if (
     language === 'javascript' ||
     language === 'typescript' ||
@@ -351,7 +291,6 @@ console.log(JSON.stringify(__KODX_RESULT__));
 `;
   }
 
-  // Python / DSA-Python
   if (language === 'python' || language === 'dsa-python') {
     const argList = args.map((a) => pyLiteral(a)).join(', ');
     return `${code}
@@ -363,7 +302,6 @@ print(__json__.dumps(__KODX_RESULT__, separators=(',', ':')))
 `;
   }
 
-  // Ruby
   if (language === 'ruby') {
     const argList = args.map((a) => rubyLiteral(a)).join(', ');
     return `${code}
@@ -375,8 +313,6 @@ puts __KODX_RESULT__.to_json
 `;
   }
 
-  // Java: not supported in return mode. `wrapForExecution` rejects
-  // it before we get here, so this branch is unreachable in practice.
   if (language === 'java') {
     return `${code}
 
@@ -396,7 +332,6 @@ function wrapPrintMode(
 ): string {
   const { args } = parseArgs(input);
 
-  // JavaScript / TypeScript / DSA-JS
   if (
     language === 'javascript' ||
     language === 'typescript' ||
@@ -411,7 +346,6 @@ ${code}
 `;
   }
 
-  // Python / DSA-Python
   if (language === 'python' || language === 'dsa-python') {
     if (args.length === 0) return code;
     const argList = args.map((a) => pyLiteral(a)).join(', ');
@@ -422,7 +356,6 @@ ${code}
 `;
   }
 
-  // Ruby
   if (language === 'ruby') {
     if (args.length === 0) return code;
     const argList = args.map((a) => rubyLiteral(a)).join(', ');
@@ -433,8 +366,6 @@ ${code}
 `;
   }
 
-  // Java — expose the input via a static field on a helper class.
-  // The student's `Main.main` can read `KodxInput.args` if needed.
   if (language === 'java') {
     const argsLiteral =
       args.length === 0

@@ -1,9 +1,7 @@
 import type { RunResult } from '../types';
-import type { CanonicalizationId } from '@kodxcamp/shared';
-import type { RunnerAdapter, AdapterRunOptions, HiddenRunResult } from './types';
+import type { RunnerAdapter, AdapterRunOptions } from './types';
 import {
   runPython,
-  runPythonHidden,
   preloadPython,
   isPythonReady,
 } from '../pythonRunner';
@@ -24,18 +22,6 @@ export const pythonAdapter: RunnerAdapter = {
     _input: string,
     opts: AdapterRunOptions
   ): Promise<RunResult> {
-    return runPython(code, { timeoutMs: opts.timeoutMs ?? 10000 });
-  },
-
-  async runHidden(
-    code: string,
-    _input: string,
-    expectedOutputHash: string,
-    canonicalization: CanonicalizationId,
-    opts: AdapterRunOptions
-  ): Promise<HiddenRunResult> {
-    return runPythonHidden(code, expectedOutputHash, canonicalization, {
-      timeoutMs: opts.timeoutMs ?? 10000,
-    });
+    return runPython(code, { timeoutMs: opts.timeoutMs ?? 30000 });
   },
 };

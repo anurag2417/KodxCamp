@@ -22,13 +22,8 @@ export interface ApiLessonTestCase {
   index: number;
   input: string;
   expectedOutput: string;
-}
-
-export interface ApiLessonHiddenTestCase {
-  id: string;
-  input: string;
-  expectedOutputHash: string;
-  canonicalization: 'trim-trailing-newline' | 'trim-all' | 'exact';
+  /** Display flag. Hide input/output from the student's test panel. */
+  isHidden: boolean;
 }
 
 export interface ApiLessonFull {
@@ -43,7 +38,6 @@ export interface ApiLessonFull {
   outputMode: 'return' | 'print';
   language: string;
   testCases: ApiLessonTestCase[];
-  hiddenTestCases: ApiLessonHiddenTestCase[];
 }
 
 export const coursesApi = {

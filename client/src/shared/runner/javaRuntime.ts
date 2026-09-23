@@ -6,11 +6,6 @@
  * operates on the page context. Because of this, the Java runtime
  * runs on the main thread.
  *
- * Consequence: hidden tests for Java FAIL CLOSED. We cannot hash
- * stdout inside an isolated boundary, so `runJavaHidden` returns
- * `{ passed: false }` unconditionally. This is documented in
- * HIDDEN-TESTS.md and mirrors the SQL/HTML behavior.
- *
  * The CheerpJ runtime is initialized lazily on first use. Init
  * downloads ~30 MB of JDK and JVM assets. This cost is paid once per
  * page session.
@@ -28,8 +23,6 @@
  * requests from `/app/jdk-compiler.jar`. Vite's dev server needs a
  * small plugin to add Range support — see `client/vite.config.ts`.
  */
-
-import type { RunResult } from './types';
 
 // ─── Global type declarations ─────────────────────────────────────
 //
@@ -63,8 +56,6 @@ declare global {
 // The server MUST respond with:
 //   - Accept-Ranges: bytes
 //   - Content-Range on 206 responses
-//   - Access-Control-Allow-Origin (same origin in prod, but Vite needs
-//     the plugin anyway)
 //
 // See `client/vite.config.ts` for the dev-server Range plugin.
 
@@ -234,11 +225,6 @@ export async function runJava(code: string): Promise<JavaExecution> {
     let exitCode = 0;
     try {
       // 2a. Compile Main.java and the capture helper.
-      //
-      //     The classpath includes /app/jdk-compiler.jar, which the
-      //     CheerpJ runtime fetches via Range requests from our own
-      //     web server. Vite dev serves it via the cheerpjRange plugin
-      //     configured in vite.config.ts.
       const compileExit = await window.cheerpjRunMain!(
         'com.sun.tools.javac.Main',
         `${COMPILER_JAR_PATH}:/app/`,
@@ -314,21 +300,6 @@ export async function runJava(code: string): Promise<JavaExecution> {
   }
 }
 
-/**
- * Java hidden tests fail closed.
- *
- * CheerpJ runs on the main thread; we cannot hash stdout inside an
- * isolated boundary the way we do for JS, Python, and Ruby. Rather
- * than ship a weaker guarantee, we mark every Java hidden test as
- * failed until server-side judging ships.
- */
-export async function runJavaHidden(): Promise<{
-  passed: boolean;
-  runtimeMs: number;
-}> {
-  return { passed: false, runtimeMs: 0 };
-}
-
 // ─── Utilities ────────────────────────────────────────────────────
 
 function base64Decode(b64: string): string {
@@ -343,6 +314,3 @@ function base64Decode(b64: string): string {
     return '';
   }
 }
-
-// Suppress unused-import warning if RunResult is not referenced.
-void ({} as RunResult);

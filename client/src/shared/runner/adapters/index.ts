@@ -6,8 +6,12 @@ import { javaAdapter } from './java';
 import { sqlAdapter } from './sql';
 import { htmlAdapter } from './html';
 
-export type { RunnerAdapter, AdapterRunOptions, HiddenRunResult } from './types';
+export type { RunnerAdapter, AdapterRunOptions } from './types';
 
+/**
+ * The adapter registry. Every language the platform supports is listed
+ * here exactly once, keyed by its canonical `id`.
+ */
 const ALL_ADAPTERS: RunnerAdapter[] = [
   javascriptAdapter,
   pythonAdapter,

@@ -1,16 +1,6 @@
 import type { RunResult } from '../types';
-import type { CanonicalizationId } from '@kodxcamp/shared';
-import type {
-  RunnerAdapter,
-  AdapterRunOptions,
-  HiddenRunResult,
-} from './types';
-import {
-  runRuby,
-  runRubyHidden,
-  preloadRuby,
-  isRubyReady,
-} from '../rubyRunner';
+import type { RunnerAdapter, AdapterRunOptions } from './types';
+import { runRuby, preloadRuby, isRubyReady } from '../rubyRunner';
 
 export const rubyAdapter: RunnerAdapter = {
   id: 'ruby',
@@ -28,18 +18,6 @@ export const rubyAdapter: RunnerAdapter = {
     _input: string,
     opts: AdapterRunOptions
   ): Promise<RunResult> {
-    return runRuby(code, { timeoutMs: opts.timeoutMs ?? 15_000 });
-  },
-
-  async runHidden(
-    code: string,
-    _input: string,
-    expectedOutputHash: string,
-    canonicalization: CanonicalizationId,
-    opts: AdapterRunOptions
-  ): Promise<HiddenRunResult> {
-    return runRubyHidden(code, expectedOutputHash, canonicalization, {
-      timeoutMs: opts.timeoutMs ?? 15_000,
-    });
+    return runRuby(code, { timeoutMs: opts.timeoutMs ?? 30000 });
   },
 };

@@ -12,16 +12,9 @@ import { RunBar } from '@/shared/components/editor/RunBar';
 import { LessonSidebar } from '@/features/courses/components/LessonSidebar';
 import {
   runTests,
-  combineSummaries,
-  type AnyTestResult,
   type TestRunSummary,
   type VisibleTestCase,
 } from '@/shared/runner/testHarness';
-import {
-  runHiddenTests,
-  type HiddenTestCase,
-  type HiddenTestOutcome,
-} from '@/shared/runner/hiddenHarness';
 import { TestPanel } from '@/features/problems/components/TestPanel';
 
 export const Lesson: React.FC = () => {
@@ -33,105 +26,55 @@ export const Lesson: React.FC = () => {
   const user = useAuthStore((s) => s.user);
 
   const [code, setCode] = useState('');
-  const [results, setResults] = useState<AnyTestResult[]>();
+  const [summary, setSummary] = useState<TestRunSummary | undefined>();
   const [accepted, setAccepted] = useState(false);
   const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
   const [progress, setProgress] = useState<ApiProgress | null>(null);
   const [completing, setCompleting] = useState(false);
   const [running, setRunning] = useState(false);
 
-  // Initialize code from lesson starter
   useEffect(() => {
     if (data?.lesson) {
       setCode(data.lesson.starterCode || '');
-      setResults(undefined);
+      setSummary(undefined);
       setAccepted(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.lesson?._id]);
 
-  // Load progress
   useEffect(() => {
     if (!user || !data?.course) return;
     progressApi
       .getForCourse(data.course._id)
       .then(setProgress)
-      .catch(() => { });
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, data?.course?._id]);
 
-  const visibleTestCases = useMemo(
-    () => data?.lesson.testCases ?? [],
-    [data?.lesson]
-  );
-  const hiddenTestCases = useMemo(
-    () => data?.lesson.hiddenTestCases ?? [],
-    [data?.lesson]
-  );
-  const hasTests = visibleTestCases.length > 0 || hiddenTestCases.length > 0;
+  const testCases = useMemo(() => data?.lesson.testCases ?? [], [data?.lesson]);
+  const hasTests = testCases.length > 0;
 
   const handleRunCode = async () => {
     if (!data) return;
     setRunning(true);
-    setResults(undefined);
+    setSummary(undefined);
     setAccepted(false);
 
-    const visibleCases: VisibleTestCase[] = visibleTestCases.map((tc) => ({
+    const visibleCases: VisibleTestCase[] = testCases.map((tc) => ({
       index: tc.index,
       input: tc.input,
       expectedOutput: tc.expectedOutput,
+      isHidden: tc.isHidden,
     }));
 
-    const visibleSummary: TestRunSummary = await runTests(
-      data.lesson.language,
-      code,
-      visibleCases,
-      {
-        functionName: data.lesson.functionName ?? 'solve',
-        outputMode: data.lesson.outputMode ?? 'print',
-      }
-    );
+    const result = await runTests(data.lesson.language, code, visibleCases, {
+      functionName: data.lesson.functionName ?? 'solve',
+      outputMode: data.lesson.outputMode ?? 'print',
+    });
 
-    let hiddenSummary: {
-      results: AnyTestResult[];
-      totalRuntimeMs: number;
-    } = { results: [], totalRuntimeMs: 0 };
-
-    if (hiddenTestCases.length > 0) {
-      const hiddenInputs: HiddenTestCase[] = hiddenTestCases.map((tc) => ({
-        id: tc.id,
-        input: tc.input,
-        expectedOutputHash: tc.expectedOutputHash,
-        canonicalization: tc.canonicalization,
-      }));
-
-      const started = performance.now();
-      const outcomes: HiddenTestOutcome[] = await runHiddenTests(
-        data.lesson.language,
-        code,
-        hiddenInputs,
-        {
-          functionName: data.lesson.functionName ?? 'solve',
-          outputMode: data.lesson.outputMode ?? 'print',
-          timeoutMs: 10000,
-        }
-      );
-
-      hiddenSummary = {
-        results: outcomes.map((o) => ({
-          kind: 'hidden' as const,
-          id: o.id,
-          passed: o.passed,
-          runtimeMs: 0,
-        })),
-        totalRuntimeMs: Math.round(performance.now() - started),
-      };
-    }
-
-    const combined = combineSummaries(visibleSummary, hiddenSummary);
-    setResults(combined.results);
-    setAccepted(combined.allPassed);
-    setTotalRuntimeMs(combined.totalRuntimeMs);
+    setSummary(result);
+    setAccepted(result.allPassed);
+    setTotalRuntimeMs(result.totalRuntimeMs);
     setRunning(false);
   };
 
@@ -186,7 +129,6 @@ export const Lesson: React.FC = () => {
       />
 
       <PanelGroup direction="horizontal" className="h-full flex-1">
-        {/* Instructions */}
         <Panel defaultSize={35} minSize={20}>
           <div className="h-full overflow-auto bg-bg p-6">
             <Link
@@ -215,7 +157,6 @@ export const Lesson: React.FC = () => {
               {lesson.content}
             </div>
 
-            {/* Implementation hint */}
             {hasTests && lesson.outputMode === 'return' && (
               <p className="mt-4 text-xs text-text-muted">
                 Implement the function{' '}
@@ -227,45 +168,49 @@ export const Lesson: React.FC = () => {
               </p>
             )}
 
-            {/* Visible test cases */}
-            {visibleTestCases.length > 0 && (
+            {testCases.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-sm font-semibold text-text-primary">
-                  Visible Test Cases
+                  Test Cases
                 </h3>
                 <div className="mt-2 flex flex-col gap-2">
-                  {visibleTestCases.map((tc, i) => (
+                  {testCases.map((tc, i) => (
                     <div
                       key={i}
                       className="rounded-lg border border-border bg-surface p-3 text-xs"
                     >
-                      {tc.input && (
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-xs font-semibold text-text-secondary">
+                          Test {i + 1}
+                        </span>
+                        {tc.isHidden && (
+                          <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-[10px] font-medium text-text-muted">
+                            hidden
+                          </span>
+                        )}
+                      </div>
+                      {!tc.isHidden && (
                         <>
-                          <div className="text-text-muted">Input</div>
-                          <code className="mt-0.5 block break-all font-mono text-text-primary">
-                            {tc.input}
+                          {tc.input && (
+                            <>
+                              <div className="text-text-muted">Input</div>
+                              <code className="mt-0.5 block break-all font-mono text-text-primary">
+                                {tc.input}
+                              </code>
+                            </>
+                          )}
+                          <div className="mt-2 text-text-muted">Expected</div>
+                          <code className="mt-0.5 block font-mono text-text-primary">
+                            {tc.expectedOutput}
                           </code>
                         </>
                       )}
-                      <div className="mt-2 text-text-muted">Expected</div>
-                      <code className="mt-0.5 block font-mono text-text-primary">
-                        {tc.expectedOutput}
-                      </code>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {hiddenTestCases.length > 0 && (
-              <p className="mt-4 rounded-lg border border-border bg-surface-secondary p-3 text-xs text-text-muted">
-                🔒 This lesson also has {hiddenTestCases.length} hidden test
-                {hiddenTestCases.length === 1 ? '' : 's'}. They run when you
-                click Run, but their inputs and expected outputs are not shown.
-              </p>
-            )}
-
-            {/* Complete button */}
             <div className="mt-6">
               <Button
                 variant={isCompleted ? 'secondary' : 'primary'}
@@ -310,7 +255,6 @@ export const Lesson: React.FC = () => {
 
         <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
 
-        {/* Editor + TestPanel */}
         <Panel defaultSize={65}>
           <PanelGroup direction="vertical">
             <Panel defaultSize={65}>
@@ -338,9 +282,8 @@ export const Lesson: React.FC = () => {
 
             <Panel defaultSize={35}>
               <TestPanel
-                testCases={visibleTestCases}
-                hiddenCount={hiddenTestCases.length}
-                results={results}
+                testCases={testCases}
+                results={summary?.results}
                 running={running}
                 accepted={accepted}
                 totalRuntimeMs={totalRuntimeMs}
@@ -365,6 +308,10 @@ function toMonacoLanguage(lang: string): string {
     case 'python':
     case 'dsa-python':
       return 'python';
+    case 'ruby':
+      return 'ruby';
+    case 'java':
+      return 'java';
     case 'sql':
       return 'sql';
     case 'react':
@@ -390,6 +337,8 @@ function getFileName(lang: string): string {
       return 'main.py';
     case 'ruby':
       return 'main.rb';
+    case 'java':
+      return 'Main.java';
     case 'sql':
       return 'query.sql';
     case 'react':
