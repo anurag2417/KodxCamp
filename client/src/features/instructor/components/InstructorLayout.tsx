@@ -2,10 +2,23 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { BookOpen, Users, Upload } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
-const tabs = [
+interface Tab {
+  to: string;
+  label: string;
+  icon: typeof BookOpen;
+  end?: boolean;
+  disabled?: boolean;
+}
+
+const tabs: Tab[] = [
   { to: '/instructor', label: 'My Courses', icon: BookOpen, end: true },
-  { to: '/instructor/students', label: 'Students', icon: Users, disabled: true },
-  { to: '/instructor/upload', label: 'Upload Recordings', icon: Upload, disabled: true },
+  { to: '/instructor/students', label: 'Students', icon: Users },
+  {
+    to: '/instructor/upload',
+    label: 'Upload Recordings',
+    icon: Upload,
+    disabled: true,
+  },
 ];
 
 export const InstructorLayout: React.FC = () => (

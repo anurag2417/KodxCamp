@@ -20,6 +20,11 @@ import {
   createInvitationSchema,
   invitationParamsSchema,
 } from '../controllers/instructor.invitation.controller.js';
+import {
+  instructorStudentController,
+  rosterQuerySchema,
+  rosterStudentSchema,
+} from '../controllers/instructor.student.controller.js';
 
 const router = Router();
 
@@ -70,7 +75,7 @@ router.delete(
   instructorCourseController.removeLesson
 );
 
-// ─── Team (existing, by user id) ──────────────────
+// ─── Team (by user id) ────────────────────────────
 router.get(
   '/courses/:slug/team',
   validate(courseSlugSchema),
@@ -92,7 +97,7 @@ router.delete(
   instructorCourseController.removeTeamMember
 );
 
-// ─── Invitations (new) ────────────────────────────
+// ─── Invitations ──────────────────────────────────
 router.get(
   '/courses/:slug/invitations',
   validate(courseSlugSchema),
@@ -107,6 +112,18 @@ router.delete(
   '/courses/:slug/invitations/:invitationId',
   validate(invitationParamsSchema),
   instructorInvitationController.revoke
+);
+
+// ─── Students ─────────────────────────────────────
+router.get(
+  '/courses/:slug/students',
+  validate(rosterQuerySchema),
+  instructorStudentController.list
+);
+router.get(
+  '/courses/:slug/students/:userId',
+  validate(rosterStudentSchema),
+  instructorStudentController.detail
 );
 
 export default router;

@@ -101,6 +101,81 @@ export interface ResolvedInvitation {
   isRevoked: boolean;
 }
 
+// ─── Student roster ──────────────────────────────────────────────
+
+export type RosterSort = 'recent' | 'progress' | 'name' | 'joined';
+
+export interface ApiRosterRow {
+  userId: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  joinedAt: string;
+  lastActiveAt: string;
+  lessonsCompleted: number;
+  totalLessons: number;
+  percentage: number;
+  problemsSolved: number;
+  submissions: number;
+  achievements: number;
+}
+
+export interface ApiRosterPage {
+  students: ApiRosterRow[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+export interface ApiStudentDetail {
+  student: {
+    userId: string;
+    name: string;
+    email: string;
+    avatar?: string;
+    role: string;
+    xp: number;
+    streak: number;
+    createdAt: string;
+    lastActiveAt: string;
+  };
+  enrollment: { joinedAt: string; source: string } | null;
+  progress: {
+    percentage: number;
+    completedLessons: number;
+    totalLessons: number;
+    lessons: {
+      _id: string;
+      title: string;
+      slug: string;
+      order: number;
+      completed: boolean;
+    }[];
+  };
+  recentActivity: {
+    _id: string;
+    type: string;
+    xp: number;
+    day: string;
+    createdAt: string;
+  }[];
+  submissions: {
+    _id: string;
+    problemId: string;
+    problemTitle: string;
+    problemSlug: string;
+    problemDifficulty: 'easy' | 'medium' | 'hard' | null;
+    language: string;
+    status: string;
+    passedTests: number;
+    totalTests: number;
+    runtimeMs?: number;
+    createdAt: string;
+  }[];
+  submissionsByDifficulty: { easy: number; medium: number; hard: number };
+}
+
 // ─── Instructor API ──────────────────────────────────────────────
 
 export const instructorApi = {
@@ -245,6 +320,33 @@ export const instructorApi = {
   ): Promise<{ ok: boolean }> => {
     const { data } = await api.delete(
       `/instructor/courses/${slug}/invitations/${invitationId}`
+    );
+    return data.data;
+  },
+
+  // ─── Students ─────────────────────────────────────────────
+  listStudents: async (
+    slug: string,
+    params: {
+      search?: string;
+      sort?: RosterSort;
+      page?: number;
+      limit?: number;
+    } = {}
+  ): Promise<ApiRosterPage> => {
+    const { data } = await api.get(
+      `/instructor/courses/${slug}/students`,
+      { params }
+    );
+    return data.data;
+  },
+
+  getStudent: async (
+    slug: string,
+    userId: string
+  ): Promise<ApiStudentDetail> => {
+    const { data } = await api.get(
+      `/instructor/courses/${slug}/students/${userId}`
     );
     return data.data;
   },

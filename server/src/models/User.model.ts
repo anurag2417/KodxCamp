@@ -42,6 +42,8 @@ export interface UserDocument extends Document {
   streak: number;
   lastActiveAt: Date;
   lastActiveDay?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const userSchema = new Schema<UserDocument>(

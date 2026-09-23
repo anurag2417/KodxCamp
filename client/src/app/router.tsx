@@ -26,6 +26,8 @@ import { Lesson } from '@/features/courses/pages/Lesson';
 import { Dashboard } from '@/features/dashboard/pages/Dashboard';
 import { InstructorGuard } from '@/features/instructor/components/InstructorGuard';
 import { InstructorLayout } from '@/features/instructor/components/InstructorLayout';
+import { InstructorStudents } from '@/features/instructor/pages/InstructorStudents';
+import { InstructorStudentDetail } from '@/features/instructor/pages/InstructorStudentDetail';
 import { Home } from '@/features/marketing/pages/Home';
 import { Playground } from '@/features/playground/pages/Playground';
 import { Practice } from '@/features/problems/pages/Practice';
@@ -97,6 +99,8 @@ export function AppRouter() {
           <Route path="playground" element={<Playground />} />
 
           {/* ─── Projects ──────────────────────────────────── */}
+          {/* "mine" must come before ":slug" — otherwise the
+              dynamic segment swallows the literal route. */}
           <Route path="projects" element={<Projects />} />
           <Route
             path="projects/mine"
@@ -164,6 +168,16 @@ export function AppRouter() {
             }
           >
             <Route index element={<Navigate to="/courses" replace />} />
+            {/* Static "students" route must come before dynamic
+                "courses/:slug/..." so the more specific path wins. */}
+            <Route path="students" element={<InstructorStudents />} />
+            <Route
+              path="courses/:slug/students/:userId"
+              element={<InstructorStudentDetail />}
+            />
+            {/* Legacy redirects — the course editor now lives under
+                /instructor/courses/:slug but the old link from the
+                sidebar points at /instructor directly. */}
             <Route
               path="courses/:slug"
               element={<Navigate to="/courses" replace />}

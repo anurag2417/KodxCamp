@@ -1,6 +1,8 @@
 import { Activity, type ActivityType } from '../models/Activity.model.js';
 import { User } from '../models/User.model.js';
+import { Lesson } from '../models/Lesson.model.js';
 import { achievementService } from './achievement.service.js';
+import { studentEnrollmentService } from './studentEnrollment.service.js';
 import { logger } from '../utils/logger.js';
 
 interface RecordInput {
@@ -31,7 +33,7 @@ export const activityService = {
     const day = todayKey();
     const xp = input.xp ?? 0;
 
-    // 1. Log the activity first (so we never lose the event)
+    // 1. Log the activity.
     await Activity.create({
       userId: input.userId,
       type: input.type,
@@ -40,7 +42,23 @@ export const activityService = {
       day,
     });
 
-    // 2. Update user XP atomically (no read-modify-write race)
+    // 2. Upsert a StudentEnrollment if the activity is course-scoped.
+    //    `lesson_completed` is the main trigger. If we ever add
+    //    course-scoped problem activities, they'd join here too.
+    if (input.type === 'lesson_completed' && input.refId) {
+      const lesson = await Lesson.findById(input.refId)
+        .select('courseId')
+        .lean();
+      if (lesson) {
+        void studentEnrollmentService.ensureEnrollment({
+          userId: input.userId,
+          courseId: lesson.courseId,
+          source: 'activity',
+        });
+      }
+    }
+
+    // 3. Update XP atomically.
     if (xp > 0) {
       await User.updateOne(
         { _id: input.userId },
@@ -53,9 +71,10 @@ export const activityService = {
       );
     }
 
-    // 3. Update streak using a Mongo filter that enforces the logic
-    //    client-side. Only touch it if the last active day is different.
-    const user = await User.findById(input.userId).select('lastActiveDay streak').lean();
+    // 4. Update streak.
+    const user = await User.findById(input.userId)
+      .select('lastActiveDay streak')
+      .lean();
     if (!user) return;
 
     const lastDay = user.lastActiveDay;
@@ -68,19 +87,16 @@ export const activityService = {
         const diff = dayDiff(lastDay, day);
         if (diff === 1) nextStreak = (user.streak ?? 0) + 1;
         else if (diff > 1) nextStreak = 1;
-        else nextStreak = user.streak ?? 1; // same day or clock glitch, keep
+        else nextStreak = user.streak ?? 1;
       }
 
-      // Only update if lastActiveDay still matches what we read — this
-      // makes concurrent streak updates idempotent.
       await User.updateOne(
         { _id: input.userId, lastActiveDay: lastDay ?? { $exists: false } },
         { $set: { lastActiveDay: day, streak: nextStreak } }
       );
     }
 
-    // 4. Fire-and-forget achievements — do NOT await, do NOT block the
-    //    response. Duplicate fires are handled by unique index + catch.
+    // 5. Fire-and-forget achievements.
     void achievementService
       .evaluate(input.userId)
       .catch((err) =>
@@ -96,7 +112,11 @@ export const activityService = {
     from.setDate(from.getDate() - days + 1);
     const fromKey = todayKeyFromDate(from);
 
-    const rows = await Activity.aggregate<{ _id: string; count: number; xp: number }>([
+    const rows = await Activity.aggregate<{
+      _id: string;
+      count: number;
+      xp: number;
+    }>([
       { $match: { userId, day: { $gte: fromKey } } },
       {
         $group: {

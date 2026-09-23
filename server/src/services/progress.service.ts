@@ -1,6 +1,7 @@
 import { Progress } from '../models/Progress.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { activityService } from './activity.service.js';
+import { studentEnrollmentService } from './studentEnrollment.service.js';
 
 const XP_PER_LESSON = 25;
 
@@ -47,13 +48,21 @@ export const progressService = {
     );
     await progress.save();
 
-    // Log activity for first-time completions
     if (wasNew) {
+      // Log the activity — this triggers the enrollment upsert too.
       await activityService.record({
         userId,
         type: 'lesson_completed',
         refId: lessonId,
         xp: XP_PER_LESSON,
+      });
+
+      // Belt-and-suspenders: also ensure the enrollment exists, in
+      // case the activity hook is ever bypassed.
+      await studentEnrollmentService.ensureEnrollment({
+        userId,
+        courseId,
+        source: 'progress',
       });
     }
 
