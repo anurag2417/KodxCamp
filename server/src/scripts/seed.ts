@@ -11,17 +11,12 @@ import { achievementService } from '../services/achievement.service.js';
 
 // ─── Types ────────────────────────────────────────────────────────
 
-type CourseLanguage =
-  | 'html-css'
-  | 'javascript'
-  | 'python'
-  | 'ruby'
-  | 'java'
-  | 'sql';
+type CourseLanguage = 'html-css' | 'javascript' | 'python' | 'ruby' | 'java' | 'sql';
 
 interface RawTestCase {
   input: string;
   expectedOutput: string;
+  /** Display flag. Hides input/output from the student's test panel. */
   isHidden: boolean;
 }
 
@@ -232,6 +227,11 @@ const courses: CourseSeed[] = [
 ];
 
 // ─── DSA practice problems ────────────────────────────────────────
+//
+// Multi-language starters. Each problem declares `starterCode` for
+// every language the picker should offer. Test cases are stored with
+// plaintext expectedOutput; `isHidden` is a display flag that hides
+// the input/output from the student while they work.
 
 const problems = [
   {

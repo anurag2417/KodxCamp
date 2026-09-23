@@ -33,12 +33,9 @@ export interface ApiInstructorCourse {
 
 export interface ApiLessonTestCase {
   input: string;
-  // Present for visible tests. Absent for hidden tests where the server
-  // only stores a hash and cannot return plaintext.
-  expectedOutput?: string;
-  expectedOutputHash?: string;
+  expectedOutput: string;
+  /** Display flag. Hides input/output from the student's test panel. */
   isHidden: boolean;
-  canonicalization?: 'trim-trailing-newline' | 'trim-all' | 'exact';
 }
 
 export interface ApiInstructorLesson {
