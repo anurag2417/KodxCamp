@@ -1,8 +1,7 @@
-import { runJavaScriptHidden } from './jsRunner';
-import { runPythonHidden } from './pythonRunner';
+import { getAdapter } from './adapters';
 import type { CanonicalizationId } from '@kodxcamp/shared';
 
-export type OutputMode = 'return' | 'print';
+export type OutputMode = 'print' | 'return';
 
 export interface HiddenTestCase {
   id: string;
@@ -17,27 +16,53 @@ export interface HiddenTestOutcome {
 }
 
 export interface HiddenRunOptions {
-  functionName?: string;
-  outputMode?: OutputMode;
   timeoutMs?: number;
+  outputMode?: OutputMode;
+  functionName?: string;
   onProgress?: (outcome: HiddenTestOutcome, index: number) => void;
 }
 
+/**
+ * Run every hidden test case against the student's code.
+ *
+ * The adapter for the language hashes the output inside its own
+ * runtime boundary and returns only a boolean. Raw stdout never
+ * crosses back.
+ *
+ * For languages whose runtime is not isolated (SQL, HTML), the
+ * adapter returns `{ passed: false }` — fail closed.
+ */
 export async function runHiddenTests(
   language: string,
   code: string,
   tests: HiddenTestCase[],
   options: HiddenRunOptions = {}
 ): Promise<HiddenTestOutcome[]> {
-  const outcomes: HiddenTestOutcome[] = [];
+  const adapter = getAdapter(language);
   const timeoutMs = options.timeoutMs ?? 10000;
+
+  if (!adapter) {
+    return tests.map((t) => ({ id: t.id, passed: false }));
+  }
+
+  const outcomes: HiddenTestOutcome[] = [];
 
   for (let i = 0; i < tests.length; i++) {
     const test = tests[i];
-    const outcome = await runOneHidden(language, code, test, {
-      ...options,
-      timeoutMs,
-    });
+    const wrapped = wrapHiddenInput(language, code, test.input, options);
+
+    const result = await adapter.runHidden(
+      wrapped,
+      test.input,
+      test.expectedOutputHash,
+      test.canonicalization as CanonicalizationId,
+      { timeoutMs }
+    );
+
+    const outcome: HiddenTestOutcome = {
+      id: test.id,
+      passed: result.passed,
+    };
     outcomes.push(outcome);
     options.onProgress?.(outcome, i);
   }
@@ -45,40 +70,11 @@ export async function runHiddenTests(
   return outcomes;
 }
 
-async function runOneHidden(
-  language: string,
-  code: string,
-  test: HiddenTestCase,
-  options: HiddenRunOptions
-): Promise<HiddenTestOutcome> {
-  const wrapped = wrapHiddenInput(language, code, test.input, options);
-
-  if (
-    language === 'javascript' ||
-    language === 'typescript' ||
-    language === 'dsa-javascript'
-  ) {
-    const result = await runJavaScriptHidden(
-      wrapped,
-      test.expectedOutputHash,
-      test.canonicalization,
-      { timeoutMs: options.timeoutMs ?? 10000 }
-    );
-    return { id: test.id, passed: result.passed };
-  }
-
-  if (language === 'python' || language === 'dsa-python') {
-    const result = await runPythonHidden(
-      wrapped,
-      test.expectedOutputHash,
-      test.canonicalization,
-      { timeoutMs: options.timeoutMs ?? 10000 }
-    );
-    return { id: test.id, passed: result.passed };
-  }
-
-  return { id: test.id, passed: false };
-}
+// ─── Wrapping ─────────────────────────────────────────────────────
+//
+// Mirrors `testHarness.ts`'s wrappers so a function that passes
+// visible tests produces the same stdout for hidden tests. Keep the
+// two files in sync if the wrapping rules change.
 
 function wrapHiddenInput(
   language: string,

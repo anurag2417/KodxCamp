@@ -1,53 +1,51 @@
-import type { RunResult, RunnerOptions } from '@/shared/runner/types';
-import { runJavaScript } from '@/shared/runner/jsRunner';
-import { runPython } from '@/shared/runner/pythonRunner';
-import { runSql } from '@/shared/runner/sqlRunner';
-import { runHtml } from '@/shared/runner/htmlRunner';
+import type { RunResult, RunnerOptions } from './types';
+import { getAdapter } from './adapters';
 
-export type { RunResult, RunnerOptions, Verdict } from '@/shared/runner/types';
+export type { RunResult, RunnerOptions, Verdict } from './types';
 export {
   runHiddenTests,
   type HiddenTestCase,
   type HiddenTestOutcome,
   type HiddenRunOptions,
-} from '@/shared/runner/hiddenHarness';
+} from './hiddenHarness';
+export { getAdapter, listAdapters } from './adapters';
+export type { RunnerAdapter } from './adapters';
 
+/**
+ * Run code in the appropriate in-browser runtime.
+ *
+ * The caller is responsible for wrapping the code (injecting input,
+ * adding a driver that calls the student's function) before passing it
+ * here. `runTests` in `testHarness.ts` does this for visible tests;
+ * `runHiddenTests` in `hiddenHarness.ts` does it for hidden tests.
+ *
+ * Languages supported today:
+ *   javascript, dsa-javascript, typescript
+ *   python, dsa-python
+ *   sql
+ *   html-css, tailwind, react
+ *
+ * Java and Ruby are in progress.
+ */
 export async function runCode(
   language: string,
   code: string,
   opts: RunnerOptions = {}
 ): Promise<RunResult> {
-  switch (language) {
-    case 'javascript':
-    case 'dsa-javascript':
-      return runJavaScript(code, opts);
+  const adapter = getAdapter(language);
 
-    case 'typescript': {
-      const stripped = code
-        .replace(/:\s*[A-Za-z_][A-Za-z0-9_<>[\]|&\s]*(?=[=;,)\n])/g, '')
-        .replace(/\bas\s+[A-Za-z_][A-Za-z0-9_<>[\]|&\s]*/g, '');
-      return runJavaScript(stripped, opts);
-    }
-
-    case 'python':
-    case 'dsa-python':
-      return runPython(code, opts);
-
-    case 'sql':
-      return runSql(code, opts);
-
-    case 'html-css':
-    case 'tailwind':
-    case 'react':
-      return runHtml(code);
-
-    default:
-      return {
-        ok: false,
-        stdout: '',
-        stderr: `Language "${language}" is not supported.`,
-        verdict: 'unsupported',
-        runtimeMs: 0,
-      };
+  if (!adapter) {
+    return {
+      ok: false,
+      stdout: '',
+      stderr: `Language "${language}" is not supported.`,
+      verdict: 'unsupported',
+      runtimeMs: 0,
+    };
   }
+
+  return adapter.run(code, '', {
+    timeoutMs: opts.timeoutMs ?? 10000,
+    stdin: opts.stdin,
+  });
 }
