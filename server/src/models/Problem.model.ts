@@ -2,17 +2,12 @@ import mongoose, { Schema, type Document } from 'mongoose';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type ProblemOutputMode = 'return' | 'print';
-type CanonicalizationId =
-  | 'trim-trailing-newline'
-  | 'trim-all'
-  | 'exact';
 
 export interface ProblemTestCase {
   input: string;
+  expectedOutput: string;
+  /** Display flag. Hides input/output from the student's test panel. */
   isHidden: boolean;
-  expectedOutput?: string;
-  expectedOutputHash?: string;
-  canonicalization?: CanonicalizationId;
 }
 
 export interface ProblemDocument extends Document {
@@ -31,62 +26,11 @@ export interface ProblemDocument extends Document {
 const testCaseSchema = new Schema<ProblemTestCase>(
   {
     input: { type: String, default: '' },
+    expectedOutput: { type: String, required: true },
     isHidden: { type: Boolean, default: false, required: true },
-
-    // Visible tests only
-    expectedOutput: { type: String, required: false },
-
-    // Hidden tests only
-    expectedOutputHash: {
-      type: String,
-      required: false,
-      match: /^[0-9a-f]{64}$/,
-    },
-    canonicalization: {
-      type: String,
-      enum: ['trim-trailing-newline', 'trim-all', 'exact'],
-      default: 'trim-trailing-newline',
-    },
   },
   { _id: false }
 );
-
-// Enforce the visible/hidden invariant before save. We use a sync
-// validator here rather than a pre('validate') hook so the error
-// surfaces through Mongoose's normal ValidationError path (which the
-// global error handler already converts into a clean 400).
-testCaseSchema.pre('validate', function (next) {
-  const tc = this as unknown as ProblemTestCase;
-
-  if (tc.isHidden) {
-    if (!tc.expectedOutputHash) {
-      return next(
-        new Error('Hidden test case requires expectedOutputHash')
-      );
-    }
-    if (tc.expectedOutput) {
-      return next(
-        new Error(
-          'Hidden test case must not store plaintext expectedOutput'
-        )
-      );
-    }
-  } else {
-    if (!tc.expectedOutput) {
-      return next(
-        new Error('Visible test case requires expectedOutput')
-      );
-    }
-    if (tc.expectedOutputHash) {
-      return next(
-        new Error(
-          'Visible test case must not store expectedOutputHash'
-        )
-      );
-    }
-  }
-  next();
-});
 
 const problemSchema = new Schema<ProblemDocument>(
   {

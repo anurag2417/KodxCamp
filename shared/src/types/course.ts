@@ -1,18 +1,3 @@
-import type { CanonicalizationId } from './problem';
-
-/**
- * Every language KodxCamp can execute in the browser.
- *
- * When adding a language, update this list AND:
- *   - server/src/models/Course.model.ts   (Mongoose enum)
- *   - server/src/models/Lesson.model.ts   (Mongoose enum)
- *   - server/src/services/bulk.service.ts (Zod enum)
- *   - client/src/shared/runner/adapters/  (a new RunnerAdapter)
- *
- * Centralizing this constant would let the Mongoose and Zod schemas
- * reference it directly. Deferred to a future cleanup; for now the
- * list is duplicated and must be kept in sync manually.
- */
 export const COURSE_LANGUAGES = [
   'html-css',
   'javascript',
@@ -38,12 +23,14 @@ export interface ICourseTeamMember {
   addedBy: string;
 }
 
+/**
+ * Lesson test case. Same semantics as `IProblemTestCase`:
+ * `expectedOutput` is plaintext, `isHidden` is a display flag only.
+ */
 export interface ITestCase {
   input: string;
+  expectedOutput: string;
   isHidden: boolean;
-  expectedOutput?: string;
-  expectedOutputHash?: string;
-  canonicalization?: CanonicalizationId;
 }
 
 export interface ILesson {

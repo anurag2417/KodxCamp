@@ -1,22 +1,9 @@
-import crypto from 'node:crypto';
 import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { Progress } from '../models/Progress.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { permissions } from './permissions.service.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
-
-type CanonicalizationId = 'trim-trailing-newline';
-
-function canonicalize(
-  value: string,
-  mode: CanonicalizationId
-): string {
-  if (mode === 'trim-trailing-newline') {
-    return value.replace(/\r?\n$/, '');
-  }
-  return value;
-}
 
 interface CourseInput {
   title: string;
@@ -28,10 +15,8 @@ interface CourseInput {
 
 interface TestCaseInput {
   input: string;
-  isHidden: boolean;
-  expectedOutput?: string;
-  expectedOutputHash?: string;
-  canonicalization?: CanonicalizationId;
+  expectedOutput: string;
+  isHidden?: boolean;
 }
 
 interface LessonInput {
@@ -52,55 +37,17 @@ function getUser(req: AuthRequest) {
   return { _id: u._id.toString(), role: u.role as string };
 }
 
-function hashExpectedOutput(
-  plaintext: string,
-  canonicalization: CanonicalizationId = 'trim-trailing-newline'
-): string {
-  const canon = canonicalize(plaintext, canonicalization);
-  return crypto.createHash('sha256').update(canon).digest('hex');
-}
-
-function normalizeTestCase(
-  tc: TestCaseInput,
-  index: number
-): {
-  input: string;
-  isHidden: boolean;
-  expectedOutput?: string;
-  expectedOutputHash?: string;
-  canonicalization?: CanonicalizationId;
-} {
-  const canon = tc.canonicalization ?? 'trim-trailing-newline';
-
-  if (tc.isHidden) {
-    let hash = tc.expectedOutputHash;
-    if (!hash && tc.expectedOutput) {
-      hash = hashExpectedOutput(tc.expectedOutput, canon);
-    }
-    if (!hash) {
-      throw new ApiError(
-        400,
-        `Test case #${index + 1}: hidden tests require expectedOutput (to hash) or expectedOutputHash`
-      );
-    }
-    return {
-      input: tc.input ?? '',
-      isHidden: true,
-      expectedOutputHash: hash,
-      canonicalization: canon,
-    };
-  }
-
+function normalizeTestCase(tc: TestCaseInput, index: number) {
   if (!tc.expectedOutput) {
     throw new ApiError(
       400,
-      `Test case #${index + 1}: visible tests require expectedOutput`
+      `Test case #${index + 1}: expectedOutput is required`
     );
   }
   return {
     input: tc.input ?? '',
-    isHidden: false,
     expectedOutput: tc.expectedOutput,
+    isHidden: Boolean(tc.isHidden),
   };
 }
 
@@ -145,44 +92,16 @@ export const courseService = {
       .lean();
     if (!lesson) throw new ApiError(404, 'Lesson not found');
 
-    // Split test cases into visible and hidden.
-    const visibleTestCases: {
-      index: number;
-      input: string;
-      expectedOutput: string;
-    }[] = [];
-    const hiddenTestCases: {
-      id: string;
-      input: string;
-      expectedOutputHash: string;
-      canonicalization: CanonicalizationId;
-    }[] = [];
+    // Return all test cases with plaintext expected output and a
+    // display flag. The client decides whether to show each one.
+    const testCases = (lesson.testCases ?? []).map((tc, i) => ({
+      index: i,
+      input: tc.input ?? '',
+      expectedOutput: tc.expectedOutput ?? '',
+      isHidden: Boolean(tc.isHidden),
+    }));
 
-    (lesson.testCases ?? []).forEach((tc, i) => {
-      if (tc.isHidden) {
-        if (!tc.expectedOutputHash) return;
-        hiddenTestCases.push({
-          id: `${lesson._id}:${i}`,
-          input: tc.input ?? '',
-          expectedOutputHash: tc.expectedOutputHash,
-          canonicalization:
-            (tc.canonicalization as CanonicalizationId) ??
-            'trim-trailing-newline',
-        });
-      } else {
-        visibleTestCases.push({
-          index: visibleTestCases.length,
-          input: tc.input ?? '',
-          expectedOutput: tc.expectedOutput ?? '',
-        });
-      }
-    });
-
-    const safeLesson = {
-      ...lesson,
-      testCases: visibleTestCases,
-      hiddenTestCases,
-    };
+    const safeLesson = { ...lesson, testCases };
 
     const safeCourse = {
       _id: course._id,
@@ -452,8 +371,6 @@ export const courseService = {
 
     return { ok: true };
   },
-
-  // ─── Team management (unchanged) ───────────────────────────────
 
   async listTeam(req: AuthRequest, slug: string) {
     const user = getUser(req);

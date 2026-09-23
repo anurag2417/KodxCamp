@@ -1,35 +1,11 @@
-import crypto from 'node:crypto';
 import { Problem } from '../models/Problem.model.js';
 import { judgeService } from './judge.service.js';
 import { ApiError } from '../utils/ApiError.js';
 
-type CanonicalizationId =
-  | 'exact'
-  | 'trim-whitespace'
-  | 'trim-trailing-newline';
-
-function canonicalize(plaintext: string, mode: CanonicalizationId): string {
-  switch (mode) {
-    case 'exact':
-      return plaintext;
-    case 'trim-whitespace':
-      return plaintext.trim();
-    case 'trim-trailing-newline':
-    default:
-      return plaintext.replace(/\r?\n$/, '');
-  }
-}
-
 interface TestCaseInput {
   input: string;
-  isHidden: boolean;
-  // Visible tests: plaintext expected output.
-  expectedOutput?: string;
-  // Hidden tests: either a pre-computed hash (from bulk import) OR
-  // plaintext expected output (from the admin editor, which the server
-  // hashes below). We accept both to keep the API flexible.
-  expectedOutputHash?: string;
-  canonicalization?: CanonicalizationId;
+  expectedOutput: string;
+  isHidden?: boolean;
 }
 
 interface ProblemInput {
@@ -53,65 +29,17 @@ async function nextProblemNumber(): Promise<number> {
   return (last?.number ?? 0) + 1;
 }
 
-export function hashExpectedOutput(
-  plaintext: string,
-  canonicalization: CanonicalizationId = 'trim-trailing-newline'
-): string {
-  const canon = canonicalize(plaintext, canonicalization);
-  return crypto.createHash('sha256').update(canon).digest('hex');
-}
-
-/**
- * Normalize a test case before saving.
- *
- *  - Visible → store plaintext `expectedOutput` as given.
- *  - Hidden → store `expectedOutputHash`. If the caller sent a hash,
- *    keep it. If the caller sent plaintext, hash it now.
- */
-function normalizeTestCase(
-  tc: TestCaseInput,
-  index: number
-): {
-  input: string;
-  isHidden: boolean;
-  expectedOutput?: string;
-  expectedOutputHash?: string;
-  canonicalization?: CanonicalizationId;
-} {
-  const canon = tc.canonicalization ?? 'trim-trailing-newline';
-
-  if (tc.isHidden) {
-    let hash = tc.expectedOutputHash;
-
-    if (!hash && tc.expectedOutput) {
-      hash = hashExpectedOutput(tc.expectedOutput, canon);
-    }
-
-    if (!hash) {
-      throw new ApiError(
-        400,
-        `Test case #${index + 1}: hidden tests require expectedOutput (to hash) or expectedOutputHash`
-      );
-    }
-
-    return {
-      input: tc.input ?? '',
-      isHidden: true,
-      expectedOutputHash: hash,
-      canonicalization: canon,
-    };
-  }
-
+function normalizeTestCase(tc: TestCaseInput, index: number) {
   if (!tc.expectedOutput) {
     throw new ApiError(
       400,
-      `Test case #${index + 1}: visible tests require expectedOutput`
+      `Test case #${index + 1}: expectedOutput is required`
     );
   }
   return {
     input: tc.input ?? '',
-    isHidden: false,
     expectedOutput: tc.expectedOutput,
+    isHidden: Boolean(tc.isHidden),
   };
 }
 
@@ -134,37 +62,12 @@ export const problemService = {
     const problem = await Problem.findOne({ slug }).lean();
     if (!problem) throw new ApiError(404, 'Problem not found');
 
-    const visibleTestCases: {
-      index: number;
-      input: string;
-      expectedOutput: string;
-    }[] = [];
-    const hiddenTestCases: {
-      id: string;
-      input: string;
-      expectedOutputHash: string;
-      canonicalization: CanonicalizationId;
-    }[] = [];
-
-    problem.testCases.forEach((tc, i) => {
-      if (tc.isHidden) {
-        if (!tc.expectedOutputHash) return;
-        hiddenTestCases.push({
-          id: `${problem._id}:${i}`,
-          input: tc.input ?? '',
-          expectedOutputHash: tc.expectedOutputHash,
-          canonicalization:
-            (tc.canonicalization as CanonicalizationId) ??
-            'trim-trailing-newline',
-        });
-      } else {
-        visibleTestCases.push({
-          index: visibleTestCases.length,
-          input: tc.input ?? '',
-          expectedOutput: tc.expectedOutput ?? '',
-        });
-      }
-    });
+    const testCases = problem.testCases.map((tc, i) => ({
+      index: i,
+      input: tc.input ?? '',
+      expectedOutput: tc.expectedOutput ?? '',
+      isHidden: Boolean(tc.isHidden),
+    }));
 
     const solvedIds = userId ? await judgeService.getSolvedProblemIds(userId) : [];
 
@@ -179,8 +82,7 @@ export const problemService = {
       functionName: problem.functionName ?? 'solve',
       outputMode: problem.outputMode ?? 'print',
       starterCode: problem.starterCode,
-      testCases: visibleTestCases,
-      hiddenTestCases,
+      testCases,
       solved: solvedIds.includes(problem._id.toString()),
     };
   },
