@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
@@ -8,15 +8,21 @@ import { progressApi, type ApiProgress } from '@/features/progress/api';
 import { Button } from '@/shared/components/ui/Button';
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { CodeEditor } from '@/shared/components/editor/CodeEditor';
-import { Console } from '@/shared/components/editor/Console';
 import { RunBar } from '@/shared/components/editor/RunBar';
 import { LessonSidebar } from '@/features/courses/components/LessonSidebar';
 import {
   runTests,
   combineSummaries,
   type AnyTestResult,
+  type TestRunSummary,
+  type VisibleTestCase,
 } from '@/shared/runner/testHarness';
-import { runHiddenTests } from '@/shared/runner/hiddenHarness';
+import {
+  runHiddenTests,
+  type HiddenTestCase,
+  type HiddenTestOutcome,
+} from '@/shared/runner/hiddenHarness';
+import { TestPanel } from '@/features/problems/components/TestPanel';
 
 export const Lesson: React.FC = () => {
   const { courseSlug, lessonSlug } = useParams<{
@@ -27,52 +33,63 @@ export const Lesson: React.FC = () => {
   const user = useAuthStore((s) => s.user);
 
   const [code, setCode] = useState('');
-  const [output, setOutput] = useState('');
-  const [status, setStatus] = useState<'idle' | 'running' | 'success' | 'error'>(
-    'idle'
-  );
+  const [results, setResults] = useState<AnyTestResult[]>();
+  const [accepted, setAccepted] = useState(false);
+  const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
   const [progress, setProgress] = useState<ApiProgress | null>(null);
   const [completing, setCompleting] = useState(false);
-  const [testsPassed, setTestsPassed] = useState<boolean | null>(null);
   const [running, setRunning] = useState(false);
 
   // Initialize code from lesson starter
   useEffect(() => {
     if (data?.lesson) {
       setCode(data.lesson.starterCode || '');
-      setOutput('');
-      setStatus('idle');
-      setTestsPassed(null);
+      setResults(undefined);
+      setAccepted(false);
     }
-  }, [data?.lesson]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.lesson?._id]);
 
   // Load progress
   useEffect(() => {
     if (!user || !data?.course) return;
-    progressApi.getForCourse(data.course._id).then(setProgress).catch(() => { });
-  }, [user, data?.course]);
+    progressApi
+      .getForCourse(data.course._id)
+      .then(setProgress)
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, data?.course?._id]);
+
+  const visibleTestCases = useMemo(
+    () => data?.lesson.testCases ?? [],
+    [data?.lesson]
+  );
+  const hiddenTestCases = useMemo(
+    () => data?.lesson.hiddenTestCases ?? [],
+    [data?.lesson]
+  );
+  const hasTests = visibleTestCases.length > 0 || hiddenTestCases.length > 0;
 
   const handleRunCode = async () => {
     if (!data) return;
     setRunning(true);
-    setStatus('running');
-    setOutput('Running tests...');
-    setTestsPassed(null);
+    setResults(undefined);
+    setAccepted(false);
 
-    const visibleCases = (data.lesson.testCases ?? []).map((tc) => ({
+    const visibleCases: VisibleTestCase[] = visibleTestCases.map((tc) => ({
       index: tc.index,
       input: tc.input,
       expectedOutput: tc.expectedOutput,
     }));
 
-    const outputMode = data.lesson.outputMode ?? 'print';
-    const functionName = data.lesson.functionName ?? 'solve';
-
-    const visibleSummary = await runTests(
+    const visibleSummary: TestRunSummary = await runTests(
       data.lesson.language,
       code,
       visibleCases,
-      { functionName, outputMode }
+      {
+        functionName: data.lesson.functionName ?? 'solve',
+        outputMode: data.lesson.outputMode ?? 'print',
+      }
     );
 
     let hiddenSummary: {
@@ -80,14 +97,26 @@ export const Lesson: React.FC = () => {
       totalRuntimeMs: number;
     } = { results: [], totalRuntimeMs: 0 };
 
-    const hiddenCases = data.lesson.hiddenTestCases ?? [];
-    if (hiddenCases.length > 0) {
-      const outcomes = await runHiddenTests(
+    if (hiddenTestCases.length > 0) {
+      const hiddenInputs: HiddenTestCase[] = hiddenTestCases.map((tc) => ({
+        id: tc.id,
+        input: tc.input,
+        expectedOutputHash: tc.expectedOutputHash,
+        canonicalization: tc.canonicalization,
+      }));
+
+      const started = performance.now();
+      const outcomes: HiddenTestOutcome[] = await runHiddenTests(
         data.lesson.language,
         code,
-        hiddenCases,
-        { functionName, outputMode, timeoutMs: 10000 }
+        hiddenInputs,
+        {
+          functionName: data.lesson.functionName ?? 'solve',
+          outputMode: data.lesson.outputMode ?? 'print',
+          timeoutMs: 10000,
+        }
       );
+
       hiddenSummary = {
         results: outcomes.map((o) => ({
           kind: 'hidden' as const,
@@ -95,42 +124,19 @@ export const Lesson: React.FC = () => {
           passed: o.passed,
           runtimeMs: 0,
         })),
-        totalRuntimeMs: 0,
+        totalRuntimeMs: Math.round(performance.now() - started),
       };
     }
 
     const combined = combineSummaries(visibleSummary, hiddenSummary);
-
-    const summaryLine = combined.allPassed
-      ? `✅ All ${combined.totalTests} test${combined.totalTests === 1 ? '' : 's'} passed (${combined.totalRuntimeMs}ms).`
-      : `❌ ${combined.passedTests}/${combined.totalTests} tests passed.`;
-
-    const failures = combined.results
-      .filter((r): r is Extract<typeof r, { kind: 'visible' }> =>
-        r.kind === 'visible' && !r.passed
-      )
-      .slice(0, 3)
-      .map((r) => {
-        const detail = r.stderr
-          ? `\n  Error: ${r.stderr}`
-          : r.actualOutput !== undefined
-            ? `\n  Got: ${r.actualOutput || '(no output)'}`
-            : '';
-        return `Test #${r.index + 1} — Failed${detail}`;
-      })
-      .join('\n');
-
-    setOutput(summaryLine + (failures ? `\n\n${failures}` : ''));
-    setStatus(combined.allPassed ? 'success' : 'error');
-    setTestsPassed(combined.allPassed);
+    setResults(combined.results);
+    setAccepted(combined.allPassed);
+    setTotalRuntimeMs(combined.totalRuntimeMs);
     setRunning(false);
   };
 
   const markComplete = async () => {
-    if (!user) {
-      setOutput('Please log in to save your progress.');
-      return;
-    }
+    if (!user) return;
     if (!data?.course || !data?.lesson) return;
     setCompleting(true);
     try {
@@ -168,12 +174,10 @@ export const Lesson: React.FC = () => {
 
   const { course, lesson } = data;
   const isCompleted = progress?.completedLessons.includes(lesson._id) ?? false;
-  const hasTests = (lesson.testCases ?? []).length > 0;
-  const canComplete = !hasTests || testsPassed === true;
+  const canComplete = !hasTests || accepted;
 
   return (
     <div className="flex h-[calc(100vh-64px)] w-full">
-      {/* Sidebar of lessons */}
       <LessonSidebar
         courseSlug={course.slug}
         lessons={(course as typeof course & { lessons: typeof lesson[] }).lessons}
@@ -181,7 +185,6 @@ export const Lesson: React.FC = () => {
         currentLessonId={lesson._id}
       />
 
-      {/* Main workspace */}
       <PanelGroup direction="horizontal" className="h-full flex-1">
         {/* Instructions */}
         <Panel defaultSize={35} minSize={20}>
@@ -225,13 +228,13 @@ export const Lesson: React.FC = () => {
             )}
 
             {/* Visible test cases */}
-            {hasTests && (
+            {visibleTestCases.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-sm font-semibold text-text-primary">
-                  Test Cases
+                  Visible Test Cases
                 </h3>
                 <div className="mt-2 flex flex-col gap-2">
-                  {lesson.testCases.map((tc, i) => (
+                  {visibleTestCases.map((tc, i) => (
                     <div
                       key={i}
                       className="rounded-lg border border-border bg-surface p-3 text-xs"
@@ -254,17 +257,20 @@ export const Lesson: React.FC = () => {
               </div>
             )}
 
+            {hiddenTestCases.length > 0 && (
+              <p className="mt-4 rounded-lg border border-border bg-surface-secondary p-3 text-xs text-text-muted">
+                🔒 This lesson also has {hiddenTestCases.length} hidden test
+                {hiddenTestCases.length === 1 ? '' : 's'}. They run when you
+                click Run, but their inputs and expected outputs are not shown.
+              </p>
+            )}
+
             {/* Complete button */}
             <div className="mt-6">
               <Button
                 variant={isCompleted ? 'secondary' : 'primary'}
                 onClick={markComplete}
-                disabled={
-                  completing ||
-                  isCompleted ||
-                  !user ||
-                  (hasTests && !isCompleted && testsPassed !== true)
-                }
+                disabled={completing || isCompleted || !user || !canComplete}
               >
                 {isCompleted ? (
                   <>
@@ -278,9 +284,9 @@ export const Lesson: React.FC = () => {
                   </>
                 )}
               </Button>
-              {hasTests && !isCompleted && testsPassed !== true && (
+              {hasTests && !isCompleted && !accepted && (
                 <p className="mt-2 text-xs text-text-muted">
-                  Run the code and pass the tests to unlock this.
+                  Run the code and pass all tests to unlock this.
                 </p>
               )}
               {!user && (
@@ -304,7 +310,7 @@ export const Lesson: React.FC = () => {
 
         <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
 
-        {/* Editor + Console */}
+        {/* Editor + TestPanel */}
         <Panel defaultSize={65}>
           <PanelGroup direction="vertical">
             <Panel defaultSize={65}>
@@ -331,7 +337,14 @@ export const Lesson: React.FC = () => {
             <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-brand-500" />
 
             <Panel defaultSize={35}>
-              <Console output={output} status={status} />
+              <TestPanel
+                testCases={visibleTestCases}
+                hiddenCount={hiddenTestCases.length}
+                results={results}
+                running={running}
+                accepted={accepted}
+                totalRuntimeMs={totalRuntimeMs}
+              />
             </Panel>
           </PanelGroup>
         </Panel>

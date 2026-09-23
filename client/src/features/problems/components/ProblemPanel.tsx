@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Lock } from 'lucide-react';
 import { DifficultyBadge } from '@/features/problems/components/DifficultyBadge';
 import { cn } from '@/shared/lib/utils';
 import type { ApiProblemFull, ApiSubmission } from '@/features/problems/api';
@@ -13,10 +14,10 @@ type Tab = 'description' | 'submissions';
 
 export const ProblemPanel: React.FC<Props> = ({ problem, submissions }) => {
   const [tab, setTab] = useState<Tab>('description');
+  const hiddenCount = problem.hiddenTestCases?.length ?? 0;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Tabs */}
       <div className="flex shrink-0 gap-1 border-b border-border bg-surface px-2">
         {(['description', 'submissions'] as const).map((t) => (
           <button
@@ -37,10 +38,9 @@ export const ProblemPanel: React.FC<Props> = ({ problem, submissions }) => {
         ))}
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto p-5">
         {tab === 'description' ? (
-          <DescriptionView problem={problem} />
+          <DescriptionView problem={problem} hiddenCount={hiddenCount} />
         ) : (
           <SubmissionsList submissions={submissions} />
         )}
@@ -49,7 +49,10 @@ export const ProblemPanel: React.FC<Props> = ({ problem, submissions }) => {
   );
 };
 
-const DescriptionView: React.FC<{ problem: ApiProblemFull }> = ({ problem }) => (
+const DescriptionView: React.FC<{
+  problem: ApiProblemFull;
+  hiddenCount: number;
+}> = ({ problem, hiddenCount }) => (
   <>
     <h1 className="text-xl font-bold text-text-primary">
       <span className="text-text-muted">{problem.number}.</span> {problem.title}
@@ -60,6 +63,12 @@ const DescriptionView: React.FC<{ problem: ApiProblemFull }> = ({ problem }) => 
       {problem.solved && (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-success)]">
           ✓ Solved
+        </span>
+      )}
+      {hiddenCount > 0 && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2.5 py-0.5 text-xs font-medium text-brand-500">
+          <Lock size={10} />
+          {hiddenCount} hidden test{hiddenCount === 1 ? '' : 's'}
         </span>
       )}
     </div>
@@ -92,6 +101,12 @@ const DescriptionView: React.FC<{ problem: ApiProblemFull }> = ({ problem }) => 
           ? '— return the result. The platform compares your return value against the expected output.'
           : '— print the result. The platform compares your stdout against the expected output.'}
       </p>
+      {hiddenCount > 0 && (
+        <p className="mt-3 text-text-muted">
+          {hiddenCount} hidden test{hiddenCount === 1 ? '' : 's'} will run when
+          you submit. Their inputs and expected outputs are not shown.
+        </p>
+      )}
     </div>
   </>
 );
