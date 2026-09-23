@@ -1,15 +1,33 @@
 import type { CanonicalizationId } from './problem';
 
-export type CourseLanguage =
-  | 'html-css'
-  | 'javascript'
-  | 'typescript'
-  | 'python'
-  | 'sql'
-  | 'react'
-  | 'tailwind'
-  | 'dsa-python'
-  | 'dsa-javascript';
+/**
+ * Every language KodxCamp can execute in the browser.
+ *
+ * When adding a language, update this list AND:
+ *   - server/src/models/Course.model.ts   (Mongoose enum)
+ *   - server/src/models/Lesson.model.ts   (Mongoose enum)
+ *   - server/src/services/bulk.service.ts (Zod enum)
+ *   - client/src/shared/runner/adapters/  (a new RunnerAdapter)
+ *
+ * Centralizing this constant would let the Mongoose and Zod schemas
+ * reference it directly. Deferred to a future cleanup; for now the
+ * list is duplicated and must be kept in sync manually.
+ */
+export const COURSE_LANGUAGES = [
+  'html-css',
+  'javascript',
+  'typescript',
+  'python',
+  'ruby',
+  'java',
+  'sql',
+  'react',
+  'tailwind',
+  'dsa-python',
+  'dsa-javascript',
+] as const;
+
+export type CourseLanguage = (typeof COURSE_LANGUAGES)[number];
 
 export type CourseTeamRole = 'lead' | 'author' | 'reviewer' | 'ta' | 'viewer';
 

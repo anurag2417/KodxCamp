@@ -1,9 +1,12 @@
 import mongoose, { Schema, type Document } from 'mongoose';
+
 type CourseLanguage =
   | 'html-css'
   | 'javascript'
   | 'typescript'
   | 'python'
+  | 'ruby'
+  | 'java'
   | 'sql'
   | 'react'
   | 'tailwind'
@@ -55,6 +58,8 @@ const courseSchema = new Schema<CourseDocument>(
         'javascript',
         'typescript',
         'python',
+        'ruby',
+        'java',
         'sql',
         'react',
         'tailwind',

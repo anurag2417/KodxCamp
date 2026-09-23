@@ -3,7 +3,7 @@ import { runCode, type RunResult } from '@/shared/runner';
 
 export type RunnerStatus = 'idle' | 'running' | 'success' | 'error';
 
-export function useRunner(defaultTimeoutMs = 5000) {
+export function useRunner(defaultTimeoutMs = 30000) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
   const [output, setOutput] = useState('');
@@ -18,9 +18,10 @@ export function useRunner(defaultTimeoutMs = 5000) {
       setOutput('Running...');
 
       try {
-        const r = await runCode(language, code, { timeoutMs: defaultTimeoutMs });
+        const r = await runCode(language, code, {
+          timeoutMs: defaultTimeoutMs,
+        });
 
-        // Ignore stale results
         if (myCallId !== callIdRef.current) return r;
 
         const combined =

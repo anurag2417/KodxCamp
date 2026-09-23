@@ -15,7 +15,7 @@ import {
   type HiddenTestCase,
   type HiddenTestOutcome,
 } from '@/shared/runner/hiddenHarness';
-import { preloadPython } from '@/shared/runner/pythonRunner';
+import { getAdapter } from '@/shared/runner/adapters';
 import { problemsApi, type ApiSubmission } from '@/features/problems/api';
 import { useAuthStore } from '@/shared/store/auth.store';
 import { Spinner } from '@/shared/components/ui/Spinner';
@@ -27,8 +27,50 @@ import { EditorToolbar } from '@/features/problems/components/EditorToolbar';
 import { AcceptanceOverlay } from '@/features/problems/components/AcceptanceOverlay';
 import { useToast } from '@/shared/hooks/useToast';
 
-const LANGUAGES = ['javascript', 'python'] as const;
-type Lang = (typeof LANGUAGES)[number];
+/**
+ * Human-readable labels for each language id.
+ * Used to populate the EditorToolbar.
+ */
+const LANGUAGE_LABELS: Record<string, string> = {
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  python: 'Python',
+  ruby: 'Ruby',
+  java: 'Java',
+  sql: 'SQL',
+  'html-css': 'HTML',
+  react: 'React',
+  tailwind: 'Tailwind',
+};
+
+/**
+ * Map a language id to the Monaco editor language identifier.
+ */
+function toMonacoLanguage(lang: string): string {
+  switch (lang) {
+    case 'html-css':
+    case 'tailwind':
+      return 'html';
+    case 'react':
+      return 'javascript';
+    case 'javascript':
+    case 'dsa-javascript':
+      return 'javascript';
+    case 'typescript':
+      return 'typescript';
+    case 'python':
+    case 'dsa-python':
+      return 'python';
+    case 'ruby':
+      return 'ruby';
+    case 'java':
+      return 'java';
+    case 'sql':
+      return 'sql';
+    default:
+      return 'plaintext';
+  }
+}
 
 export const ProblemDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -36,7 +78,16 @@ export const ProblemDetail: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const toast = useToast();
 
-  const [language, setLanguage] = useState<Lang>('javascript');
+  // Languages available for this problem — derived from starterCode keys.
+  const languages = useMemo(() => {
+    if (!problem?.starterCode) return [];
+    return Object.keys(problem.starterCode).map((id) => ({
+      id,
+      label: LANGUAGE_LABELS[id] ?? id,
+    }));
+  }, [problem?.starterCode]);
+
+  const [language, setLanguage] = useState<string>('javascript');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<AnyTestResult[]>();
@@ -44,15 +95,36 @@ export const ProblemDetail: React.FC = () => {
   const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
   const [showAcceptance, setShowAcceptance] = useState(false);
-  const [pyReady, setPyReady] = useState(false);
+  const [runtimeReady, setRuntimeReady] = useState(true);
 
+  // Pick the first available language once the problem loads.
   useEffect(() => {
-    void preloadPython().then(() => setPyReady(true));
-  }, []);
+    if (languages.length > 0 && !languages.some((l) => l.id === language)) {
+      setLanguage(languages[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [languages]);
+
+  // Warm the runtime for the current language when it changes.
+  useEffect(() => {
+    const adapter = getAdapter(language);
+    if (!adapter?.init) {
+      setRuntimeReady(true);
+      return;
+    }
+    setRuntimeReady(adapter.isReady());
+    let cancelled = false;
+    adapter.init().then(() => {
+      if (!cancelled) setRuntimeReady(true);
+    }).catch(() => {
+      if (!cancelled) setRuntimeReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
 
   // Reset editor state when the problem id or language changes.
-  // Keyed on `problem?._id` (not `problem`) so a background refetch
-  // doesn't wipe in-progress results.
   useEffect(() => {
     if (!problem) return;
     const starter = problem.starterCode?.[language] ?? '';
@@ -112,8 +184,6 @@ export const ProblemDetail: React.FC = () => {
       }
     );
 
-    // Hidden tests run only on Submit — not on Run — so the pass/fail
-    // vector isn't leaked during exploration.
     let hiddenSummary: {
       results: AnyTestResult[];
       totalRuntimeMs: number;
@@ -138,7 +208,7 @@ export const ProblemDetail: React.FC = () => {
         {
           functionName: problem.functionName,
           outputMode: problem.outputMode,
-          timeoutMs: 10000,
+          timeoutMs: 30000,
         }
       );
 
@@ -255,18 +325,18 @@ export const ProblemDetail: React.FC = () => {
               <Panel defaultSize={65} minSize={30}>
                 <div className="flex h-full flex-col bg-surface">
                   <EditorToolbar
-                    languages={LANGUAGES}
+                    languages={languages}
                     language={language}
-                    onLanguageChange={(l) => setLanguage(l as Lang)}
+                    onLanguageChange={setLanguage}
                     onRun={() => void execute(false)}
                     onSubmit={() => void execute(true)}
                     running={busy}
                     canSubmit={!!user}
-                    pyReady={pyReady}
+                    ready={runtimeReady}
                   />
                   <div className="flex-1">
                     <CodeEditor
-                      language={language}
+                      language={toMonacoLanguage(language)}
                       value={code}
                       onChange={setCode}
                     />

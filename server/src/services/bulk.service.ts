@@ -6,23 +6,21 @@ import { ApiError } from '../utils/ApiError.js';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 
+// ─── Zod schemas ──────────────────────────────────────────────────
+
 const canonicalizationSchema = z.enum([
   'trim-trailing-newline',
   'trim-all',
   'exact',
 ]);
 
-type Canonicalization = z.infer<typeof canonicalizationSchema>;
-
-function canonicalize(value: string, mode: Canonicalization): string {
-  switch (mode) {
-    case 'trim-all':
-      return value.trim();
-    case 'exact':
-      return value;
-    case 'trim-trailing-newline':
-      return value.replace(/(?:\r\n|\n|\r)+$/, '');
-  }
+function canonicalize(
+  value: string,
+  mode: 'trim-trailing-newline' | 'trim-all' | 'exact'
+): string {
+  if (mode === 'trim-all') return value.trim();
+  if (mode === 'trim-trailing-newline') return value.replace(/\r?\n$/, '');
+  return value;
 }
 
 const visibleTestCaseSchema = z
@@ -33,7 +31,7 @@ const visibleTestCaseSchema = z
   })
   .strict();
 
-const hiddenTestCaseSchema = z
+const hiddenWithHashSchema = z
   .object({
     input: z.string().default(''),
     isHidden: z.literal(true),
@@ -42,26 +40,29 @@ const hiddenTestCaseSchema = z
   })
   .strict();
 
-/**
- * Bulk import accepts EITHER the hashed form OR a plaintext
- * `expectedOutput` for hidden tests — because a bulk JSON file is a
- * convenient place to store the expected output in plaintext and let
- * the server hash it. The hash is computed here, in-process, and the
- * plaintext is discarded immediately.
- */
+const hiddenWithPlaintextSchema = z
+  .object({
+    input: z.string().default(''),
+    isHidden: z.literal(true),
+    expectedOutput: z.string().min(1),
+    canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
+  })
+  .strict();
+
 const testCaseSchema = z.union([
   visibleTestCaseSchema,
-  hiddenTestCaseSchema,
-  z
-    .object({
-      input: z.string().default(''),
-      isHidden: z.literal(true),
-      expectedOutput: z.string().min(1),
-      canonicalization: canonicalizationSchema.default('trim-trailing-newline'),
-    })
-    .strict(),
+  hiddenWithHashSchema,
+  hiddenWithPlaintextSchema,
 ]);
 
+/**
+ * Materialize a test case for saving.
+ *
+ * The bulk importer accepts plaintext `expectedOutput` for hidden
+ * tests — the hash is computed here, in-process, and the plaintext is
+ * discarded. This is safe because the bulk importer is admin-only and
+ * runs server-side; it does not go through the client at all.
+ */
 function materializeTestCase(raw: unknown) {
   const tc = raw as {
     input: string;
@@ -124,7 +125,15 @@ const problemSchema = z.object({
 
 const projectFileSchema = z.object({
   name: z.string().min(1),
-  language: z.enum(['html', 'css', 'javascript', 'jsx', 'sql', 'json', 'markdown']),
+  language: z.enum([
+    'html',
+    'css',
+    'javascript',
+    'jsx',
+    'sql',
+    'json',
+    'markdown',
+  ]),
   content: z.string().default(''),
   isEntry: z.boolean().optional(),
 });
@@ -134,7 +143,14 @@ const projectSchema = z.object({
   slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/),
   description: z.string().min(5).max(500),
   longDescription: z.string().default(''),
-  category: z.enum(['frontend', 'react', 'api', 'sql', 'dataviz', 'javascript']),
+  category: z.enum([
+    'frontend',
+    'react',
+    'api',
+    'sql',
+    'dataviz',
+    'javascript',
+  ]),
   difficulty: z.enum(['beginner', 'intermediate', 'advanced']),
   topics: z.array(z.string()).default([]),
   files: z.array(projectFileSchema).min(1),
@@ -165,6 +181,8 @@ const courseSchema = z.object({
     'javascript',
     'typescript',
     'python',
+    'ruby',
+    'java',
     'sql',
     'react',
     'tailwind',
@@ -173,6 +191,8 @@ const courseSchema = z.object({
   ]),
   lessons: z.array(lessonSchema).min(1),
 });
+
+// ─── Types ────────────────────────────────────────────────────────
 
 export type ImportMode = 'merge' | 'replace';
 
@@ -183,6 +203,8 @@ export interface ImportReport {
   failed: { index: number; slug?: string; error: string }[];
   totalProcessed: number;
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────
 
 function zipValidationErrors(
   items: unknown[],
@@ -214,9 +236,14 @@ function zipValidationErrors(
 }
 
 async function nextProblemNumber(): Promise<number> {
-  const last = await Problem.findOne().sort({ number: -1 }).select('number').lean();
+  const last = await Problem.findOne()
+    .sort({ number: -1 })
+    .select('number')
+    .lean();
   return (last?.number ?? 0) + 1;
 }
+
+// ─── Service ──────────────────────────────────────────────────────
 
 export const bulkService = {
   async importProblems(
@@ -277,7 +304,6 @@ export const bulkService = {
         number?: number;
         testCases: unknown[];
       };
-      // Materialize hidden test cases (hash plaintext if present).
       const materialized = {
         ...doc,
         testCases: (doc.testCases ?? []).map(materializeTestCase),

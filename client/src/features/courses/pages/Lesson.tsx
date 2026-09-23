@@ -56,7 +56,7 @@ export const Lesson: React.FC = () => {
     progressApi
       .getForCourse(data.course._id)
       .then(setProgress)
-      .catch(() => {});
+      .catch(() => { });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, data?.course?._id]);
 
@@ -388,6 +388,8 @@ function getFileName(lang: string): string {
     case 'python':
     case 'dsa-python':
       return 'main.py';
+    case 'ruby':
+      return 'main.rb';
     case 'sql':
       return 'query.sql';
     case 'react':

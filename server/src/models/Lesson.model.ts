@@ -5,6 +5,8 @@ type CourseLanguage =
   | 'javascript'
   | 'typescript'
   | 'python'
+  | 'ruby'
+  | 'java'
   | 'sql'
   | 'react'
   | 'tailwind'
@@ -12,10 +14,8 @@ type CourseLanguage =
   | 'dsa-javascript';
 
 type ProblemOutputMode = 'return' | 'print';
-type CanonicalizationId =
-  | 'trim-trailing-newline'
-  | 'trim-all'
-  | 'exact';
+
+type CanonicalizationId = 'trim-trailing-newline' | 'trim-all' | 'exact';
 
 interface LessonTestCase {
   input: string;
@@ -115,6 +115,8 @@ const lessonSchema = new Schema<LessonDocument>(
         'javascript',
         'typescript',
         'python',
+        'ruby',
+        'java',
         'sql',
         'react',
         'tailwind',
@@ -130,7 +132,4 @@ const lessonSchema = new Schema<LessonDocument>(
 
 lessonSchema.index({ courseId: 1, order: 1 });
 
-export const Lesson = mongoose.model<LessonDocument>(
-  'Lesson',
-  lessonSchema
-);
+export const Lesson = mongoose.model<LessonDocument>('Lesson', lessonSchema);

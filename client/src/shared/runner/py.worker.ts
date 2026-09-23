@@ -1,5 +1,9 @@
 /// <reference lib="webworker" />
 
+// Keep worker helpers module-scoped so they cannot collide with declarations
+// from other script files during TypeScript compilation.
+export {};
+
 /**
  * Python sandbox worker — runs Pyodide off the main thread.
  *
@@ -59,7 +63,7 @@ const PYODIDE_BASE = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/
 // module worker cannot import from a workspace package without extra
 // runtime fetches. Keep these rules in sync with the shared copy.
 
-function canonicalize(
+function canonicalizeOutput(
   output: string,
   id: CanonicalizationId = 'trim-trailing-newline'
 ): string {
@@ -245,7 +249,10 @@ self.onmessage = async (e: MessageEvent<InMsg>) => {
 
     let passed = false;
     if (result.ok) {
-      const canonical = canonicalize(result.stdout, e.data.canonicalization);
+      const canonical = canonicalizeOutput(
+        result.stdout,
+        e.data.canonicalization
+      );
       const actualHash = await sha256Hex(canonical);
       passed = actualHash === e.data.expectedOutputHash;
     }

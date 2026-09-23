@@ -16,9 +16,12 @@ async function getSql(): Promise<SqlJsStatic> {
     sqlPromise = (async () => {
       const mod = await import('sql.js');
       const initSqlJs = mod.default;
+
+      // The wasm file version must match the installed sql.js version.
+      // Check package.json for the pinned version, and keep them in sync.
       const SQL = await initSqlJs({
         locateFile: (file: string) =>
-          `https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/${file}`,
+          `https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/${file}`,
       });
       return SQL as unknown as SqlJsStatic;
     })();
@@ -26,11 +29,6 @@ async function getSql(): Promise<SqlJsStatic> {
   return sqlPromise;
 }
 
-/**
- * Runs SQL against a fresh in-memory SQLite DB.
- * The first chunk of the code is treated as "setup" — every statement that is
- * NOT a SELECT/PRAGMA is executed silently, then SELECTs are collected.
- */
 export async function runSql(
   code: string,
   _opts: RunnerOptions = {}
@@ -81,7 +79,6 @@ export async function runSql(
 }
 
 function splitSqlStatements(sql: string): string[] {
-  // Simple splitter — good enough for lessons. Doesn't handle `;` inside strings.
   const out: string[] = [];
   let buf = '';
   let inString: string | null = null;

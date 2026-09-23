@@ -12,6 +12,13 @@ import { achievementService } from '../services/achievement.service.js';
 
 // ─── Types ────────────────────────────────────────────────────────
 
+type CourseLanguage =
+  | 'html-css'
+  | 'javascript'
+  | 'python'
+  | 'ruby'
+  | 'java'
+  | 'sql';
 type CanonicalizationId = 'trim-trailing-newline';
 
 interface RawTestCase {
@@ -41,29 +48,19 @@ interface CourseSeed {
   title: string;
   slug: string;
   description: string;
-  language:
-  | 'html-css'
-  | 'javascript'
-  | 'typescript'
-  | 'python'
-  | 'sql'
-  | 'react'
-  | 'tailwind'
-  | 'dsa-python'
-  | 'dsa-javascript';
+  language: CourseLanguage;
   lessons: LessonSeed[];
 }
 
 // ─── Hidden-test helpers ──────────────────────────────────────────
 
-function canonicalize(
-  plaintext: string,
-  canon: CanonicalizationId
-): string {
-  if (canon === 'trim-trailing-newline') {
-    return plaintext.replace(/\r?\n$/, '');
+function canonicalize(value: string, canon: CanonicalizationId): string {
+  switch (canon) {
+    case 'trim-trailing-newline':
+      return value.replace(/\r?\n$/, '');
+    default:
+      return value;
   }
-  return plaintext;
 }
 
 function hashExpected(
@@ -150,34 +147,6 @@ const courses: CourseSeed[] = [
         solution: 'const a = 5;\nconst b = 10;\nconsole.log(a + b);',
         testCases: [{ input: '', expectedOutput: '15', isHidden: false }],
       },
-      {
-        title: 'Functions',
-        slug: 'functions',
-        content:
-          'Functions encapsulate reusable logic.\n\n**Task:** Write a function `double(n)` that returns `n * 2`. Print `double(21)`.',
-        starterCode:
-          'function double(n) {\n  // TODO\n}\n\nconsole.log(double(21));\n',
-        solution:
-          'function double(n) {\n  return n * 2;\n}\n\nconsole.log(double(21));',
-        testCases: [{ input: '', expectedOutput: '42', isHidden: false }],
-      },
-    ],
-  },
-  {
-    title: 'TypeScript for JavaScript Developers',
-    slug: 'typescript',
-    description: 'Add type safety to your JavaScript with TypeScript.',
-    language: 'typescript',
-    lessons: [
-      {
-        title: 'Type Annotations',
-        slug: 'type-annotations',
-        content:
-          'TypeScript lets you annotate variables.\n\n**Task:** Create a variable `name` of type `string`, set it to `"KodxCamp"`, and print it.',
-        starterCode:
-          '// Add type annotation\nconst name = "KodxCamp";\nconsole.log(name);\n',
-        solution: 'const name: string = "KodxCamp";\nconsole.log(name);',
-      },
     ],
   },
   {
@@ -210,6 +179,88 @@ const courses: CourseSeed[] = [
     ],
   },
   {
+    title: 'Ruby Fundamentals',
+    slug: 'ruby',
+    description:
+      'Learn programming basics with Ruby — clean syntax, powerful objects.',
+    language: 'ruby',
+    lessons: [
+      {
+        title: 'Hello, Ruby!',
+        slug: 'hello-ruby',
+        content:
+          'Ruby uses `puts` to print a line.\n\n**Task:** Print `Hello, KodxCamp!`',
+        starterCode: '# Write your puts below\n',
+        solution: 'puts "Hello, KodxCamp!"',
+        testCases: [
+          { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
+        ],
+      },
+      {
+        title: 'Variables & Arithmetic',
+        slug: 'variables-arithmetic-ruby',
+        content:
+          "Ruby variables don't need declarations.\n\n**Task:** Print the sum of 7 and 8.",
+        starterCode: 'a = 7\nb = 8\n# print the sum\n',
+        solution: 'a = 7\nb = 8\nputs a + b',
+        testCases: [{ input: '', expectedOutput: '15', isHidden: false }],
+      },
+    ],
+  },
+  {
+    title: 'Java Fundamentals',
+    slug: 'java',
+    description:
+      'Learn programming basics with Java — the language of enterprise.',
+    language: 'java',
+    lessons: [
+      {
+        title: 'Hello, Java!',
+        slug: 'hello-java',
+        content:
+          'Every Java program starts with a `main` method.\n\n**Task:** Print `Hello, KodxCamp!` to stdout.',
+        starterCode: `public class Main {
+  public static void main(String[] args) {
+    // Print Hello, KodxCamp! below
+  }
+}
+`,
+        solution: `public class Main {
+  public static void main(String[] args) {
+    System.out.println("Hello, KodxCamp!");
+  }
+}
+`,
+        testCases: [
+          { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
+        ],
+      },
+      {
+        title: 'Variables & Arithmetic',
+        slug: 'variables-arithmetic-java',
+        content:
+          'Java is statically typed. Declare variables with an explicit type.\n\n**Task:** Print the sum of 7 and 8.',
+        starterCode: `public class Main {
+  public static void main(String[] args) {
+    int a = 7;
+    int b = 8;
+    // Print the sum below
+  }
+}
+`,
+        solution: `public class Main {
+  public static void main(String[] args) {
+    int a = 7;
+    int b = 8;
+    System.out.println(a + b);
+  }
+}
+`,
+        testCases: [{ input: '', expectedOutput: '15', isHidden: false }],
+      },
+    ],
+  },
+  {
     title: 'SQL Fundamentals',
     slug: 'sql',
     description: 'Query relational databases with structured query language.',
@@ -225,165 +276,115 @@ const courses: CourseSeed[] = [
       },
     ],
   },
-  {
-    title: 'React Essentials',
-    slug: 'react',
-    description:
-      'Build modern UIs with React — components, props, and state.',
-    language: 'react',
-    lessons: [
-      {
-        title: 'Your First Component',
-        slug: 'first-component',
-        content:
-          'React components are functions that return JSX.\n\n**Task:** Create a `Hello` component that renders `<h1>Hello, React!</h1>`.',
-        starterCode:
-          'function Hello() {\n  return null; // TODO\n}\n\nexport default Hello;\n',
-        solution:
-          'function Hello() {\n  return <h1>Hello, React!</h1>;\n}\n\nexport default Hello;\n',
-      },
-    ],
-  },
-  {
-    title: 'Tailwind CSS',
-    slug: 'tailwind',
-    description: 'Style applications rapidly with utility-first CSS.',
-    language: 'tailwind',
-    lessons: [
-      {
-        title: 'Utility Classes',
-        slug: 'utility-classes',
-        content:
-          'Tailwind provides utility classes.\n\n**Task:** Create a `<div>` with classes `p-4 bg-green-500 text-white`.',
-        starterCode: '<!-- Use Tailwind classes -->\n<div>Hello</div>\n',
-        solution: '<div class="p-4 bg-green-500 text-white">Hello</div>',
-      },
-    ],
-  },
-  {
-    title: 'DSA with Python',
-    slug: 'dsa-python',
-    description: 'Master Data Structures & Algorithms using Python.',
-    language: 'dsa-python',
-    lessons: [
-      {
-        title: 'Reverse a List',
-        slug: 'reverse-list',
-        content:
-          'Reverse a list in-place or return a new reversed list.\n\n**Task:** Print the reversed list of `[1, 2, 3, 4]`.',
-        starterCode: 'nums = [1, 2, 3, 4]\n# print reversed\n',
-        solution: 'nums = [1, 2, 3, 4]\nprint(nums[::-1])',
-        testCases: [
-          { input: '', expectedOutput: '[4, 3, 2, 1]', isHidden: false },
-        ],
-      },
-    ],
-  },
-  {
-    title: 'DSA with JavaScript',
-    slug: 'dsa-javascript',
-    description: 'Master Data Structures & Algorithms using JavaScript.',
-    language: 'dsa-javascript',
-    lessons: [
-      {
-        title: 'Two Sum',
-        slug: 'two-sum',
-        content:
-          'Find two numbers that add to a target.\n\n**Task:** Print the indices `[0, 1]` for `nums = [2, 7]`, `target = 9`.',
-        starterCode:
-          'const nums = [2, 7];\nconst target = 9;\n// print the two indices\n',
-        solution: 'const nums = [2, 7];\nconst target = 9;\nconsole.log([0, 1]);',
-        testCases: [{ input: '', expectedOutput: '[0, 1]', isHidden: false }],
-      },
-    ],
-  },
 ];
 
 // ─── DSA practice problems ────────────────────────────────────────
+//
+// Multi-language starters. Each problem declares `starterCode` for
+// every language the picker should offer. Java problems use
+// `outputMode: 'print'` because Java writes to stdout via System.out.
 
 const problems = [
   {
-    title: 'Two Sum',
-    slug: 'two-sum',
+    number: 1,
+    title: 'Add Two Numbers',
+    slug: 'add-two-numbers',
     difficulty: 'easy' as const,
-    topics: ['array', 'hashmap'],
+    topics: ['math', 'basics'],
     statement:
-      'Given an array of integers `nums` and an integer `target`, return indices of the two numbers that add up to `target`.',
-    functionName: 'twoSum',
-    outputMode: 'return',
+      'Given two integers `a` and `b`, return their sum.\n\n**Example 1**\n```\nInput: 2, 3\nOutput: 5\n```\n\n**Example 2**\n```\nInput: -4, 7\nOutput: 3\n```',
+    functionName: 'addTwo',
+    outputMode: 'return' as const,
     starterCode: {
-      javascript: 'function twoSum(nums, target) {\n  // TODO\n}',
-      python: 'def two_sum(nums, target):\n    # TODO\n    pass',
+      javascript: 'function addTwo(a, b) {\n  // TODO: return a + b\n}',
+      python: 'def addTwo(a, b):\n    # TODO: return a + b\n    pass',
+      ruby: 'def add_two(a, b)\n  # TODO: return a + b\nend',
     },
     testCases: [
-      { input: '[[2,7,11,15], 9]', expectedOutput: '[0,1]', isHidden: false },
-      { input: '[[3,2,4], 6]', expectedOutput: '[1,2]', isHidden: false },
-      { input: '[[3,3], 6]', expectedOutput: '[0,1]', isHidden: false },
-      { input: '[[1,5,8,3], 11]', expectedOutput: '[2,3]', isHidden: true },
-      { input: '[[0,4,3,0], 0]', expectedOutput: '[0,3]', isHidden: true },
-      { input: '[[-1,-2,-3,-4,-5], -8]', expectedOutput: '[2,4]', isHidden: true },
-      { input: '[[10,20,30,40,50], 90]', expectedOutput: '[3,4]', isHidden: true },
-      { input: '[[1,2,3,4,5,6,7,8,9,10], 19]', expectedOutput: '[8,9]', isHidden: true },
-      { input: '[[100,200,300], 500]', expectedOutput: '[1,2]', isHidden: true },
-      { input: '[[7,3,9,5,1], 16]', expectedOutput: '[0,2]', isHidden: true },
+      { input: '[2, 3]', expectedOutput: '5', isHidden: false },
+      { input: '[0, 0]', expectedOutput: '0', isHidden: false },
+      { input: '[-1, 1]', expectedOutput: '0', isHidden: false },
+      { input: '[100, 200]', expectedOutput: '300', isHidden: true },
+      { input: '[-5, -7]', expectedOutput: '-12', isHidden: true },
+      { input: '[42, 58]', expectedOutput: '100', isHidden: true },
     ],
   },
   {
-    title: 'Reverse String',
-    slug: 'reverse-string',
+    number: 2,
+    title: 'Find Maximum',
+    slug: 'find-maximum',
     difficulty: 'easy' as const,
-    topics: ['string', 'two-pointers'],
+    topics: ['array', 'basics'],
     statement:
-      'Write a function that reverses a string. The input string is given as an array of characters.',
-    functionName: 'reverseString',
-    outputMode: 'return',
+      'Given an array of integers `nums`, return the largest value in the array. The array will always contain at least one element.\n\n**Example 1**\n```\nInput: [3, 1, 4, 1, 5, 9, 2, 6]\nOutput: 9\n```\n\n**Example 2**\n```\nInput: [-10, -3, -25, -8]\nOutput: -3\n```',
+    functionName: 'findMax',
+    outputMode: 'return' as const,
     starterCode: {
-      javascript: 'function reverseString(s) {\n  // TODO\n}',
-      python: 'def reverse_string(s):\n    # TODO\n    pass',
+      javascript:
+        'function findMax(nums) {\n  // TODO: return the largest number in nums\n}',
+      python:
+        'def findMax(nums):\n    # TODO: return the largest number in nums\n    pass',
+      ruby: 'def find_max(nums)\n  # TODO: return the largest number in nums\nend',
     },
     testCases: [
-      { input: '[["h","e","l","l","o"]]', expectedOutput: '["o","l","l","e","h"]', isHidden: false },
-      { input: '[["H","a","n","n","a","h"]]', expectedOutput: '["h","a","n","n","a","H"]', isHidden: false },
-      { input: '[["a"]]', expectedOutput: '["a"]', isHidden: false },
-      { input: '[["a","b"]]', expectedOutput: '["b","a"]', isHidden: true },
-      { input: '[["x","y","z"]]', expectedOutput: '["z","y","x"]', isHidden: true },
-      { input: '[[]]', expectedOutput: '[]', isHidden: true },
-      { input: '[["K","o","d","x"]]', expectedOutput: '["x","d","o","K"]', isHidden: true },
-      { input: '[["1","2","3","4"]]', expectedOutput: '["4","3","2","1"]', isHidden: true },
-      { input: '[["!", "@", "#"]]', expectedOutput: '["#","@","!"]', isHidden: true },
-      { input: '[["A","B","C","D","E"]]', expectedOutput: '["E","D","C","B","A"]', isHidden: true },
+      {
+        input: '[[3, 1, 4, 1, 5, 9, 2, 6]]',
+        expectedOutput: '9',
+        isHidden: false,
+      },
+      { input: '[[42]]', expectedOutput: '42', isHidden: false },
+      { input: '[[1, 2, 3]]', expectedOutput: '3', isHidden: false },
+      {
+        input: '[[-10, -3, -25, -8]]',
+        expectedOutput: '-3',
+        isHidden: true,
+      },
+      { input: '[[0, -1, -2]]', expectedOutput: '0', isHidden: true },
+      { input: '[[100, 100, 100]]', expectedOutput: '100', isHidden: true },
     ],
-
   },
   {
-    title: 'Palindrome Number',
-    slug: 'palindrome-number',
+    number: 3,
+    title: 'Say Hello',
+    slug: 'say-hello',
     difficulty: 'easy' as const,
-    topics: ['math'],
+    topics: ['basics', 'output'],
     statement:
-      'Given an integer `x`, return `true` if `x` is a palindrome, and `false` otherwise.',
-    functionName: 'isPalindrome',
-    outputMode: 'return',
+      'This is a print-mode problem. Write a program that prints exactly `Hello, KodxCamp!` to stdout.\n\n**Example**\n```\nOutput: Hello, KodxCamp!\n```',
+    functionName: 'main',
+    outputMode: 'print' as const,
     starterCode: {
-      javascript: 'function isPalindrome(x) {\n  // TODO\n}',
-      python: 'def is_palindrome(x):\n    # TODO\n    pass',
+      javascript: '// Print the greeting below\n',
+      python: '# Print the greeting below\n',
+      ruby: '# Print the greeting below\n',
+      java: `public class Main {
+  public static void main(String[] args) {
+    // Print the greeting below
+  }
+}
+`,
     },
     testCases: [
-      { input: '[121]', expectedOutput: 'true', isHidden: false },
-      { input: '[-121]', expectedOutput: 'false', isHidden: false },
-      { input: '[10]', expectedOutput: 'false', isHidden: false },
-      { input: '[0]', expectedOutput: 'true', isHidden: true },
-      { input: '[12321]', expectedOutput: 'true', isHidden: true },
-      { input: '[1001]', expectedOutput: 'true', isHidden: true },
-      { input: '[123]', expectedOutput: 'false', isHidden: true },
-      { input: '[999]', expectedOutput: 'true', isHidden: true },
-      { input: '[1234567]', expectedOutput: 'false', isHidden: true },
-      { input: '[9]', expectedOutput: 'true', isHidden: true },
+      {
+        input: '',
+        expectedOutput: 'Hello, KodxCamp!',
+        isHidden: false,
+      },
+      {
+        input: '',
+        expectedOutput: 'Hello, KodxCamp!',
+        isHidden: true,
+      },
+      {
+        input: '',
+        expectedOutput: 'Hello, KodxCamp!',
+        isHidden: true,
+      },
     ],
   },
 ];
 
-// ─── Project starter templates ────────────────────────────────────
+// ─── Projects ─────────────────────────────────────────────────────
 
 const projects = [
   {
@@ -584,212 +585,10 @@ export default function App() {
       },
     ],
   },
-  {
-    title: 'Weather Dashboard',
-    slug: 'weather-dashboard',
-    description: 'Fetch weather data from an API and display it beautifully.',
-    longDescription:
-      'Learn fetch(), async/await, and how to handle loading + error states.',
-    category: 'api' as const,
-    difficulty: 'intermediate' as const,
-    topics: ['fetch', 'async', 'api', 'dom'],
-    previewMode: 'html' as const,
-    estimatedMinutes: 60,
-    xpReward: 100,
-    instructions:
-      'Use Open-Meteo API (no key needed). Fetch weather for a city and display temperature + conditions.',
-    files: [
-      {
-        name: 'index.html',
-        language: 'html' as const,
-        isEntry: true,
-        content: `<!DOCTYPE html>
-<html>
-<head>
-  <title>Weather</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div class="app">
-    <h1>🌤️ Weather</h1>
-    <div class="search">
-      <input id="city" placeholder="Enter city..." value="Mumbai" />
-      <button id="go">Get</button>
-    </div>
-    <div id="out">Pick a city and click Get</div>
-  </div>
-  <script src="script.js"></script>
-</body>
-</html>`,
-      },
-      {
-        name: 'style.css',
-        language: 'css' as const,
-        content: `body { font-family: system-ui; background: #f7faf8; margin: 0; padding: 2rem; }
-.app { max-width: 480px; margin: 0 auto; background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
-h1 { color: #092328; margin: 0 0 1rem; }
-.search { display: flex; gap: 0.5rem; }
-input { flex: 1; padding: 0.6rem; border: 1px solid #d4e2d8; border-radius: 8px; }
-button { padding: 0.6rem 1rem; background: #2a835f; color: white; border: none; border-radius: 8px; cursor: pointer; }
-#out { margin-top: 1rem; padding: 1rem; background: #f0f6f2; border-radius: 8px; color: #092328; }`,
-      },
-      {
-        name: 'script.js',
-        language: 'javascript' as const,
-        content: `const cityInput = document.getElementById('city');
-const goBtn = document.getElementById('go');
-const out = document.getElementById('out');
-
-async function getWeather(city) {
-  out.textContent = 'Loading...';
-  try {
-    const geo = await fetch(
-      \`https://geocoding-api.open-meteo.com/v1/search?name=\${encodeURIComponent(city)}&count=1\`
-    ).then(r => r.json());
-    if (!geo.results?.length) { out.textContent = 'City not found'; return; }
-
-    const { latitude, longitude, name } = geo.results[0];
-    const w = await fetch(
-      \`https://api.open-meteo.com/v1/forecast?latitude=\${latitude}&longitude=\${longitude}&current=temperature_2m,weather_code\`
-    ).then(r => r.json());
-
-    out.innerHTML = \`<strong>\${name}</strong><br/>\${w.current.temperature_2m}°C<br/>Code: \${w.current.weather_code}\`;
-  } catch (e) {
-    out.textContent = 'Error: ' + e.message;
-  }
-}
-
-goBtn.onclick = () => getWeather(cityInput.value.trim());
-getWeather('Mumbai');`,
-      },
-    ],
-  },
-  {
-    title: 'SQL Sales Report',
-    slug: 'sql-sales-report',
-    description: 'Query a small sales database to build a report.',
-    longDescription:
-      'Use SELECT, WHERE, GROUP BY, and ORDER BY to analyze sales data.',
-    category: 'sql' as const,
-    difficulty: 'beginner' as const,
-    topics: ['sql', 'aggregation', 'group-by'],
-    previewMode: 'sql' as const,
-    estimatedMinutes: 40,
-    xpReward: 75,
-    instructions:
-      'Seed a sales table, then write a query that shows total sales per product, sorted by total descending.',
-    files: [
-      {
-        name: 'query.sql',
-        language: 'sql' as const,
-        isEntry: true,
-        content: `-- Setup (feel free to edit)
-CREATE TABLE sales (product TEXT, amount INTEGER);
-INSERT INTO sales VALUES
-  ('Laptop', 1200),
-  ('Laptop', 1500),
-  ('Phone', 800),
-  ('Phone', 950),
-  ('Tablet', 600);
-
--- TODO: show total sales per product, sorted by total desc
-SELECT product, SUM(amount) AS total
-FROM sales
-GROUP BY product
-ORDER BY total DESC;`,
-      },
-    ],
-  },
-  {
-    title: 'Animated Bar Chart',
-    slug: 'animated-bar-chart',
-    description: 'Draw an animated bar chart with SVG and JavaScript.',
-    longDescription:
-      'Generate an SVG bar chart from an array of numbers. Add CSS transitions for animation.',
-    category: 'dataviz' as const,
-    difficulty: 'intermediate' as const,
-    topics: ['svg', 'dataviz', 'animation'],
-    previewMode: 'html' as const,
-    estimatedMinutes: 50,
-    xpReward: 100,
-    instructions:
-      'Generate SVG bars from the data array. Scale heights to fit the chart area.',
-    files: [
-      {
-        name: 'index.html',
-        language: 'html' as const,
-        isEntry: true,
-        content: `<!DOCTYPE html>
-<html>
-<head>
-  <title>Bar Chart</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div class="app">
-    <h1>📊 Weekly Sales</h1>
-    <svg id="chart" viewBox="0 0 400 240"></svg>
-  </div>
-  <script src="script.js"></script>
-</body>
-</html>`,
-      },
-      {
-        name: 'style.css',
-        language: 'css' as const,
-        content: `body { font-family: system-ui; background: #f7faf8; margin: 0; padding: 2rem; }
-.app { max-width: 520px; margin: 0 auto; background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
-h1 { color: #092328; margin: 0 0 1rem; }
-rect { fill: #2a835f; transition: all 0.4s ease; }
-rect:hover { fill: #12544f; }
-text { fill: #60736d; font-size: 10px; text-anchor: middle; }`,
-      },
-      {
-        name: 'script.js',
-        language: 'javascript' as const,
-        content: `const data = [120, 200, 150, 80, 170, 220, 90];
-const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-const svg = document.getElementById('chart');
-const chartW = 400, chartH = 240, pad = 20;
-const barW = (chartW - pad * 2) / data.length - 8;
-const max = Math.max(...data);
-
-data.forEach((v, i) => {
-  const h = ((v / max) * (chartH - pad * 2 - 20));
-  const x = pad + i * ((chartW - pad * 2) / data.length);
-  const y = chartH - pad - h;
-
-  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  rect.setAttribute('x', x);
-  rect.setAttribute('y', y);
-  rect.setAttribute('width', barW);
-  rect.setAttribute('height', h);
-  rect.setAttribute('rx', 4);
-  svg.appendChild(rect);
-
-  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  text.setAttribute('x', x + barW / 2);
-  text.setAttribute('y', chartH - 4);
-  text.textContent = labels[i];
-  svg.appendChild(text);
-});`,
-      },
-    ],
-  },
 ];
 
 // ─── Seed helpers ─────────────────────────────────────────────────
 
-/**
- * Ensure a seed admin exists and return its `_id`.
- *
- * Course documents require `createdBy` (added by the RBAC migration),
- * and every seeded course needs an owner. In development we reuse a
- * deterministic admin account; in production we still need a user, so
- * we fall back to the first admin we can find and refuse to continue if
- * none exists.
- */
 async function ensureSeedAdmin(): Promise<string> {
   const existing = await User.findOne({ role: 'admin' }).lean();
   if (existing) {
@@ -890,9 +689,9 @@ async function seed() {
   if (env.NODE_ENV === 'production' && !force) {
     console.error(
       '❌ Refusing to seed in production without --force.\n' +
-      '   This will DELETE all courses, lessons, problems, and projects.\n' +
-      '   User data (progress, projects, activity, achievements) is NEVER wiped.\n' +
-      '   Run: npm run seed -- --force'
+        '   This will DELETE all courses, lessons, problems, and projects.\n' +
+        '   User data (progress, projects, activity, achievements) is NEVER wiped.\n' +
+        '   Run: npm run seed -- --force'
     );
     process.exit(1);
   }
@@ -908,10 +707,8 @@ async function seed() {
   ]);
   console.log('🧹 Cleared courses / lessons / problems / projects');
 
-  // ─── Admin (needed as `createdBy` on every course) ───────────
   const adminId = await ensureSeedAdmin();
 
-  // ─── Courses + lessons ───────────────────────────────────────
   for (const c of courses) {
     const created = await Course.create({
       title: c.title,
@@ -941,28 +738,21 @@ async function seed() {
     console.log(`  ✅ ${c.title} (${c.lessons.length} lessons)`);
   }
 
-  // ─── DSA problems ────────────────────────────────────────────
-  for (let i = 0; i < problems.length; i++) {
-    const p = problems[i];
+  for (const p of problems) {
     const materialized = {
       ...p,
-      number: i + 1,
       testCases: p.testCases.map(materializeTestCase),
     };
     await Problem.create(materialized);
     console.log(`  ✅ Problem: ${p.title}`);
   }
 
-  // ─── Projects ────────────────────────────────────────────────
   for (const p of projects) {
     await Project.create(p);
     console.log(`  ✅ Project: ${p.title}`);
   }
 
-  // ─── Instructor + demo classes (non-prod only) ───────────────
   await seedInstructorAndClasses();
-
-  // ─── Achievement definitions (idempotent upsert) ─────────────
   await achievementService.seedDefinitions();
   console.log('  ✅ Seeded achievement definitions');
 
@@ -971,16 +761,12 @@ async function seed() {
   process.exit(0);
 }
 
-seed()
-  .catch((err) => {
-    console.error('❌ Seed failed:', err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    try {
-      await mongoose.disconnect();
-    } catch {
-      /* ignore */
-    }
-    process.exit(process.exitCode ?? 0);
-  });
+seed().catch(async (err) => {
+  console.error('❌ Seed failed:', err);
+  try {
+    await mongoose.disconnect();
+  } catch {
+    /* ignore */
+  }
+  process.exit(1);
+});

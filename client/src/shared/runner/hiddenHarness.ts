@@ -1,26 +1,20 @@
 import { getAdapter } from './adapters';
 import type { CanonicalizationId } from '@kodxcamp/shared';
+import type {
+  HiddenTestCase,
+  HiddenTestOutcome,
+  HiddenRunOptions,
+  OutputMode,
+} from './hiddenHarness.types';
 
-export type OutputMode = 'print' | 'return';
-
-export interface HiddenTestCase {
-  id: string;
-  input: string;
-  expectedOutputHash: string;
-  canonicalization: CanonicalizationId;
-}
-
-export interface HiddenTestOutcome {
-  id: string;
-  passed: boolean;
-}
-
-export interface HiddenRunOptions {
-  timeoutMs?: number;
-  outputMode?: OutputMode;
-  functionName?: string;
-  onProgress?: (outcome: HiddenTestOutcome, index: number) => void;
-}
+// Re-export so existing callers that import from './hiddenHarness'
+// keep working without changes.
+export type {
+  HiddenTestCase,
+  HiddenTestOutcome,
+  HiddenRunOptions,
+  OutputMode,
+} from './hiddenHarness.types';
 
 /**
  * Run every hidden test case against the student's code.
@@ -39,7 +33,7 @@ export async function runHiddenTests(
   options: HiddenRunOptions = {}
 ): Promise<HiddenTestOutcome[]> {
   const adapter = getAdapter(language);
-  const timeoutMs = options.timeoutMs ?? 10000;
+  const timeoutMs = options.timeoutMs ?? 15000;
 
   if (!adapter) {
     return tests.map((t) => ({ id: t.id, passed: false }));
@@ -72,9 +66,9 @@ export async function runHiddenTests(
 
 // ─── Wrapping ─────────────────────────────────────────────────────
 //
-// Mirrors `testHarness.ts`'s wrappers so a function that passes
-// visible tests produces the same stdout for hidden tests. Keep the
-// two files in sync if the wrapping rules change.
+// Mirrors `testHarness.ts`'s wrappers so a function that passes visible
+// tests produces the same stdout for hidden tests. Keep the two files
+// in sync if the wrapping rules change.
 
 function wrapHiddenInput(
   language: string,
@@ -88,8 +82,9 @@ function wrapHiddenInput(
     language === 'typescript' ||
     language === 'dsa-javascript';
   const isPy = language === 'python' || language === 'dsa-python';
+  const isRuby = language === 'ruby';
 
-  if (!isJs && !isPy) return code;
+  if (!isJs && !isPy && !isRuby) return code;
 
   const { args } = parseArgs(input);
 
@@ -106,16 +101,29 @@ console.log(JSON.stringify(__KODX_RESULT__));
 `;
     }
 
-    const argList = args.map((a) => pyLiteral(a)).join(', ');
-    return `${code}
+    if (isPy) {
+      const argList = args.map((a) => pyLiteral(a)).join(', ');
+      return `${code}
 
 # ── Hidden-test driver ───────────────────────────────
 import json as __json__
 __KODX_RESULT__ = ${functionName}(${argList})
 print(__json__.dumps(__KODX_RESULT__, separators=(',', ':')))
 `;
+    }
+
+    // Ruby
+    const argList = args.map((a) => rubyLiteral(a)).join(', ');
+    return `${code}
+
+# ── Hidden-test driver ───────────────────────────────
+require 'json'
+__KODX_RESULT__ = ${functionName}(${argList})
+puts __KODX_RESULT__.to_json
+`;
   }
 
+  // Print mode — inject __input__, let the student's code run and print.
   if (args.length === 0) return code;
 
   if (isJs) {
@@ -127,13 +135,25 @@ ${code}
 `;
   }
 
-  const argList = args.map((a) => pyLiteral(a)).join(', ');
+  if (isPy) {
+    const argList = args.map((a) => pyLiteral(a)).join(', ');
+    return `__input__ = ${
+      args.length === 1 ? pyLiteral(args[0]) : `[${argList}]`
+    }
+${code}
+`;
+  }
+
+  // Ruby
+  const argList = args.map((a) => rubyLiteral(a)).join(', ');
   return `__input__ = ${
-    args.length === 1 ? pyLiteral(args[0]) : `[${argList}]`
+    args.length === 1 ? rubyLiteral(args[0]) : `[${argList}]`
   }
 ${code}
 `;
 }
+
+// ─── Argument parsing ─────────────────────────────────────────────
 
 function parseArgs(input: string): { args: unknown[] } {
   const trimmed = input.trim();
@@ -157,10 +177,30 @@ function parseArgs(input: string): { args: unknown[] } {
   return { args: [trimmed] };
 }
 
+// ─── Literal serializers ──────────────────────────────────────────
+
 function pyLiteral(value: unknown): string {
   const json = JSON.stringify(value);
   return json
     .replace(/\btrue\b/g, 'True')
     .replace(/\bfalse\b/g, 'False')
     .replace(/\bnull\b/g, 'None');
+}
+
+function rubyLiteral(value: unknown): string {
+  if (value === null || value === undefined) return 'nil';
+  if (value === true) return 'true';
+  if (value === false) return 'false';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => rubyLiteral(v)).join(', ')}]`;
+  }
+  if (typeof value === 'object') {
+    const pairs = Object.entries(value as Record<string, unknown>)
+      .map(([k, v]) => `${JSON.stringify(k)} => ${rubyLiteral(v)}`)
+      .join(', ');
+    return `{${pairs}}`;
+  }
+  return JSON.stringify(value);
 }
