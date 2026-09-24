@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 import { instructorApi, type ApiInstructorQuizQuestion } from '@/features/instructor/api';
 import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
@@ -13,13 +13,15 @@ const emptyOptions = [
   { id: 'a', text: '' },
   { id: 'b', text: '' },
   { id: 'c', text: '' },
+  { id: 'd', text: '' },
 ];
 
 export const CourseQuizEditor: React.FC<Props> = ({ courseSlug }) => {
   const [questions, setQuestions] = useState<ApiInstructorQuizQuestion[]>([]);
   const [prompt, setPrompt] = useState('');
   const [options, setOptions] = useState(emptyOptions);
-  const [correctOptionId, setCorrectOptionId] = useState('a');
+  const [mode, setMode] = useState<'single' | 'multiple'>('single');
+  const [correctOptionIds, setCorrectOptionIds] = useState(['a']);
   const [explanation, setExplanation] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -35,13 +37,15 @@ export const CourseQuizEditor: React.FC<Props> = ({ courseSlug }) => {
       await instructorApi.createQuizQuestion(courseSlug, {
         prompt,
         options,
-        correctOptionId,
+        mode,
+        correctOptionIds,
         explanation,
         order: questions.length + 1,
       });
       setPrompt('');
       setOptions(emptyOptions);
-      setCorrectOptionId('a');
+      setMode('single');
+      setCorrectOptionIds(['a']);
       setExplanation('');
       await load();
     } finally {
@@ -69,9 +73,14 @@ export const CourseQuizEditor: React.FC<Props> = ({ courseSlug }) => {
         {options.map((option, index) => (
           <div key={option.id} className="flex items-center gap-2">
             <input
-              type="radio"
-              checked={correctOptionId === option.id}
-              onChange={() => setCorrectOptionId(option.id)}
+              type={mode === 'multiple' ? 'checkbox' : 'radio'}
+              checked={correctOptionIds.includes(option.id)}
+              onChange={() => setCorrectOptionIds((current) => {
+                if (mode === 'single') return [option.id];
+                return current.includes(option.id)
+                  ? current.filter((id) => id !== option.id)
+                  : [...current, option.id];
+              })}
               aria-label={`Correct option ${index + 1}`}
             />
             <Input
@@ -79,10 +88,41 @@ export const CourseQuizEditor: React.FC<Props> = ({ courseSlug }) => {
               placeholder={`Option ${index + 1}`}
               onChange={(event) => setOptions((current) => current.map((item) => item.id === option.id ? { ...item, text: event.target.value } : item))}
             />
+            {options.length > 2 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOptions((current) => current.filter((item) => item.id !== option.id));
+                  setCorrectOptionIds((current) => current.filter((id) => id !== option.id));
+                }}
+                className="rounded p-1 text-text-muted hover:bg-surface-tertiary hover:text-[var(--color-error)]"
+                title="Remove option"
+                aria-label="Remove option"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setOptions((current) => [...current, { id: String.fromCharCode(97 + current.length), text: '' }])}
+            disabled={options.length >= 6}
+          >
+            <Plus size={14} /> Add option
+          </Button>
+          <label className="flex items-center gap-2 text-sm text-text-secondary">
+            Answer mode
+            <select value={mode} onChange={(event) => { const next = event.target.value as 'single' | 'multiple'; setMode(next); if (next === 'single') setCorrectOptionIds((current) => current.slice(0, 1)); }} className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-text-primary">
+              <option value="single">Single correct</option>
+              <option value="multiple">Multiple correct</option>
+            </select>
+          </label>
+        </div>
         <Input value={explanation} onChange={(event) => setExplanation(event.target.value)} placeholder="Explanation shown after submission (optional)" />
-        <Button className="self-start" onClick={create} disabled={busy || !prompt.trim() || options.some((option) => !option.text.trim())}>
+        <Button className="self-start" onClick={create} disabled={busy || !prompt.trim() || !correctOptionIds.length || options.some((option) => !option.text.trim())}>
           <Plus size={14} /> {busy ? 'Adding...' : 'Add question'}
         </Button>
       </div>

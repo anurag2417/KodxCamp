@@ -10,7 +10,9 @@ export interface QuizQuestionDocument extends Document {
   lessonId?: string;
   prompt: string;
   options: QuizOption[];
-  correctOptionId: string;
+  mode: 'single' | 'multiple';
+  correctOptionIds: string[];
+  correctOptionId?: string;
   explanation?: string;
   order: number;
 }
@@ -29,7 +31,9 @@ const quizQuestionSchema = new Schema<QuizQuestionDocument>(
     lessonId: { type: String, index: true },
     prompt: { type: String, required: true, trim: true },
     options: { type: [optionSchema], required: true },
-    correctOptionId: { type: String, required: true },
+    mode: { type: String, enum: ['single', 'multiple'], default: 'single' },
+    correctOptionIds: { type: [String], default: [] },
+    correctOptionId: { type: String },
     explanation: { type: String, default: '' },
     order: { type: Number, required: true, default: 1 },
   },

@@ -10,6 +10,7 @@ interface CourseInput {
   slug: string;
   description: string;
   language: string;
+  courseType?: string;
   thumbnail?: string;
 }
 
@@ -24,6 +25,7 @@ interface LessonInput {
   slug: string;
   order: number;
   content: string;
+  contentType?: string;
   starterCode?: string;
   starterFiles?: Record<string, string>;
   solution?: string;

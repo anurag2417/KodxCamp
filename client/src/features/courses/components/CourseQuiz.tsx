@@ -11,7 +11,7 @@ interface Props {
 export const CourseQuiz: React.FC<Props> = ({ courseSlug }) => {
   const user = useAuthStore((state) => state.user);
   const [questions, setQuestions] = useState<ApiQuizQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [result, setResult] = useState<ApiQuizResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -53,11 +53,18 @@ export const CourseQuiz: React.FC<Props> = ({ courseSlug }) => {
               {question.options.map((option) => (
                 <label key={option.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary hover:bg-surface-secondary">
                   <input
-                    type="radio"
-                    name={question._id}
+                    type={question.mode === 'multiple' ? 'checkbox' : 'radio'}
                     value={option.id}
-                    checked={answers[question._id] === option.id}
-                    onChange={() => setAnswers((current) => ({ ...current, [question._id]: option.id }))}
+                    checked={answers[question._id]?.includes(option.id) ?? false}
+                    onChange={() => setAnswers((current) => {
+                      const selected = current[question._id] ?? [];
+                      const next = selected.includes(option.id)
+                        ? selected.filter((id) => id !== option.id)
+                        : question.mode === 'single'
+                          ? [option.id]
+                          : [...selected, option.id];
+                      return { ...current, [question._id]: next };
+                    })}
                   />
                   {option.text}
                 </label>

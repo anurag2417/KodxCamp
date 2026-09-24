@@ -1,23 +1,13 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 
-type CourseLanguage =
-  | 'html-css'
-  | 'javascript'
-  | 'typescript'
-  | 'python'
-  | 'ruby'
-  | 'java'
-  | 'sql'
-  | 'react'
-  | 'tailwind'
-  | 'dsa-python'
-  | 'dsa-javascript';
+type CourseLanguage = string;
 
 export interface CourseDocument extends Document {
   title: string;
   slug: string;
   description: string;
   language: CourseLanguage;
+  courseType: string;
   thumbnail?: string;
   totalLessons: number;
   createdBy: string;
@@ -53,21 +43,9 @@ const courseSchema = new Schema<CourseDocument>(
     description: { type: String, required: true },
     language: {
       type: String,
-      enum: [
-        'html-css',
-        'javascript',
-        'typescript',
-        'python',
-        'ruby',
-        'java',
-        'sql',
-        'react',
-        'tailwind',
-        'dsa-python',
-        'dsa-javascript',
-      ] as CourseLanguage[],
       required: true,
     },
+    courseType: { type: String, default: 'general', trim: true },
     thumbnail: { type: String },
     totalLessons: { type: Number, default: 0 },
     createdBy: { type: String, required: true, index: true },

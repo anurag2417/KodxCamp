@@ -6,6 +6,7 @@ export interface ApiCourse {
   slug: string;
   description: string;
   language: string;
+  courseType?: string;
   totalLessons: number;
   thumbnail?: string;
 }
@@ -34,8 +35,10 @@ export interface ApiLessonFull {
   slug: string;
   order: number;
   content: string;
+  contentType?: string;
   starterCode: string;
   starterFiles?: Record<string, string>;
+  webChecks?: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] };
   problemSlug?: string;
   functionName: string;
   outputMode: 'return' | 'print';
@@ -47,6 +50,7 @@ export interface ApiQuizQuestion {
   _id: string;
   prompt: string;
   options: { id: string; text: string }[];
+  mode: 'single' | 'multiple';
   order: number;
   lessonId?: string;
 }
@@ -55,7 +59,7 @@ export interface ApiQuizResult {
   score: number;
   total: number;
   percentage: number;
-  results: { questionId: string; correct: boolean; explanation?: string }[];
+  results: { questionId: string; correct: boolean; correctOptionIds?: string[]; explanation?: string }[];
 }
 
 export const coursesApi = {
@@ -88,7 +92,7 @@ export const coursesApi = {
 
   submitQuiz: async (
     courseSlug: string,
-    answers: Record<string, string>
+    answers: Record<string, string | string[]>
   ): Promise<ApiQuizResult> => {
     const { data } = await api.post(`/courses/${courseSlug}/quiz/submit`, { answers });
     return data.data;

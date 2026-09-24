@@ -33,8 +33,10 @@ interface LessonEditorState {
     slug: string;
     order: number;
     content: string;
+    contentType: string;
     starterCode: string;
     starterFiles: Record<string, string>;
+    webChecks: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] };
     solution: string;
     problemSlug: string;
     functionName: string;
@@ -47,12 +49,14 @@ const emptyLesson = (order: number): LessonEditorState => ({
     slug: '',
     order,
     content: '',
+    contentType: 'lesson',
     starterCode: '',
     starterFiles: {
         'index.html': '',
         'styles.css': '',
         'script.js': '',
     },
+    webChecks: { requiredHtml: [], requiredCss: [], requiredJs: [] },
     solution: '',
     problemSlug: '',
     functionName: 'solve',
@@ -133,12 +137,14 @@ export const InstructorCourseEdit: React.FC = () => {
             slug: lesson.slug,
             order: lesson.order,
             content: lesson.content,
+            contentType: lesson.contentType ?? 'lesson',
             starterCode: lesson.starterCode ?? '',
             starterFiles: lesson.starterFiles ?? {
                 'index.html': '',
                 'styles.css': '',
                 'script.js': '',
             },
+            webChecks: lesson.webChecks ?? { requiredHtml: [], requiredCss: [], requiredJs: [] },
             solution: lesson.solution ?? '',
             problemSlug: lesson.problemSlug ?? '',
             functionName: lesson.functionName ?? 'solve',
@@ -189,10 +195,12 @@ export const InstructorCourseEdit: React.FC = () => {
             slug: editing.slug,
             order: editing.order,
             content: editing.content,
+            contentType: editing.contentType,
             starterCode: editing.starterCode,
             starterFiles: isWebCourse(course.language)
                 ? editing.starterFiles
                 : undefined,
+            webChecks: isWebCourse(course.language) ? editing.webChecks : undefined,
             solution: editing.solution,
             problemSlug: editing.problemSlug || undefined,
             functionName: editing.functionName,
@@ -380,6 +388,47 @@ export const InstructorCourseEdit: React.FC = () => {
                         className="mt-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
                     />
 
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold text-text-secondary">Lesson type</label>
+                            <Input
+                                placeholder="lesson, quiz, project, video, custom"
+                                value={editing.contentType}
+                                onChange={(e) => setEditing({ ...editing, contentType: e.target.value })}
+                            />
+                        </div>
+                    </div>
+
+                    {isWebCourse(course.language) && (
+                        <div className="mt-4 rounded-lg border border-border bg-surface-secondary p-4">
+                            <p className="text-sm font-semibold text-text-primary">Checking requirements</p>
+                            <p className="mt-1 text-xs text-text-muted">The learner must include every non-empty line when they click Run or Submit.</p>
+                            <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                {([
+                                    ['requiredHtml', 'Required HTML'],
+                                    ['requiredCss', 'Required CSS'],
+                                    ['requiredJs', 'Required JavaScript'],
+                                ] as const).map(([key, label]) => (
+                                    <textarea
+                                        key={key}
+                                        rows={5}
+                                        placeholder={`${label}\n.example\n.required-class`}
+                                        value={editing.webChecks[key].join('\n')}
+                                        onChange={(e) => setEditing({
+                                            ...editing,
+                                            webChecks: {
+                                                ...editing.webChecks,
+                                                [key]: e.target.value.split('\n').map((value) => value.trim()).filter(Boolean),
+                                            },
+                                        })}
+                                        className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
+                                        aria-label={label}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <Input
                         placeholder="Coding problem slug (optional, e.g. two-sum)"
                         value={editing.problemSlug}
@@ -425,47 +474,56 @@ export const InstructorCourseEdit: React.FC = () => {
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                         {isWebCourse(course.language) ? (
                             <div className="grid gap-3 md:col-span-2 md:grid-cols-3">
+                                <p className="md:col-span-3 text-sm font-semibold text-text-primary">Starter files</p>
                                 {(['index.html', 'styles.css', 'script.js'] as const).map(
                                     (fileName) => (
-                                        <textarea
-                                            key={fileName}
-                                            placeholder={fileName}
-                                            rows={8}
-                                            value={editing.starterFiles[fileName] ?? ''}
-                                            onChange={(e) =>
-                                                setEditing({
-                                                    ...editing,
-                                                    starterFiles: {
-                                                        ...editing.starterFiles,
-                                                        [fileName]: e.target.value,
-                                                    },
-                                                })
-                                            }
-                                            className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
-                                        />
+                                        <label key={fileName} className="text-xs font-semibold text-text-secondary">
+                                            {fileName}
+                                            <textarea
+                                                placeholder={`Write the starting ${fileName} code`}
+                                                rows={8}
+                                                value={editing.starterFiles[fileName] ?? ''}
+                                                onChange={(e) =>
+                                                    setEditing({
+                                                        ...editing,
+                                                        starterFiles: {
+                                                            ...editing.starterFiles,
+                                                            [fileName]: e.target.value,
+                                                        },
+                                                    })
+                                                }
+                                                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
+                                            />
+                                        </label>
                                     )
                                 )}
                             </div>
                         ) : (
-                            <textarea
-                                placeholder="Starter code"
-                                rows={6}
-                                value={editing.starterCode}
-                                onChange={(e) =>
-                                    setEditing({ ...editing, starterCode: e.target.value })
-                                }
-                                className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
-                            />
+                            <label className="text-xs font-semibold text-text-secondary">
+                                Starter code
+                                <textarea
+                                    placeholder="Write the starting code shown to learners"
+                                    rows={6}
+                                    value={editing.starterCode}
+                                    onChange={(e) =>
+                                        setEditing({ ...editing, starterCode: e.target.value })
+                                    }
+                                    className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
+                                />
+                            </label>
                         )}
-                        <textarea
-                            placeholder="Solution (not shown to students)"
-                            rows={6}
-                            value={editing.solution}
-                            onChange={(e) =>
-                                setEditing({ ...editing, solution: e.target.value })
-                            }
-                            className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
-                        />
+                        <label className="text-xs font-semibold text-text-secondary">
+                            Instructor solution (hidden from learners)
+                            <textarea
+                                placeholder="Write the reference solution"
+                                rows={6}
+                                value={editing.solution}
+                                onChange={(e) =>
+                                    setEditing({ ...editing, solution: e.target.value })
+                                }
+                                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
+                            />
+                        </label>
                     </div>
 
                     <div className="mt-4">

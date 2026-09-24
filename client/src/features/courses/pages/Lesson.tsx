@@ -99,7 +99,7 @@ export const Lesson: React.FC = () => {
     setAccepted(false);
 
     if (isWebLesson) {
-      const result = validateWebFiles(files);
+      const result = validateWebFiles(files, data.lesson.webChecks);
       setWebMessage(result.message);
       setAccepted(result.ok);
       if (result.ok) setWebPreview(buildWebPreview(files));
@@ -126,7 +126,7 @@ export const Lesson: React.FC = () => {
   };
 
   const handleSubmitWeb = () => {
-    const result = validateWebFiles(files);
+    const result = validateWebFiles(files, data?.lesson?.webChecks);
     setWebMessage(result.message);
     setAccepted(result.ok);
     if (result.ok) setWebPreview(buildWebPreview(files));
@@ -476,7 +476,10 @@ function lessonLanguage(lang: string | undefined): string {
   return lang ?? '';
 }
 
-function validateWebFiles(files: Record<string, string>): { ok: boolean; message: string } {
+function validateWebFiles(
+  files: Record<string, string>,
+  checks?: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] }
+): { ok: boolean; message: string } {
   const html = files['index.html']?.trim() ?? '';
   const css = files['styles.css']?.trim() ?? '';
   const javascript = files['script.js']?.trim() ?? '';
@@ -493,6 +496,12 @@ function validateWebFiles(files: Record<string, string>): { ok: boolean; message
   if (parsed.querySelector('parsererror')) {
     return { ok: false, message: 'index.html could not be parsed.' };
   }
+  const missingHtml = (checks?.requiredHtml ?? []).find((token) => !html.includes(token));
+  if (missingHtml) return { ok: false, message: `HTML check failed: missing "${missingHtml}".` };
+  const missingCss = (checks?.requiredCss ?? []).find((token) => !css.includes(token));
+  if (missingCss) return { ok: false, message: `CSS check failed: missing "${missingCss}".` };
+  const missingJs = (checks?.requiredJs ?? []).find((token) => !javascript.includes(token));
+  if (missingJs) return { ok: false, message: `JavaScript check failed: missing "${missingJs}".` };
   return { ok: true, message: 'Submitted successfully. All three files passed basic checks.' };
 }
 

@@ -17,12 +17,19 @@ const testCaseSchema = z
   })
   .strict();
 
+const webChecksSchema = z.object({
+  requiredHtml: z.array(z.string().min(1)).default([]),
+  requiredCss: z.array(z.string().min(1)).default([]),
+  requiredJs: z.array(z.string().min(1)).default([]),
+}).strict();
+
 export const createCourseSchema = z.object({
   body: z.object({
     title: z.string().min(2).max(120),
     slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/),
     description: z.string().min(5).max(1000),
     language: z.string().min(2),
+    courseType: z.string().min(2).max(80).default('general'),
     thumbnail: z.string().optional(),
   }),
 });
@@ -34,6 +41,7 @@ export const updateCourseSchema = z.object({
     slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/).optional(),
     description: z.string().min(5).max(1000).optional(),
     language: z.string().min(2).optional(),
+    courseType: z.string().min(2).max(80).optional(),
     thumbnail: z.string().optional(),
   }),
 });
@@ -61,8 +69,10 @@ export const createLessonSchema = z.object({
     slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/),
     order: z.number().int().min(1).default(1),
     content: z.string().min(1),
+    contentType: z.string().min(2).max(40).default('lesson'),
     starterCode: z.string().default(''),
     starterFiles: z.record(z.string()).optional(),
+    webChecks: webChecksSchema.optional(),
     solution: z.string().default(''),
     problemSlug: z.string().min(1).optional(),
     functionName: z.string().min(1).default('solve'),
@@ -82,8 +92,10 @@ export const updateLessonSchema = z.object({
     slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/).optional(),
     order: z.number().int().min(1).optional(),
     content: z.string().min(1).optional(),
+    contentType: z.string().min(2).max(40).optional(),
     starterCode: z.string().optional(),
     starterFiles: z.record(z.string()).optional(),
+    webChecks: webChecksSchema.optional(),
     solution: z.string().optional(),
     problemSlug: z.string().min(1).optional(),
     functionName: z.string().optional(),

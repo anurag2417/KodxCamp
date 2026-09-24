@@ -23,6 +23,7 @@ export interface ApiInstructorCourse {
   slug: string;
   description: string;
   language: string;
+  courseType?: string;
   thumbnail?: string;
   totalLessons: number;
   createdBy: string;
@@ -42,7 +43,8 @@ export interface ApiInstructorQuizQuestion {
   _id: string;
   prompt: string;
   options: { id: string; text: string }[];
-  correctOptionId: string;
+  mode: 'single' | 'multiple';
+  correctOptionIds: string[];
   explanation?: string;
   order: number;
   lessonId?: string;
@@ -55,8 +57,10 @@ export interface ApiInstructorLesson {
   slug: string;
   order: number;
   content: string;
+  contentType?: string;
   starterCode: string;
   starterFiles?: Record<string, string>;
+  webChecks?: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] };
   solution: string;
   problemSlug?: string;
   functionName: string;
@@ -107,6 +111,7 @@ export interface ResolvedInvitation {
     slug: string;
     description: string;
     language: string;
+    courseType?: string;
   };
   isExpired: boolean;
   isAlreadyAccepted: boolean;
@@ -206,6 +211,7 @@ export const instructorApi = {
     slug: string;
     description: string;
     language: string;
+    courseType?: string;
   }): Promise<ApiInstructorCourse> => {
     const { data } = await api.post('/instructor/courses', input);
     return data.data;

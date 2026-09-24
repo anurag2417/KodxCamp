@@ -28,6 +28,9 @@ import { InstructorGuard } from '@/features/instructor/components/InstructorGuar
 import { InstructorLayout } from '@/features/instructor/components/InstructorLayout';
 import { InstructorStudents } from '@/features/instructor/pages/InstructorStudents';
 import { InstructorStudentDetail } from '@/features/instructor/pages/InstructorStudentDetail';
+import { InstructorCourses } from '@/features/instructor/components/InstructorCourses';
+import { InstructorCourseEdit } from '@/features/instructor/components/InstructorCourseEdit';
+import { InstructorCourseCreate } from '@/features/instructor/pages/InstructorCourseCreate';
 import { Home } from '@/features/marketing/pages/Home';
 import { Playground } from '@/features/playground/pages/Playground';
 import { Practice } from '@/features/problems/pages/Practice';
@@ -167,7 +170,7 @@ export function AppRouter() {
               </InstructorGuard>
             }
           >
-            <Route index element={<Navigate to="/courses" replace />} />
+            <Route index element={<InstructorCourses />} />
             {/* Static "students" route must come before dynamic
                 "courses/:slug/..." so the more specific path wins. */}
             <Route path="students" element={<InstructorStudents />} />
@@ -175,13 +178,8 @@ export function AppRouter() {
               path="courses/:slug/students/:userId"
               element={<InstructorStudentDetail />}
             />
-            {/* Legacy redirects - the course editor now lives under
-                /instructor/courses/:slug but the old link from the
-                sidebar points at /instructor directly. */}
-            <Route
-              path="courses/:slug"
-              element={<Navigate to="/courses" replace />}
-            />
+            <Route path="courses/new" element={<InstructorCourseCreate />} />
+            <Route path="courses/:slug" element={<InstructorCourseEdit />} />
           </Route>
 
           {/* ─── Admin ─────────────────────────────────────── */}

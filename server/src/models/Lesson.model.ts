@@ -1,16 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose';
-type CourseLanguage =
-  | 'html-css'
-  | 'javascript'
-  | 'typescript'
-  | 'python'
-  | 'ruby'
-  | 'java'
-  | 'sql'
-  | 'react'
-  | 'tailwind'
-  | 'dsa-python'
-  | 'dsa-javascript';
+type CourseLanguage = string;
 
 type ProblemOutputMode = 'return' | 'print';
 
@@ -27,8 +16,14 @@ interface LessonFields {
   slug: string;
   order: number;
   content: string;
+  contentType: string;
   starterCode: string;
   starterFiles?: Record<string, string>;
+  webChecks?: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
   solution: string;
   problemSlug?: string;
   functionName: string;
@@ -55,8 +50,14 @@ const lessonSchema = new Schema<LessonDocument>(
     slug: { type: String, required: true },
     order: { type: Number, required: true },
     content: { type: String, required: true },
+    contentType: { type: String, default: 'lesson', trim: true },
     starterCode: { type: String, default: '' },
     starterFiles: { type: Map, of: String, default: undefined },
+    webChecks: {
+      requiredHtml: { type: [String], default: [] },
+      requiredCss: { type: [String], default: [] },
+      requiredJs: { type: [String], default: [] },
+    },
     solution: { type: String, default: '' },
     problemSlug: { type: String, trim: true },
     functionName: { type: String, default: 'solve', trim: true },
@@ -67,19 +68,6 @@ const lessonSchema = new Schema<LessonDocument>(
     },
     language: {
       type: String,
-      enum: [
-        'html-css',
-        'javascript',
-        'typescript',
-        'python',
-        'ruby',
-        'java',
-        'sql',
-        'react',
-        'tailwind',
-        'dsa-python',
-        'dsa-javascript',
-      ] as CourseLanguage[],
       required: true,
     },
     testCases: { type: [testCaseSchema], default: [] },
