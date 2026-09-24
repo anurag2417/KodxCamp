@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useLesson } from '@/features/courses/hooks/useLesson';
 import { useAuthStore } from '@/shared/store/auth.store';
@@ -18,8 +18,11 @@ import {
 import { TestPanel } from '@/features/problems/components/TestPanel';
 import { readStoredValue, writeStoredValue } from '@/shared/lib/storage';
 import { CourseQuiz } from '@/features/courses/components/CourseQuiz';
+import { cn } from '@/shared/lib/utils';
+import type { ApiWebLessonStep } from '@/features/courses/api';
 
 const WEB_FILES = ['index.html', 'styles.css', 'script.js'] as const;
+type WebFile = (typeof WEB_FILES)[number];
 
 export const Lesson: React.FC = () => {
   const { courseSlug, lessonSlug } = useParams<{
@@ -31,44 +34,162 @@ export const Lesson: React.FC = () => {
 
   const [code, setCode] = useState('');
   const [files, setFiles] = useState<Record<string, string>>({});
-  const [activeFile, setActiveFile] = useState<string>(WEB_FILES[0]);
+  const [activeFile, setActiveFile] = useState<WebFile>(WEB_FILES[0]);
   const [summary, setSummary] = useState<TestRunSummary | undefined>();
   const [accepted, setAccepted] = useState(false);
   const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
   const [progress, setProgress] = useState<ApiProgress | null>(null);
   const [completing, setCompleting] = useState(false);
   const [running, setRunning] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [webPreview, setWebPreview] = useState('');
   const [webMessage, setWebMessage] = useState('');
+  const [savingStep, setSavingStep] = useState(false);
 
+  const initializedForRef = useRef<string | null>(null);
+
+  const isWebLesson = isWebLessonLanguage(lessonLanguage(data?.lesson?.language));
+  const steps: ApiWebLessonStep[] = data?.lesson.steps ?? [];
+  const hasSteps = isWebLesson && steps.length > 0;
+
+  const currentStepIndex = useMemo(() => {
+    if (!hasSteps) return 0;
+    const idx = progress?.currentStepIndex ?? 0;
+    return Math.max(0, Math.min(idx, steps.length - 1));
+  }, [hasSteps, progress?.currentStepIndex, steps.length]);
+
+  const currentStep = hasSteps ? steps[currentStepIndex] : null;
+  const completedSteps = useMemo(
+    () => new Set(progress?.completedSteps ?? []),
+    [progress?.completedSteps]
+  );
+
+  // ─── Web lesson file initialization ────────────────────────────
+  //
+  // Runs whenever the active (lesson, step) pair changes, or when a
+  // classic web lesson first loads. Handles three cases:
+  //
+  //  1. First load of a step-less web lesson -> use starterFiles, or
+  //     starterCode as a fallback.
+  //  2. First load of a step lesson -> use the current step's
+  //     starterFiles.
+  //  3. Advancing to a new step -> carry the student's current files
+  //     forward, only adopting a file from the target step's starters
+  //     if the author provided a different non-empty value for it.
   useEffect(() => {
-    if (data?.lesson) {
-      const stored = readStoredValue<{
-        code?: string;
-        files?: Record<string, string>;
-        activeFile?: string;
-      }>(`lesson:${user?._id ?? 'guest'}:${data.lesson._id}`);
-      if (isWebLessonLanguage(data.lesson.language)) {
-        setFiles(
-          stored?.files ?? data.lesson.starterFiles ?? {
-            'index.html': data.lesson.starterCode || '',
-            'styles.css': '',
-            'script.js': '',
-          }
-        );
-        setActiveFile(
-          stored?.activeFile && WEB_FILES.includes(stored.activeFile as (typeof WEB_FILES)[number])
-            ? stored.activeFile
-            : WEB_FILES[0]
-        );
+    if (!data?.lesson) return;
+    if (!isWebLesson) return;
+
+    const key = hasSteps
+      ? `${data.lesson._id}:${currentStepIndex}`
+      : `${data.lesson._id}:classic`;
+
+    if (initializedForRef.current === key) return;
+
+    const stored = readStoredValue<{
+      files?: Record<string, string>;
+      activeFile?: string;
+      stepIndex?: number;
+    }>(`lesson:${user?._id ?? 'guest'}:${data.lesson._id}`);
+
+    const stepStarter = currentStep?.starterFiles ?? null;
+    const prevStepStarter =
+      currentStepIndex > 0 ? steps[currentStepIndex - 1].starterFiles : null;
+
+    const isFirstLoadForLesson =
+      stored === null || stored.stepIndex === undefined;
+
+    // Full-document fallback. If the lesson has no starterFiles at all
+    // (old data), fall back to starterCode as the index.html body.
+    const lessonStarterFiles = data.lesson.starterFiles ?? {
+      'index.html': data.lesson.starterCode || '',
+      'styles.css': '',
+      'script.js': '',
+    };
+
+    if (!hasSteps) {
+      // Classic web lesson. Prefer starterFiles, ignore step machinery.
+      if (stored?.files) {
+        setFiles(stored.files);
       } else {
-        setCode(stored?.code ?? data.lesson.starterCode ?? '');
+        setFiles({
+          'index.html': lessonStarterFiles['index.html'] ?? '',
+          'styles.css': lessonStarterFiles['styles.css'] ?? '',
+          'script.js': lessonStarterFiles['script.js'] ?? '',
+        });
       }
-      setSummary(undefined);
-      setAccepted(false);
+    } else if (isFirstLoadForLesson) {
+      // Step lesson, first visit.
+      if (stepStarter) {
+        setFiles({
+          'index.html': stepStarter['index.html'] ?? '',
+          'styles.css': stepStarter['styles.css'] ?? '',
+          'script.js': stepStarter['script.js'] ?? '',
+        });
+      } else {
+        setFiles({
+          'index.html': lessonStarterFiles['index.html'] ?? '',
+          'styles.css': lessonStarterFiles['styles.css'] ?? '',
+          'script.js': lessonStarterFiles['script.js'] ?? '',
+        });
+      }
+    } else if (stored.stepIndex === currentStepIndex) {
+      if (stored.files) {
+        setFiles(stored.files);
+      }
+    } else {
+      // Advancing (or going back) to a different step. Carry forward.
+      const currentFiles = files;
+      const merged: Record<string, string> = { ...currentFiles };
+
+      if (stepStarter) {
+        for (const fileName of WEB_FILES) {
+          const nextStarter = stepStarter[fileName] ?? '';
+          const prevStarter = prevStepStarter?.[fileName] ?? '';
+          const authorChangedThisFile =
+            nextStarter.length > 0 && nextStarter !== prevStarter;
+          if (authorChangedThisFile) {
+            merged[fileName] = nextStarter;
+          }
+        }
+      }
+
+      setFiles(merged);
     }
+
+    setActiveFile(
+      stored?.activeFile && WEB_FILES.includes(stored.activeFile as WebFile)
+        ? (stored.activeFile as WebFile)
+        : WEB_FILES[0]
+    );
+
+    setSummary(undefined);
+    setAccepted(false);
+    setWebMessage('');
+    setWebPreview('');
+
+    initializedForRef.current = key;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.lesson?._id, user?._id]);
+  }, [data?.lesson?._id, currentStepIndex, isWebLesson, hasSteps]);
+
+  // Non-web lessons: single code blob, load once per lesson.
+  useEffect(() => {
+    if (!data?.lesson || isWebLesson) return;
+
+    const key = `code:${data.lesson._id}`;
+    if (initializedForRef.current === key) return;
+
+    const stored = readStoredValue<{ code?: string }>(
+      `lesson:${user?._id ?? 'guest'}:${data.lesson._id}`
+    );
+
+    setCode(stored?.code ?? data.lesson.starterCode ?? '');
+    setSummary(undefined);
+    setAccepted(false);
+
+    initializedForRef.current = key;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.lesson?._id, isWebLesson, user?._id]);
 
   useEffect(() => {
     if (!user || !data?.course) return;
@@ -81,7 +202,6 @@ export const Lesson: React.FC = () => {
 
   const testCases = useMemo(() => data?.lesson.testCases ?? [], [data?.lesson]);
   const hasTests = testCases.length > 0;
-  const isWebLesson = isWebLessonLanguage(lessonLanguage(data?.lesson?.language));
   const activeCode = isWebLesson ? files[activeFile] ?? '' : code;
 
   useEffect(() => {
@@ -90,23 +210,38 @@ export const Lesson: React.FC = () => {
       code: isWebLesson ? undefined : code,
       files: isWebLesson ? files : undefined,
       activeFile: isWebLesson ? activeFile : undefined,
+      stepIndex: hasSteps ? currentStepIndex : undefined,
     });
-  }, [activeCode, activeFile, code, data?.lesson, files, isWebLesson, user?._id]);
+  }, [
+    activeCode,
+    activeFile,
+    code,
+    data?.lesson,
+    files,
+    isWebLesson,
+    user?._id,
+    hasSteps,
+    currentStepIndex,
+  ]);
+
+  const validateCurrentWebFiles = (): { ok: boolean; message: string } => {
+    const checks = currentStep?.webChecks ?? data?.lesson?.webChecks;
+    return validateWebFiles(files, checks);
+  };
 
   const handleRunCode = async () => {
     if (!data) return;
     setRunning(true);
-    setSummary(undefined);
-    setAccepted(false);
 
     if (isWebLesson) {
-      const result = validateWebFiles(files, data.lesson.webChecks);
-      setWebMessage(result.message);
-      setAccepted(result.ok);
-      if (result.ok) setWebPreview(buildWebPreview(files));
+      setWebMessage('');
+      setWebPreview(buildWebPreview(files));
       setRunning(false);
       return;
     }
+
+    setSummary(undefined);
+    setAccepted(false);
 
     const visibleCases: VisibleTestCase[] = testCases.map((tc) => ({
       index: tc.index,
@@ -126,11 +261,61 @@ export const Lesson: React.FC = () => {
     setRunning(false);
   };
 
-  const handleSubmitWeb = () => {
-    const result = validateWebFiles(files, data?.lesson?.webChecks);
-    setWebMessage(result.message);
-    setAccepted(result.ok);
-    if (result.ok) setWebPreview(buildWebPreview(files));
+  const handleSubmitWeb = async () => {
+    if (!data) return;
+    setSubmitting(true);
+    try {
+      setWebPreview(buildWebPreview(files));
+      const result = validateCurrentWebFiles();
+      setWebMessage(result.message);
+      setAccepted(result.ok);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleNextStep = async () => {
+    if (!hasSteps || !data?.course || !data?.lesson) return;
+    if (!accepted) return;
+
+    initializedForRef.current = null;
+
+    if (!user) {
+      const next = Math.min(currentStepIndex + 1, steps.length - 1);
+      setProgress((prev) => ({
+        _id: prev?._id ?? null,
+        userId: '',
+        courseId: data.course._id,
+        completedLessons: prev?.completedLessons ?? [],
+        currentLessonId: data.lesson._id,
+        currentStepIndex: next,
+        completedSteps: Array.from(
+          new Set([...(prev?.completedSteps ?? []), currentStepIndex])
+        ).sort((a, b) => a - b),
+        percentage: prev?.percentage ?? 0,
+      }));
+      setAccepted(false);
+      setWebMessage('');
+      setWebPreview('');
+      return;
+    }
+
+    setSavingStep(true);
+    try {
+      const updated = await progressApi.markStepComplete(
+        data.course._id,
+        data.lesson._id,
+        currentStepIndex
+      );
+      setProgress(updated);
+      setAccepted(false);
+      setWebMessage('');
+      setWebPreview('');
+    } catch {
+      /* leave student on current step */
+    } finally {
+      setSavingStep(false);
+    }
   };
 
   const markComplete = async () => {
@@ -172,13 +357,23 @@ export const Lesson: React.FC = () => {
 
   const { course, lesson } = data;
   const isCompleted = progress?.completedLessons.includes(lesson._id) ?? false;
-  const canComplete = !hasTests || accepted;
+  const canComplete = hasSteps ? false : !hasTests || accepted;
+  const isLastStep = hasSteps && currentStepIndex === steps.length - 1;
+  const allStepsDone =
+    hasSteps && steps.every((_, i) => completedSteps.has(i));
+
+  // Is the "Mark as Complete" button visible in the RunBar?
+  // Rules:
+  //   - Step lessons: no, the "Finish lesson" button covers it.
+  //   - Non-web lessons: yes.
+  //   - Web lessons with no steps: yes.
+  const showMarkCompleteInBar = !hasSteps;
 
   return (
     <div className="flex h-[calc(100vh-64px)] w-full">
       <LessonSidebar
         courseSlug={course.slug}
-        lessons={(course as typeof course & { lessons: typeof lesson[] }).lessons}
+        lessons={course.lessons}
         completedLessons={progress?.completedLessons ?? []}
         currentLessonId={lesson._id}
       />
@@ -202,102 +397,178 @@ export const Lesson: React.FC = () => {
                   <CheckCircle2 size={14} /> Completed
                 </span>
               )}
+              {hasSteps && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-500">
+                  Step {currentStepIndex + 1} of {steps.length}
+                </span>
+              )}
             </div>
 
             <h1 className="mt-3 text-2xl font-bold text-text-primary">
               {lesson.title}
             </h1>
 
-            <div className="prose prose-sm mt-4 max-w-none whitespace-pre-wrap text-sm text-text-secondary">
-              {lesson.content}
-            </div>
-
-            {hasTests && lesson.outputMode === 'return' && (
-              <p className="mt-4 text-xs text-text-muted">
-                Implement the function{' '}
-                <code className="rounded bg-surface-tertiary px-1.5 py-0.5 font-mono text-text-primary">
-                  {lesson.functionName}
-                </code>{' '}
-                - return the result; the platform compares it to the expected
-                output automatically.
-              </p>
-            )}
-
-            {testCases.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-semibold text-text-primary">
-                  Test Cases
-                </h3>
-                <div className="mt-2 flex flex-col gap-2">
-                  {testCases.map((tc, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg border border-border bg-surface p-3 text-xs"
-                    >
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="text-xs font-semibold text-text-secondary">
-                          Test {i + 1}
-                        </span>
-                        {tc.isHidden && (
-                          <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-[10px] font-medium text-text-muted">
-                            hidden
-                          </span>
+            {hasSteps && currentStep ? (
+              <>
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {steps.map((s, i) => {
+                    const done = completedSteps.has(i);
+                    const active = i === currentStepIndex;
+                    const locked = !done && i > currentStepIndex;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={locked}
+                        onClick={() => {
+                          if (locked) return;
+                          if (i === currentStepIndex) return;
+                        }}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
+                          done
+                            ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                            : active
+                              ? 'bg-brand-500 text-white'
+                              : locked
+                                ? 'cursor-not-allowed bg-surface-tertiary text-text-muted opacity-60'
+                                : 'bg-surface-tertiary text-text-secondary'
                         )}
-                      </div>
-                      {!tc.isHidden && (
-                        <>
-                          {tc.input && (
+                        title={s.title}
+                      >
+                        {done ? (
+                          <CheckCircle2 size={11} />
+                        ) : locked ? (
+                          <Lock size={11} />
+                        ) : null}
+                        Step {i + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 rounded-xl border border-brand-500/30 bg-brand-500/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-brand-500">
+                    Step {currentStepIndex + 1}
+                  </p>
+                  <h2 className="mt-1 text-lg font-bold text-text-primary">
+                    {currentStep.title}
+                  </h2>
+                  <div className="prose prose-sm mt-3 max-w-none whitespace-pre-wrap text-sm text-text-secondary">
+                    {currentStep.instructions}
+                  </div>
+                  {currentStep.hint && (
+                    <details className="mt-3 rounded-lg border border-border bg-surface px-3 py-2 text-xs">
+                      <summary className="cursor-pointer font-semibold text-text-secondary">
+                        Hint
+                      </summary>
+                      <p className="mt-1 whitespace-pre-wrap text-text-muted">
+                        {currentStep.hint}
+                      </p>
+                    </details>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <Button
+                    onClick={() => void handleNextStep()}
+                    disabled={!accepted || savingStep}
+                  >
+                    {savingStep
+                      ? 'Saving…'
+                      : isLastStep
+                        ? 'Finish lesson'
+                        : 'Next step'}
+                  </Button>
+                  {!accepted && (
+                    <p className="text-xs text-text-muted">
+                      Submit your code to unlock the next step.
+                    </p>
+                  )}
+                  {!user && accepted && (
+                    <p className="text-xs text-text-muted">
+                      Sign in to save your step progress.
+                    </p>
+                  )}
+                </div>
+
+                {allStepsDone && (
+                  <div className="mt-4 flex items-center gap-2 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-success)]/5 px-3 py-2 text-xs font-medium text-[var(--color-success)]">
+                    <CheckCircle2 size={14} /> All steps complete
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="prose prose-sm mt-4 max-w-none whitespace-pre-wrap text-sm text-text-secondary">
+                  {lesson.content}
+                </div>
+
+                {hasTests && lesson.outputMode === 'return' && (
+                  <p className="mt-4 text-xs text-text-muted">
+                    Implement the function{' '}
+                    <code className="rounded bg-surface-tertiary px-1.5 py-0.5 font-mono text-text-primary">
+                      {lesson.functionName}
+                    </code>{' '}
+                    - return the result; the platform compares it to the expected
+                    output automatically.
+                  </p>
+                )}
+
+                {testCases.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-semibold text-text-primary">
+                      Test Cases
+                    </h3>
+                    <div className="mt-2 flex flex-col gap-2">
+                      {testCases.map((tc, i) => (
+                        <div
+                          key={i}
+                          className="rounded-lg border border-border bg-surface p-3 text-xs"
+                        >
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="text-xs font-semibold text-text-secondary">
+                              Test {i + 1}
+                            </span>
+                            {tc.isHidden && (
+                              <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-[10px] font-medium text-text-muted">
+                                hidden
+                              </span>
+                            )}
+                          </div>
+                          {!tc.isHidden && (
                             <>
-                              <div className="text-text-muted">Input</div>
-                              <code className="mt-0.5 block break-all font-mono text-text-primary">
-                                {tc.input}
+                              {tc.input && (
+                                <>
+                                  <div className="text-text-muted">Input</div>
+                                  <code className="mt-0.5 block break-all font-mono text-text-primary">
+                                    {tc.input}
+                                  </code>
+                                </>
+                              )}
+                              <div className="mt-2 text-text-muted">Expected</div>
+                              <code className="mt-0.5 block font-mono text-text-primary">
+                                {tc.expectedOutput}
                               </code>
                             </>
                           )}
-                          <div className="mt-2 text-text-muted">Expected</div>
-                          <code className="mt-0.5 block font-mono text-text-primary">
-                            {tc.expectedOutput}
-                          </code>
-                        </>
-                      )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-6">
-              <Button
-                variant={isCompleted ? 'secondary' : 'primary'}
-                onClick={markComplete}
-                disabled={completing || isCompleted || !user || !canComplete}
-              >
-                {isCompleted ? (
-                  <>
-                    <CheckCircle2 size={16} /> Completed
-                  </>
-                ) : completing ? (
-                  'Saving...'
-                ) : (
-                  <>
-                    <CheckCircle2 size={16} /> Mark as Complete
-                  </>
+                  </div>
                 )}
-              </Button>
-              {hasTests && !isCompleted && !accepted && (
-                <p className="mt-2 text-xs text-text-muted">
-                  Run the code and pass all tests to unlock this.
-                </p>
-              )}
-              {!user && (
-                <p className="mt-2 text-xs text-text-muted">
-                  <Link to="/login" className="text-brand-500 hover:underline">
-                    Log in
-                  </Link>{' '}
-                  to save progress
-                </p>
-              )}
-            </div>
+
+                {!user && (
+                  <p className="mt-6 text-xs text-text-muted">
+                    <Link to="/login" className="text-brand-500 hover:underline">
+                      Log in
+                    </Link>{' '}
+                    to save your progress. The Mark as Complete button lives
+                    next to Run in the toolbar.
+                  </p>
+                )}
+              </>
+            )}
 
             {lesson.problemSlug && (
               <Link
@@ -334,7 +605,11 @@ export const Lesson: React.FC = () => {
                             key={fileName}
                             type="button"
                             onClick={() => setActiveFile(fileName)}
-                            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${activeFile === fileName ? 'bg-surface-tertiary text-brand-500' : 'text-text-muted hover:bg-surface-tertiary hover:text-text-primary'}`}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                              activeFile === fileName
+                                ? 'bg-surface-tertiary text-brand-500'
+                                : 'text-text-muted hover:bg-surface-tertiary hover:text-text-primary'
+                            }`}
                           >
                             {fileName}
                           </button>
@@ -348,13 +623,19 @@ export const Lesson: React.FC = () => {
                   }
                   onRun={handleRunCode}
                   running={running}
-                  right={
-                    isWebLesson ? (
-                      <Button size="sm" variant="secondary" onClick={handleSubmitWeb} disabled={running}>
-                        <CheckCircle2 size={14} /> Submit
-                      </Button>
-                    ) : undefined
+                  onSubmit={isWebLesson ? handleSubmitWeb : undefined}
+                  submitting={submitting}
+                  hideSubmit={!isWebLesson}
+                  onMarkComplete={
+                    showMarkCompleteInBar
+                      ? () => void markComplete()
+                      : undefined
                   }
+                  markCompleteDisabled={
+                    !user || !canComplete || completing || isCompleted
+                  }
+                  markCompleteBusy={completing}
+                  completed={isCompleted}
                 />
                 <div className="flex-1">
                   <CodeEditor
@@ -390,12 +671,18 @@ export const Lesson: React.FC = () => {
                       />
                     ) : (
                       <div className="grid h-full place-items-center p-6 text-center text-sm text-text-muted">
-                        Run your files to see the preview.
+                        Click Run to preview, Submit to check your work.
                       </div>
                     )}
                   </div>
                   {webMessage && (
-                    <p className={`border-t border-border px-4 py-2 text-xs ${accepted ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
+                    <p
+                      className={`border-t border-border px-4 py-2 text-xs ${
+                        accepted
+                          ? 'text-[var(--color-success)]'
+                          : 'text-[var(--color-error)]'
+                      }`}
+                    >
                       {webMessage}
                     </p>
                   )}
@@ -493,7 +780,12 @@ function validateWebFiles(
   try {
     new Function(javascript);
   } catch (error) {
-    return { ok: false, message: `script.js has a syntax error: ${error instanceof Error ? error.message : String(error)}` };
+    return {
+      ok: false,
+      message: `script.js has a syntax error: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
   }
   const parsed = new DOMParser().parseFromString(html, 'text/html');
   if (parsed.querySelector('parsererror')) {
@@ -505,7 +797,7 @@ function validateWebFiles(
   if (missingCss) return { ok: false, message: `CSS check failed: missing "${missingCss}".` };
   const missingJs = (checks?.requiredJs ?? []).find((token) => !javascript.includes(token));
   if (missingJs) return { ok: false, message: `JavaScript check failed: missing "${missingJs}".` };
-  return { ok: true, message: 'Submitted successfully. All three files passed basic checks.' };
+  return { ok: true, message: 'All checks passed.' };
 }
 
 function buildWebPreview(files: Record<string, string>): string {

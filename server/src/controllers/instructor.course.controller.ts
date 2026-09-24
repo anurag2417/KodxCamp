@@ -17,11 +17,39 @@ const testCaseSchema = z
   })
   .strict();
 
-const webChecksSchema = z.object({
-  requiredHtml: z.array(z.string().min(1)).default([]),
-  requiredCss: z.array(z.string().min(1)).default([]),
-  requiredJs: z.array(z.string().min(1)).default([]),
-}).strict();
+const webChecksSchema = z
+  .object({
+    requiredHtml: z.array(z.string().min(1)).default([]),
+    requiredCss: z.array(z.string().min(1)).default([]),
+    requiredJs: z.array(z.string().min(1)).default([]),
+  })
+  .strict();
+
+const starterFilesSchema = z
+  .object({
+    'index.html': z.string().default(''),
+    'styles.css': z.string().default(''),
+    'script.js': z.string().default(''),
+  })
+  .strict();
+
+const webLessonStepSchema = z
+  .object({
+    title: z.string().min(1).max(150),
+    instructions: z.string().min(1).max(5000),
+    hint: z.string().max(1000).optional(),
+    starterFiles: starterFilesSchema.default({
+      'index.html': '',
+      'styles.css': '',
+      'script.js': '',
+    }),
+    webChecks: webChecksSchema.default({
+      requiredHtml: [],
+      requiredCss: [],
+      requiredJs: [],
+    }),
+  })
+  .strict();
 
 export const createCourseSchema = z.object({
   body: z.object({
@@ -79,6 +107,7 @@ export const createLessonSchema = z.object({
     outputMode: z.enum(['return', 'print']).default('print'),
     language: z.string().min(2),
     testCases: z.array(testCaseSchema).default([]),
+    steps: z.array(webLessonStepSchema).default([]),
   }),
 });
 
@@ -102,6 +131,7 @@ export const updateLessonSchema = z.object({
     outputMode: z.enum(['return', 'print']).optional(),
     language: z.string().min(2).optional(),
     testCases: z.array(testCaseSchema).optional(),
+    steps: z.array(webLessonStepSchema).optional(),
   }),
 });
 

@@ -1,6 +1,7 @@
 import { Problem } from '../models/Problem.model.js';
 import { judgeService } from './judge.service.js';
 import { ApiError } from '../utils/ApiError.js';
+import { validateSqlSetup } from './sqlSetupValidator.js';
 
 interface TestCaseInput {
   input: string;
@@ -19,6 +20,7 @@ interface ProblemInput {
   outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
   testCases: TestCaseInput[];
+  sqlSetup?: string;
 }
 
 async function nextProblemNumber(): Promise<number> {
@@ -46,7 +48,7 @@ function normalizeTestCase(tc: TestCaseInput, index: number) {
 export const problemService = {
   async list(userId?: string) {
     const problems = await Problem.find()
-      .select('-testCases -starterCode -statement')
+      .select('-testCases -starterCode -statement -sqlSetup')
       .sort({ number: 1 })
       .lean();
 
@@ -83,6 +85,7 @@ export const problemService = {
       outputMode: problem.outputMode ?? 'print',
       starterCode: problem.starterCode,
       testCases,
+      sqlSetup: problem.sqlSetup,
       solved: solvedIds.includes(problem._id.toString()),
     };
   },
@@ -101,6 +104,8 @@ export const problemService = {
   async createProblem(input: ProblemInput) {
     const exists = await Problem.findOne({ slug: input.slug }).lean();
     if (exists) throw new ApiError(409, 'Slug already exists');
+
+    validateSqlSetup(input.sqlSetup);
 
     let number = input.number;
     if (number === undefined) {
@@ -140,6 +145,10 @@ export const problemService = {
           );
         }
       }
+    }
+
+    if ('sqlSetup' in patch) {
+      validateSqlSetup(patch.sqlSetup);
     }
 
     const update: Record<string, unknown> = { ...patch };

@@ -3,6 +3,7 @@ import { Project } from '../models/Project.model.js';
 import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { ApiError } from '../utils/ApiError.js';
+import { validateSqlSetup } from './sqlSetupValidator.js';
 import { z } from 'zod';
 
 // ─── Zod schemas ──────────────────────────────────────────────────
@@ -34,6 +35,7 @@ const problemSchema = z.object({
   starterCode: z.record(z.string()).default({}),
   testCases: z.array(testCaseSchema).min(1),
   number: z.number().int().positive().optional(),
+  sqlSetup: z.string().optional(),
 });
 
 const projectFileSchema = z.object({
@@ -164,10 +166,31 @@ export const bulkService = {
     const { valid, errors } = zipValidationErrors(items, problemSchema);
     report.failed = errors;
 
+    // Extra structural validation for SQL setup - Zod can only check
+    // shape, not SQL structure. Any problem whose sqlSetup is malformed
+    // gets pushed into `failed` here, before we hit the DB.
+    const structurallyValid: unknown[] = [];
+    valid.forEach((item, i) => {
+      const candidate = item as { slug: string; sqlSetup?: string };
+      try {
+        validateSqlSetup(candidate.sqlSetup);
+        structurallyValid.push(item);
+      } catch (err) {
+        report.failed.push({
+          index: i,
+          slug: candidate.slug,
+          error:
+            err instanceof ApiError
+              ? err.message
+              : 'sqlSetup failed structural validation',
+        });
+      }
+    });
+
     const seenSlugs = new Set<string>();
     const seenNumbers = new Set<number>();
     const deduped: unknown[] = [];
-    valid.forEach((item, i) => {
+    structurallyValid.forEach((item, i) => {
       const { slug, number } = item as { slug: string; number?: number };
       if (seenSlugs.has(slug)) {
         report.failed.push({

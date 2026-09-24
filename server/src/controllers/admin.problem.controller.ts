@@ -39,6 +39,11 @@ export const problemBodySchema = z.object({
     testCases: z
       .array(testCaseSchema)
       .min(1, 'At least one test case is required'),
+    sqlSetup: z
+      .string()
+      .min(1, 'sqlSetup cannot be empty when provided')
+      .max(20_000, 'sqlSetup is too long')
+      .optional(),
   }),
 });
 
@@ -64,6 +69,11 @@ export const updateProblemSchema = z.object({
     outputMode: z.enum(['return', 'print']).optional(),
     starterCode: z.record(z.string()).optional(),
     testCases: z.array(testCaseSchema).optional(),
+    sqlSetup: z
+      .string()
+      .min(1, 'sqlSetup cannot be empty when provided')
+      .max(20_000, 'sqlSetup is too long')
+      .optional(),
   }),
 });
 

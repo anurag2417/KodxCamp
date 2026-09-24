@@ -4,7 +4,7 @@ interface SqlJsStatic {
   Database: new (data?: Uint8Array) => SqlDatabase;
 }
 
-interface SqlDatabase {
+export interface SqlDatabase {
   exec: (sql: string) => { columns: string[]; values: unknown[][] }[];
   close: () => void;
 }
@@ -29,15 +29,110 @@ async function getSql(): Promise<SqlJsStatic> {
   return sqlPromise;
 }
 
-export async function runSql(
-  code: string,
-  _opts: RunnerOptions = {}
-): Promise<RunResult> {
+/**
+ * Result of a setup run. On success the `db` handle is live and must
+ * be closed by the caller. On failure `db` is null and the error is in
+ * `result.stderr`.
+ */
+export interface SqlSetupOutcome {
+  result: RunResult;
+  db: SqlDatabase | null;
+}
+
+/**
+ * Execute a block of setup SQL (CREATE TABLE / INSERT) against a fresh
+ * SQL.js database and return both the result and the live database
+ * handle. The caller is responsible for closing the returned `db`.
+ *
+ * If `sqlSetup` is empty/undefined, we still return a fresh empty DB
+ * so the caller can run queries against it (they'll fail with "no
+ * such table", which is the correct behavior for a problem that
+ * forgot to declare setup).
+ */
+export async function runSqlSetup(
+  sqlSetup: string | undefined
+): Promise<SqlSetupOutcome> {
   const start = performance.now();
+
   try {
     const SQL = await getSql();
     const db = new SQL.Database();
 
+    if (sqlSetup && sqlSetup.trim() !== '') {
+      const statements = splitSqlStatements(sqlSetup);
+      for (const stmt of statements) {
+        const trimmed = stmt.trim();
+        if (!trimmed) continue;
+        db.exec(trimmed);
+      }
+    }
+
+    return {
+      result: {
+        ok: true,
+        stdout: '',
+        stderr: '',
+        verdict: 'accepted',
+        runtimeMs: Math.round(performance.now() - start),
+      },
+      db,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      result: {
+        ok: false,
+        stdout: '',
+        stderr: `Setup failed: ${msg}`,
+        verdict: 'runtime_error',
+        runtimeMs: Math.round(performance.now() - start),
+      },
+      db: null,
+    };
+  }
+}
+
+/**
+ * Run the student's SQL code.
+ *
+ * If `existingDb` is provided, executes against it and does NOT close
+ * it - the caller owns the lifecycle. This is how the test harness
+ * runs a student's query against the DB that `runSqlSetup` seeded.
+ *
+ * If `existingDb` is omitted, creates a fresh database, runs the code
+ * against it, and closes it before returning. This is the Playground
+ * and standalone code path.
+ */
+export async function runSql(
+  code: string,
+  opts: RunnerOptions = {},
+  existingDb?: SqlDatabase
+): Promise<RunResult> {
+  const start = performance.now();
+  const ownsDb = !existingDb;
+
+  let db: SqlDatabase;
+  try {
+    if (existingDb) {
+      db = existingDb;
+    } else {
+      const SQL = await getSql();
+      db = new SQL.Database();
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      stdout: '',
+      stderr: msg,
+      verdict: 'runtime_error',
+      runtimeMs: Math.round(performance.now() - start),
+    };
+  }
+
+  void opts;
+
+  try {
     const statements = splitSqlStatements(code);
     const selectOutput: string[] = [];
 
@@ -45,7 +140,9 @@ export async function runSql(
       const trimmed = stmt.trim();
       if (!trimmed) continue;
 
-      const isQuery = /^(select|pragma|with)\b/i.test(stripLeadingComments(trimmed));
+      const isQuery = /^(select|pragma|with)\b/i.test(
+        stripLeadingComments(trimmed)
+      );
       const result = db.exec(trimmed);
 
       if (isQuery && result.length > 0) {
@@ -55,7 +152,6 @@ export async function runSql(
       }
     }
 
-    db.close();
     const runtimeMs = Math.round(performance.now() - start);
 
     return {
@@ -75,6 +171,14 @@ export async function runSql(
       verdict: 'runtime_error',
       runtimeMs,
     };
+  } finally {
+    if (ownsDb) {
+      try {
+        db.close();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 

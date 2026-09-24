@@ -1,5 +1,10 @@
 import { runCode, type RunResult } from '@/shared/runner/index';
 import { runJavaBatch } from '@/shared/runner/javaRuntime';
+import {
+  runSqlSetup,
+  runSql,
+  type SqlDatabase,
+} from '@/shared/runner/sqlRunner';
 
 export type OutputMode = 'return' | 'print';
 
@@ -37,6 +42,8 @@ export interface TestHarnessOptions {
   functionName: string;
   /** Whether to compare the function's return value, or stdout. */
   outputMode: OutputMode;
+  /** SQL-only: schema + seed SQL executed once before any test case. */
+  sqlSetup?: string;
 }
 
 export async function runTests(
@@ -45,6 +52,16 @@ export async function runTests(
   testCases: VisibleTestCase[],
   options: TestHarnessOptions
 ): Promise<TestRunSummary> {
+  // ─── SQL ──────────────────────────────────────────────────────
+  // For SQL we don't wrap per-test: the setup runs once, the student's
+  // query runs against the seeded DB, and the formatted result table
+  // is compared to each test case's expectedOutput.
+  if (language === 'sql') {
+    return runSqlTests(code, testCases, options);
+  }
+
+  // ─── Java ─────────────────────────────────────────────────────
+  // Compile once, run one entry point per test case.
   if (language === 'java' && testCases.length > 0) {
     const wrappedCases = testCases.map((tc, index) => {
       const wrapped = wrapForExecution(language, code, tc.input, options);
@@ -83,6 +100,7 @@ export async function runTests(
     };
   }
 
+  // ─── Everything else ──────────────────────────────────────────
   const results: VisibleTestResult[] = [];
   let totalRuntimeMs = 0;
 
@@ -115,6 +133,75 @@ export async function runTests(
     totalTests: results.length,
     allPassed: results.every((r) => r.passed),
     totalRuntimeMs,
+  };
+}
+
+// ─── SQL driver ───────────────────────────────────────────────────
+
+async function runSqlTests(
+  studentQuery: string,
+  testCases: VisibleTestCase[],
+  options: TestHarnessOptions
+): Promise<TestRunSummary> {
+  // Seed the DB once. `setup.db` is the live handle the student's
+  // query will run against - the same database, not a fresh one.
+  const setup = await runSqlSetup(options.sqlSetup);
+
+  if (!setup.result.ok || !setup.db) {
+    const results: VisibleTestResult[] = testCases.map((tc) => ({
+      index: tc.index,
+      passed: false,
+      actualOutput: '',
+      expectedOutput: tc.expectedOutput,
+      stderr: setup.result.stderr || 'SQL setup failed',
+      runtimeMs: setup.result.runtimeMs,
+      isHidden: tc.isHidden,
+    }));
+    return {
+      results,
+      passedTests: 0,
+      totalTests: results.length,
+      allPassed: false,
+      totalRuntimeMs: setup.result.runtimeMs,
+    };
+  }
+
+  const db: SqlDatabase = setup.db;
+
+  let runResult: RunResult;
+  try {
+    runResult = await runSql(studentQuery, { timeoutMs: 30000 }, db);
+  } finally {
+    // We own the handle now - close it whether or not the run succeeded.
+    try {
+      db.close();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const actual = runResult.stdout.trim();
+
+  const results: VisibleTestResult[] = testCases.map((tc) => {
+    const passed =
+      runResult.ok && outputsMatch(actual, tc.expectedOutput, options.outputMode);
+    return {
+      index: tc.index,
+      passed,
+      actualOutput: actual,
+      expectedOutput: tc.expectedOutput,
+      stderr: runResult.stderr,
+      runtimeMs: runResult.runtimeMs,
+      isHidden: tc.isHidden,
+    };
+  });
+
+  return {
+    results,
+    passedTests: results.filter((r) => r.passed).length,
+    totalTests: results.length,
+    allPassed: results.every((r) => r.passed),
+    totalRuntimeMs: runResult.runtimeMs,
   };
 }
 
@@ -478,5 +565,7 @@ class KodxEntry {
 `;
   }
 
+  // SQL: the student's query is the code; the setup is handled
+  // separately in runSqlTests. Return code unchanged.
   return code;
 }

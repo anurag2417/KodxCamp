@@ -5,7 +5,7 @@ import type { ApiLessonSummary } from '@/features/courses/api';
 
 interface Props {
   courseSlug: string;
-  lessons: ApiLessonSummary[];
+  lessons: ApiLessonSummary[] | undefined;
   completedLessons: string[];
   currentLessonId: string;
 }
@@ -17,6 +17,11 @@ export const LessonSidebar: React.FC<Props> = ({
   currentLessonId,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
+
+  // Defensive: the sidebar renders on the very first frame of a route
+  // change, before the lesson query has resolved. `lessons` is
+  // legitimately `undefined` at that point.
+  const safeLessons = lessons ?? [];
 
   return (
     <aside
@@ -43,9 +48,11 @@ export const LessonSidebar: React.FC<Props> = ({
           <div className="flex justify-center text-text-muted">
             <List size={18} />
           </div>
+        ) : safeLessons.length === 0 ? (
+          <p className="text-xs text-text-muted">No lessons yet.</p>
         ) : (
           <div className="flex flex-col gap-1">
-            {lessons.map((l) => (
+            {safeLessons.map((l) => (
               <LessonListItem
                 key={l._id}
                 courseSlug={courseSlug}

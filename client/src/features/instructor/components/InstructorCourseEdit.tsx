@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
-    ArrowLeft,
-    Plus,
-    Trash2,
-    Save,
-    Eye,
-    EyeOff,
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Save,
+  Eye,
+  EyeOff,
+  ListOrdered,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
-    instructorApi,
-    type ApiInstructorCourseFull,
-    type ApiInstructorLesson,
+  instructorApi,
+  type ApiInstructorCourseFull,
+  type ApiInstructorLesson,
 } from '@/features/instructor/api';
 import { queryKeys } from '@/shared/lib/queryKeys';
 import { Spinner } from '@/shared/components/ui/Spinner';
@@ -23,617 +24,687 @@ import { Card } from '@/shared/components/ui/Card';
 import { Input } from '@/shared/components/ui/Input';
 import { ConfirmDialog } from '@/features/admin/components/ConfirmDialog';
 import {
-    TestCaseEditor,
-    type EditableTestCase,
+  TestCaseEditor,
+  type EditableTestCase,
 } from '@/features/admin/components/TestCaseEditor';
 import { CourseQuizEditor } from '@/features/instructor/components/CourseQuizEditor';
+import {
+  WebLessonStepsEditor,
+  type EditableWebLessonStep,
+} from '@/features/instructor/components/WebLessonStepsEditor';
+import { cn } from '@/shared/lib/utils';
 
 interface LessonEditorState {
-    title: string;
-    slug: string;
-    order: number;
-    content: string;
-    contentType: string;
-    starterCode: string;
-    starterFiles: Record<string, string>;
-    webChecks: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] };
-    solution: string;
-    problemSlug: string;
-    functionName: string;
-    outputMode: 'return' | 'print';
-    testCases: EditableTestCase[];
+  title: string;
+  slug: string;
+  order: number;
+  content: string;
+  contentType: string;
+  starterCode: string;
+  starterFiles: Record<string, string>;
+  webChecks: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] };
+  solution: string;
+  problemSlug: string;
+  functionName: string;
+  outputMode: 'return' | 'print';
+  testCases: EditableTestCase[];
+  steps: EditableWebLessonStep[];
 }
 
 const emptyLesson = (order: number): LessonEditorState => ({
-    title: '',
-    slug: '',
-    order,
-    content: '',
-    contentType: 'lesson',
-    starterCode: '',
-    starterFiles: {
-        'index.html': '',
-        'styles.css': '',
-        'script.js': '',
-    },
-    webChecks: { requiredHtml: [], requiredCss: [], requiredJs: [] },
-    solution: '',
-    problemSlug: '',
-    functionName: 'solve',
-    outputMode: 'print',
-    testCases: [],
+  title: '',
+  slug: '',
+  order,
+  content: '',
+  contentType: 'lesson',
+  starterCode: '',
+  starterFiles: {
+    'index.html': '',
+    'styles.css': '',
+    'script.js': '',
+  },
+  webChecks: { requiredHtml: [], requiredCss: [], requiredJs: [] },
+  solution: '',
+  problemSlug: '',
+  functionName: 'solve',
+  outputMode: 'print',
+  testCases: [],
+  steps: [],
 });
 
 function extractError(err: unknown): string {
-    if (axios.isAxiosError(err)) {
-        const body = err.response?.data as
-            | { message?: string; details?: { path: string; message: string }[] }
-            | undefined;
-        if (body?.details?.length) {
-            return body.details.map((d) => `• ${d.path}: ${d.message}`).join('\n');
-        }
-        if (body?.message) return body.message;
-        return `Request failed (${err.response?.status ?? 'network'})`;
+  if (axios.isAxiosError(err)) {
+    const body = err.response?.data as
+      | { message?: string; details?: { path: string; message: string }[] }
+      | undefined;
+    if (body?.details?.length) {
+      return body.details.map((d) => `• ${d.path}: ${d.message}`).join('\n');
     }
-    if (err instanceof Error) return err.message;
-    return 'Failed to save';
+    if (body?.message) return body.message;
+    return `Request failed (${err.response?.status ?? 'network'})`;
+  }
+  if (err instanceof Error) return err.message;
+  return 'Failed to save';
 }
 
 export const InstructorCourseEdit: React.FC = () => {
-    const { slug } = useParams<{ slug: string }>();
-    const navigate = useNavigate();
-    const qc = useQueryClient();
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
 
-    const query = useQuery({
-        queryKey: queryKeys.courses.detail(slug ?? ''),
-        queryFn: () => instructorApi.getCourseFull(slug!),
-        enabled: !!slug,
+  const query = useQuery({
+    queryKey: queryKeys.courses.detail(slug ?? ''),
+    queryFn: () => instructorApi.getCourseFull(slug!),
+    enabled: !!slug,
+  });
+
+  const [editing, setEditing] = useState<LessonEditorState | null>(null);
+  const [originalSlug, setOriginalSlug] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{ slug: string; title: string } | null>(
+    null
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const course = query.data;
+
+  useEffect(() => {
+    if (!course) return;
+    document.title = `${course.title} · KodxCamp`;
+  }, [course]);
+
+  const refresh = () => {
+    qc.invalidateQueries({
+      queryKey: queryKeys.courses.detail(slug ?? ''),
     });
+    qc.invalidateQueries({ queryKey: queryKeys.courses.all });
+  };
 
-    const [editing, setEditing] = useState<LessonEditorState | null>(null);
-    const [originalSlug, setOriginalSlug] = useState<string | null>(null);
-    const [deleting, setDeleting] = useState<{ slug: string; title: string } | null>(
-        null
+  const openCreate = () => {
+    const nextOrder =
+      (course?.lessons.reduce((max, l) => Math.max(max, l.order), 0) ?? 0) + 1;
+    setEditing(emptyLesson(nextOrder));
+    setOriginalSlug(null);
+    setError('');
+  };
+
+  const openEdit = (lesson: ApiInstructorLesson) => {
+    const normalized: EditableTestCase[] = (lesson.testCases ?? []).map(
+      (tc) => ({
+        input: tc.input ?? '',
+        expectedOutput: tc.isHidden ? '' : tc.expectedOutput ?? '',
+        isHidden: tc.isHidden === true,
+      })
     );
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState('');
 
-    const course = query.data;
+    const normalizedSteps: EditableWebLessonStep[] = (lesson.steps ?? []).map(
+      (step) => ({
+        title: step.title,
+        instructions: step.instructions,
+        hint: step.hint ?? '',
+        starterFiles: {
+          'index.html': step.starterFiles?.['index.html'] ?? '',
+          'styles.css': step.starterFiles?.['styles.css'] ?? '',
+          'script.js': step.starterFiles?.['script.js'] ?? '',
+        },
+        webChecks: {
+          requiredHtml: step.webChecks?.requiredHtml ?? [],
+          requiredCss: step.webChecks?.requiredCss ?? [],
+          requiredJs: step.webChecks?.requiredJs ?? [],
+        },
+      })
+    );
 
-    useEffect(() => {
-        if (!course) return;
-        document.title = `${course.title} · KodxCamp`;
-    }, [course]);
+    setEditing({
+      title: lesson.title,
+      slug: lesson.slug,
+      order: lesson.order,
+      content: lesson.content,
+      contentType: lesson.contentType ?? 'lesson',
+      starterCode: lesson.starterCode ?? '',
+      starterFiles: lesson.starterFiles ?? {
+        'index.html': '',
+        'styles.css': '',
+        'script.js': '',
+      },
+      webChecks: lesson.webChecks ?? {
+        requiredHtml: [],
+        requiredCss: [],
+        requiredJs: [],
+      },
+      solution: lesson.solution ?? '',
+      problemSlug: lesson.problemSlug ?? '',
+      functionName: lesson.functionName ?? 'solve',
+      outputMode: lesson.outputMode ?? 'print',
+      testCases: normalized,
+      steps: normalizedSteps,
+    });
+    setOriginalSlug(lesson.slug);
+    setError('');
+  };
 
-    const refresh = () => {
-        qc.invalidateQueries({
-            queryKey: queryKeys.courses.detail(slug ?? ''),
-        });
-        qc.invalidateQueries({ queryKey: queryKeys.courses.all });
-    };
+  const closeEditor = () => {
+    setEditing(null);
+    setOriginalSlug(null);
+    setError('');
+  };
 
-    const openCreate = () => {
-        const nextOrder =
-            (course?.lessons.reduce((max, l) => Math.max(max, l.order), 0) ?? 0) + 1;
-        setEditing(emptyLesson(nextOrder));
-        setOriginalSlug(null);
-        setError('');
-    };
+  const handleSaveLesson = async () => {
+    if (!course || !editing) return;
+    setBusy(true);
+    setError('');
 
-    const openEdit = (lesson: ApiInstructorLesson) => {
-        // Normalize test cases: hidden tests only store a hash, so we
-        // leave their expected output blank. The admin must re-enter it
-        // to change the expected answer.
-        const normalized: EditableTestCase[] = (lesson.testCases ?? []).map(
-            (tc) => ({
-                input: tc.input ?? '',
-                expectedOutput: tc.isHidden ? '' : tc.expectedOutput ?? '',
-                isHidden: tc.isHidden === true,
-            })
-        );
-
-        setEditing({
-            title: lesson.title,
-            slug: lesson.slug,
-            order: lesson.order,
-            content: lesson.content,
-            contentType: lesson.contentType ?? 'lesson',
-            starterCode: lesson.starterCode ?? '',
-            starterFiles: lesson.starterFiles ?? {
-                'index.html': '',
-                'styles.css': '',
-                'script.js': '',
-            },
-            webChecks: lesson.webChecks ?? { requiredHtml: [], requiredCss: [], requiredJs: [] },
-            solution: lesson.solution ?? '',
-            problemSlug: lesson.problemSlug ?? '',
-            functionName: lesson.functionName ?? 'solve',
-            outputMode: lesson.outputMode ?? 'print',
-            testCases: normalized,
-        });
-        setOriginalSlug(lesson.slug);
-        setError('');
-    };
-
-    const closeEditor = () => {
-        setEditing(null);
-        setOriginalSlug(null);
-        setError('');
-    };
-
-    const handleSaveLesson = async () => {
-        if (!course || !editing) return;
-        setBusy(true);
-        setError('');
-
-        const issues: string[] = [];
-        if (!editing.title || editing.title.length < 2) issues.push('Title too short');
-        if (!editing.slug || editing.slug.length < 2) issues.push('Slug too short');
-        if (!/^[a-z0-9-]+$/.test(editing.slug)) issues.push('Invalid slug');
-        if (!editing.content) issues.push('Content required');
-        if (!editing.order || editing.order < 1) issues.push('Order must be ≥ 1');
-        const emptyExpected = editing.testCases.findIndex(
-            (tc) => !tc.expectedOutput
-        );
-        if (emptyExpected !== -1) {
-            issues.push(
-                `Test #${emptyExpected + 1} is missing expected output${editing.testCases[emptyExpected].isHidden
-                    ? ' (required even for hidden tests)'
-                    : ''
-                }`
-            );
-        }
-
-        if (issues.length) {
-            setError(issues.map((p) => `• ${p}`).join('\n'));
-            setBusy(false);
-            return;
-        }
-
-        const payload = {
-            title: editing.title,
-            slug: editing.slug,
-            order: editing.order,
-            content: editing.content,
-            contentType: editing.contentType,
-            starterCode: editing.starterCode,
-            starterFiles: isWebCourse(course.language)
-                ? editing.starterFiles
-                : undefined,
-            webChecks: isWebCourse(course.language) ? editing.webChecks : undefined,
-            solution: editing.solution,
-            problemSlug: editing.problemSlug || undefined,
-            functionName: editing.functionName,
-            outputMode: editing.outputMode,
-            language: course.language,
-            testCases: editing.testCases.map((tc) => ({
-                input: tc.input,
-                expectedOutput: tc.expectedOutput,
-                isHidden: tc.isHidden,
-            })),
-        };
-
-        try {
-            if (originalSlug) {
-                await instructorApi.updateLesson(course.slug, originalSlug, payload);
-            } else {
-                await instructorApi.createLesson(course.slug, payload);
-            }
-            refresh();
-            closeEditor();
-        } catch (err) {
-            setError(extractError(err));
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const handleDeleteLesson = async () => {
-        if (!course || !deleting) return;
-        try {
-            await instructorApi.deleteLesson(course.slug, deleting.slug);
-            refresh();
-            setDeleting(null);
-        } catch (err) {
-            setError(extractError(err));
-            setDeleting(null);
-        }
-    };
-
-    const togglePublish = async () => {
-        if (!course) return;
-        try {
-            await instructorApi.setPublished(course.slug, !course.published);
-            refresh();
-        } catch (err) {
-            setError(extractError(err));
-        }
-    };
-
-    const deleteCourse = async () => {
-        if (!course) return;
-        if (!confirm(`Delete "${course.title}"? This cannot be undone.`)) return;
-        try {
-            await instructorApi.deleteCourse(course.slug);
-            qc.invalidateQueries({ queryKey: queryKeys.courses.all });
-            navigate('/instructor');
-        } catch (err) {
-            setError(extractError(err));
-        }
-    };
-
-    if (query.isLoading) {
-        return (
-            <div className="flex w-full justify-center py-32">
-                <Spinner className="h-8 w-8" />
-            </div>
-        );
+    const issues: string[] = [];
+    if (!editing.title || editing.title.length < 2) issues.push('Title too short');
+    if (!editing.slug || editing.slug.length < 2) issues.push('Slug too short');
+    if (!/^[a-z0-9-]+$/.test(editing.slug)) issues.push('Invalid slug');
+    if (!editing.content) issues.push('Content required');
+    if (!editing.order || editing.order < 1) issues.push('Order must be ≥ 1');
+    const emptyExpected = editing.testCases.findIndex(
+      (tc) => !tc.expectedOutput
+    );
+    if (emptyExpected !== -1) {
+      issues.push(
+        `Test #${emptyExpected + 1} is missing expected output${
+          editing.testCases[emptyExpected].isHidden
+            ? ' (required even for hidden tests)'
+            : ''
+        }`
+      );
     }
 
-    if (query.error || !course) {
-        return (
-            <div className="w-full p-6 lg:p-8">
-                <Link
-                    to="/instructor"
-                    className="inline-flex items-center gap-2 text-xs text-text-muted hover:text-brand-500"
-                >
-                    <ArrowLeft size={14} /> My Courses
-                </Link>
-                <div className="mt-6">
-                    <ErrorState
-                        title="Couldn't load this course"
-                        message="Either it doesn't exist or you don't have access."
-                        onRetry={() => query.refetch()}
-                    />
-                </div>
-            </div>
-        );
+    if (editing.steps.length > 0 && !isWebCourse(course.language)) {
+      issues.push('Step-by-step mode is only supported for HTML/CSS, React, and Tailwind courses');
     }
 
-    const { permissions: perms } = course;
+    if (issues.length) {
+      setError(issues.map((p) => `• ${p}`).join('\n'));
+      setBusy(false);
+      return;
+    }
 
+    const payload: Record<string, unknown> = {
+      title: editing.title,
+      slug: editing.slug,
+      order: editing.order,
+      content: editing.content,
+      contentType: editing.contentType,
+      starterCode: editing.starterCode,
+      starterFiles: isWebCourse(course.language)
+        ? editing.starterFiles
+        : undefined,
+      webChecks: isWebCourse(course.language) ? editing.webChecks : undefined,
+      solution: editing.solution,
+      problemSlug: editing.problemSlug || undefined,
+      functionName: editing.functionName,
+      outputMode: editing.outputMode,
+      language: course.language,
+      testCases: editing.testCases.map((tc) => ({
+        input: tc.input,
+        expectedOutput: tc.expectedOutput,
+        isHidden: tc.isHidden,
+      })),
+    };
+
+    if (isWebCourse(course.language)) {
+      payload.steps = editing.steps.map((s) => ({
+        title: s.title,
+        instructions: s.instructions,
+        hint: s.hint || undefined,
+        starterFiles: s.starterFiles,
+        webChecks: s.webChecks,
+      }));
+    }
+
+    try {
+      if (originalSlug) {
+        await instructorApi.updateLesson(course.slug, originalSlug, payload);
+      } else {
+        await instructorApi.createLesson(course.slug, payload);
+      }
+      refresh();
+      closeEditor();
+    } catch (err) {
+      setError(extractError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteLesson = async () => {
+    if (!course || !deleting) return;
+    try {
+      await instructorApi.deleteLesson(course.slug, deleting.slug);
+      refresh();
+      setDeleting(null);
+    } catch (err) {
+      setError(extractError(err));
+      setDeleting(null);
+    }
+  };
+
+  const togglePublish = async () => {
+    if (!course) return;
+    try {
+      await instructorApi.setPublished(course.slug, !course.published);
+      refresh();
+    } catch (err) {
+      setError(extractError(err));
+    }
+  };
+
+  const deleteCourse = async () => {
+    if (!course) return;
+    if (!confirm(`Delete "${course.title}"? This cannot be undone.`)) return;
+    try {
+      await instructorApi.deleteCourse(course.slug);
+      qc.invalidateQueries({ queryKey: queryKeys.courses.all });
+      navigate('/instructor');
+    } catch (err) {
+      setError(extractError(err));
+    }
+  };
+
+  if (query.isLoading) {
     return (
-        <div className="w-full p-6 lg:p-8">
-            <Link
-                to="/instructor"
-                className="mb-4 inline-flex items-center gap-2 text-xs text-text-muted hover:text-brand-500"
-            >
-                <ArrowLeft size={14} /> My Courses
-            </Link>
-
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h1 className="text-3xl font-bold text-text-primary">{course.title}</h1>
-                    <p className="mt-1 text-sm text-text-muted">
-                        {course.lessons.length} lessons · {course.language} ·{' '}
-                        {course.published ? (
-                            <span className="text-[var(--color-success)]">Live</span>
-                        ) : (
-                            <span className="text-[var(--color-warning)]">Draft</span>
-                        )}
-                    </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                    {perms.canManageCourse && (
-                        <Button variant="secondary" onClick={togglePublish}>
-                            {course.published ? (
-                                <>
-                                    <EyeOff size={14} /> Unpublish
-                                </>
-                            ) : (
-                                <>
-                                    <Eye size={14} /> Publish
-                                </>
-                            )}
-                        </Button>
-                    )}
-                    {perms.canEditContent && (
-                        <Button onClick={openCreate}>
-                            <Plus size={16} /> Add Lesson
-                        </Button>
-                    )}
-                </div>
-            </div>
-
-            {editing && (
-                <Card className="mb-6 p-6">
-                    <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-sm font-semibold text-text-primary">
-                            {originalSlug ? 'Edit lesson' : 'New lesson'}
-                        </h2>
-                        <Button variant="ghost" size="sm" onClick={closeEditor}>
-                            Cancel
-                        </Button>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-3">
-                        <Input
-                            placeholder="Title"
-                            value={editing.title}
-                            onChange={(e) =>
-                                setEditing({
-                                    ...editing,
-                                    title: e.target.value,
-                                    slug: originalSlug ? editing.slug : autoSlug(e.target.value),
-                                })
-                            }
-                            className="md:col-span-2"
-                        />
-                        <Input
-                            type="number"
-                            min={1}
-                            placeholder="Order"
-                            value={editing.order}
-                            onChange={(e) =>
-                                setEditing({ ...editing, order: Number(e.target.value) })
-                            }
-                        />
-                    </div>
-
-                    <Input
-                        placeholder="Slug (lowercase, dashes)"
-                        value={editing.slug}
-                        onChange={(e) =>
-                            setEditing({ ...editing, slug: autoSlug(e.target.value) })
-                        }
-                        className="mt-3"
-                    />
-
-                    <textarea
-                        placeholder="Content (Markdown supported)"
-                        rows={6}
-                        value={editing.content}
-                        onChange={(e) => setEditing({ ...editing, content: e.target.value })}
-                        className="mt-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
-                    />
-
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold text-text-secondary">Lesson type</label>
-                            <Input
-                                placeholder="lesson, quiz, project, video, custom"
-                                value={editing.contentType}
-                                onChange={(e) => setEditing({ ...editing, contentType: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    {isWebCourse(course.language) && (
-                        <div className="mt-4 rounded-lg border border-border bg-surface-secondary p-4">
-                            <p className="text-sm font-semibold text-text-primary">Checking requirements</p>
-                            <p className="mt-1 text-xs text-text-muted">The learner must include every non-empty line when they click Run or Submit.</p>
-                            <div className="mt-3 grid gap-3 md:grid-cols-3">
-                                {([
-                                    ['requiredHtml', 'Required HTML'],
-                                    ['requiredCss', 'Required CSS'],
-                                    ['requiredJs', 'Required JavaScript'],
-                                ] as const).map(([key, label]) => (
-                                    <textarea
-                                        key={key}
-                                        rows={5}
-                                        placeholder={`${label}\n.example\n.required-class`}
-                                        value={editing.webChecks[key].join('\n')}
-                                        onChange={(e) => setEditing({
-                                            ...editing,
-                                            webChecks: {
-                                                ...editing.webChecks,
-                                                [key]: e.target.value.split('\n').map((value) => value.trim()).filter(Boolean),
-                                            },
-                                        })}
-                                        className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
-                                        aria-label={label}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <Input
-                        placeholder="Coding problem slug (optional, e.g. two-sum)"
-                        value={editing.problemSlug}
-                        onChange={(e) =>
-                            setEditing({ ...editing, problemSlug: e.target.value.trim() })
-                        }
-                        className="mt-3"
-                    />
-
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold text-text-secondary">
-                                Function name
-                            </label>
-                            <Input
-                                placeholder="e.g. sum, double"
-                                value={editing.functionName}
-                                onChange={(e) =>
-                                    setEditing({ ...editing, functionName: e.target.value.trim() })
-                                }
-                            />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold text-text-secondary">
-                                Output mode
-                            </label>
-                            <select
-                                value={editing.outputMode}
-                                onChange={(e) =>
-                                    setEditing({
-                                        ...editing,
-                                        outputMode: e.target.value as 'return' | 'print',
-                                    })
-                                }
-                                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
-                            >
-                                <option value="print">Print to console</option>
-                                <option value="return">Return value</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        {isWebCourse(course.language) ? (
-                            <div className="grid gap-3 md:col-span-2 md:grid-cols-3">
-                                <p className="md:col-span-3 text-sm font-semibold text-text-primary">Starter files</p>
-                                {(['index.html', 'styles.css', 'script.js'] as const).map(
-                                    (fileName) => (
-                                        <label key={fileName} className="text-xs font-semibold text-text-secondary">
-                                            {fileName}
-                                            <textarea
-                                                placeholder={`Write the starting ${fileName} code`}
-                                                rows={8}
-                                                value={editing.starterFiles[fileName] ?? ''}
-                                                onChange={(e) =>
-                                                    setEditing({
-                                                        ...editing,
-                                                        starterFiles: {
-                                                            ...editing.starterFiles,
-                                                            [fileName]: e.target.value,
-                                                        },
-                                                    })
-                                                }
-                                                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
-                                            />
-                                        </label>
-                                    )
-                                )}
-                            </div>
-                        ) : (
-                            <label className="text-xs font-semibold text-text-secondary">
-                                Starter code
-                                <textarea
-                                    placeholder="Write the starting code shown to learners"
-                                    rows={6}
-                                    value={editing.starterCode}
-                                    onChange={(e) =>
-                                        setEditing({ ...editing, starterCode: e.target.value })
-                                    }
-                                    className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
-                                />
-                            </label>
-                        )}
-                        <label className="text-xs font-semibold text-text-secondary">
-                            Instructor solution (hidden from learners)
-                            <textarea
-                                placeholder="Write the reference solution"
-                                rows={6}
-                                value={editing.solution}
-                                onChange={(e) =>
-                                    setEditing({ ...editing, solution: e.target.value })
-                                }
-                                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
-                            />
-                        </label>
-                    </div>
-
-                    <div className="mt-4">
-                        <p className="mb-2 text-xs font-semibold text-text-secondary">
-                            Test Cases
-                        </p>
-                        <TestCaseEditor
-                            testCases={editing.testCases}
-                            onChange={(tcs) => setEditing({ ...editing, testCases: tcs })}
-                        />
-                    </div>
-
-                    {error && (
-                        <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-3 text-xs text-[var(--color-error)]">
-                            {error}
-                        </pre>
-                    )}
-
-                    <div className="mt-4 flex justify-end gap-2">
-                        <Button variant="ghost" onClick={closeEditor}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSaveLesson} disabled={busy}>
-                            <Save size={14} /> {busy ? 'Saving...' : 'Save Lesson'}
-                        </Button>
-                    </div>
-                </Card>
-            )}
-
-            <div className="flex flex-col gap-2">
-                {course.lessons.map((l) => (
-                    <Card key={l._id} className="flex items-center justify-between gap-4 p-4">
-                        <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                                <span className="grid h-6 w-6 place-items-center rounded bg-surface-tertiary text-xs font-bold text-brand-500">
-                                    {l.order}
-                                </span>
-                                <p className="text-sm font-medium text-text-primary">{l.title}</p>
-                                {l.testCases.some((tc) => tc.isHidden) && (
-                                    <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-medium text-brand-500">
-                                        hidden tests
-                                    </span>
-                                )}
-                            </div>
-                            <p className="mt-1 truncate text-xs text-text-muted">{l.slug}</p>
-                        </div>
-                        <div className="flex gap-1">
-                            {perms.canEditContent && (
-                                <>
-                                    <Button size="sm" variant="ghost" onClick={() => openEdit(l)}>
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => setDeleting({ slug: l.slug, title: l.title })}
-                                    >
-                                        <Trash2 size={14} className="text-[var(--color-error)]" />
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    </Card>
-                ))}
-
-                {course.lessons.length === 0 && (
-                    <Card className="p-8 text-center text-sm text-text-muted">
-                        {perms.canEditContent
-                            ? 'No lessons yet. Add the first one above.'
-                            : 'No lessons yet.'}
-                    </Card>
-                )}
-            </div>
-
-            {perms.canEditContent && <CourseQuizEditor courseSlug={course.slug} lessons={course.lessons} />}
-
-            {perms.canManageCourse && (
-                <div className="mt-8 border-t border-border pt-6">
-                    <Button
-                        variant="ghost"
-                        onClick={deleteCourse}
-                        className="text-[var(--color-error)]"
-                    >
-                        <Trash2 size={14} /> Delete Course
-                    </Button>
-                </div>
-            )}
-
-            <ConfirmDialog
-                open={!!deleting}
-                title="Delete lesson?"
-                message={`This will permanently delete "${deleting?.title}".`}
-                confirmLabel="Delete"
-                danger
-                onConfirm={handleDeleteLesson}
-                onCancel={() => setDeleting(null)}
-            />
-        </div>
+      <div className="flex w-full justify-center py-32">
+        <Spinner className="h-8 w-8" />
+      </div>
     );
+  }
+
+  if (query.error || !course) {
+    return (
+      <div className="w-full p-6 lg:p-8">
+        <Link
+          to="/instructor"
+          className="inline-flex items-center gap-2 text-xs text-text-muted hover:text-brand-500"
+        >
+          <ArrowLeft size={14} /> My Courses
+        </Link>
+        <div className="mt-6">
+          <ErrorState
+            title="Couldn't load this course"
+            message="Either it doesn't exist or you don't have access."
+            onRetry={() => query.refetch()}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const { permissions: perms } = course;
+
+  return (
+    <div className="w-full p-6 lg:p-8">
+      <Link
+        to="/instructor"
+        className="mb-4 inline-flex items-center gap-2 text-xs text-text-muted hover:text-brand-500"
+      >
+        <ArrowLeft size={14} /> My Courses
+      </Link>
+
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-text-primary">{course.title}</h1>
+          <p className="mt-1 text-sm text-text-muted">
+            {course.lessons.length} lessons · {course.language} ·{' '}
+            {course.published ? (
+              <span className="text-[var(--color-success)]">Live</span>
+            ) : (
+              <span className="text-[var(--color-warning)]">Draft</span>
+            )}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {perms.canManageCourse && (
+            <Button variant="secondary" onClick={togglePublish}>
+              {course.published ? (
+                <>
+                  <EyeOff size={14} /> Unpublish
+                </>
+              ) : (
+                <>
+                  <Eye size={14} /> Publish
+                </>
+              )}
+            </Button>
+          )}
+          {perms.canEditContent && (
+            <Button onClick={openCreate}>
+              <Plus size={16} /> Add Lesson
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {editing && (
+        <Card className="mb-6 p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text-primary">
+              {originalSlug ? 'Edit lesson' : 'New lesson'}
+            </h2>
+            <Button variant="ghost" size="sm" onClick={closeEditor}>
+              Cancel
+            </Button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <Input
+              placeholder="Title"
+              value={editing.title}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  title: e.target.value,
+                  slug: originalSlug ? editing.slug : autoSlug(e.target.value),
+                })
+              }
+              className="md:col-span-2"
+            />
+            <Input
+              type="number"
+              min={1}
+              placeholder="Order"
+              value={editing.order}
+              onChange={(e) =>
+                setEditing({ ...editing, order: Number(e.target.value) })
+              }
+            />
+          </div>
+
+          <Input
+            placeholder="Slug (lowercase, dashes)"
+            value={editing.slug}
+            onChange={(e) =>
+              setEditing({ ...editing, slug: autoSlug(e.target.value) })
+            }
+            className="mt-3"
+          />
+
+          <textarea
+            placeholder="Content (Markdown supported)"
+            rows={6}
+            value={editing.content}
+            onChange={(e) => setEditing({ ...editing, content: e.target.value })}
+            className="mt-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
+          />
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-secondary">Lesson type</label>
+              <Input
+                placeholder="lesson, quiz, project, video, custom"
+                value={editing.contentType}
+                onChange={(e) => setEditing({ ...editing, contentType: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {isWebCourse(course.language) && (
+            <>
+              <div className="mt-4 rounded-lg border border-border bg-surface-secondary p-4">
+                <p className="text-sm font-semibold text-text-primary">Classic mode checking requirements</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  Used when this lesson has no steps. Steps override these checks for the step they belong to.
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  {([
+                    ['requiredHtml', 'Required HTML'],
+                    ['requiredCss', 'Required CSS'],
+                    ['requiredJs', 'Required JavaScript'],
+                  ] as const).map(([key, label]) => (
+                    <textarea
+                      key={key}
+                      rows={5}
+                      placeholder={`${label}\n.example\n.required-class`}
+                      value={editing.webChecks[key].join('\n')}
+                      onChange={(e) => setEditing({
+                        ...editing,
+                        webChecks: {
+                          ...editing.webChecks,
+                          [key]: e.target.value.split('\n').map((value) => value.trim()).filter(Boolean),
+                        },
+                      })}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
+                      aria-label={label}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-border bg-surface-secondary p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <ListOrdered size={16} className="text-brand-500" />
+                  <p className="text-sm font-semibold text-text-primary">
+                    Step-by-step mode
+                  </p>
+                </div>
+                <p className="mb-3 text-xs text-text-muted">
+                  Add steps to turn this lesson into a guided, learn-by-building tutorial. When steps exist, they replace the classic single-shot flow.
+                </p>
+                <WebLessonStepsEditor
+                  steps={editing.steps}
+                  onChange={(steps) => setEditing({ ...editing, steps })}
+                />
+              </div>
+            </>
+          )}
+
+          <Input
+            placeholder="Coding problem slug (optional, e.g. two-sum)"
+            value={editing.problemSlug}
+            onChange={(e) =>
+              setEditing({ ...editing, problemSlug: e.target.value.trim() })
+            }
+            className="mt-3"
+          />
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-secondary">
+                Function name
+              </label>
+              <Input
+                placeholder="e.g. sum, double"
+                value={editing.functionName}
+                onChange={(e) =>
+                  setEditing({ ...editing, functionName: e.target.value.trim() })
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-secondary">
+                Output mode
+              </label>
+              <select
+                value={editing.outputMode}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    outputMode: e.target.value as 'return' | 'print',
+                  })
+                }
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+              >
+                <option value="print">Print to console</option>
+                <option value="return">Return value</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {isWebCourse(course.language) ? (
+              <div className="grid gap-3 md:col-span-2 md:grid-cols-3">
+                <p className="md:col-span-3 text-sm font-semibold text-text-primary">Classic starter files</p>
+                <p className="md:col-span-3 -mt-2 text-xs text-text-muted">
+                  Used when this lesson has no steps.
+                </p>
+                {(['index.html', 'styles.css', 'script.js'] as const).map(
+                  (fileName) => (
+                    <label key={fileName} className="text-xs font-semibold text-text-secondary">
+                      {fileName}
+                      <textarea
+                        placeholder={`Write the starting ${fileName} code`}
+                        rows={8}
+                        value={editing.starterFiles[fileName] ?? ''}
+                        onChange={(e) =>
+                          setEditing({
+                            ...editing,
+                            starterFiles: {
+                              ...editing.starterFiles,
+                              [fileName]: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
+                      />
+                    </label>
+                  )
+                )}
+              </div>
+            ) : (
+              <label className="text-xs font-semibold text-text-secondary">
+                Starter code
+                <textarea
+                  placeholder="Write the starting code shown to learners"
+                  rows={6}
+                  value={editing.starterCode}
+                  onChange={(e) =>
+                    setEditing({ ...editing, starterCode: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
+                />
+              </label>
+            )}
+            <label className="text-xs font-semibold text-text-secondary">
+              Instructor solution (hidden from learners)
+              <textarea
+                placeholder="Write the reference solution"
+                rows={6}
+                value={editing.solution}
+                onChange={(e) =>
+                  setEditing({ ...editing, solution: e.target.value })
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs font-normal text-text-primary focus:border-brand-500 focus:outline-none"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-semibold text-text-secondary">
+              Test Cases
+            </p>
+            <TestCaseEditor
+              testCases={editing.testCases}
+              onChange={(tcs) => setEditing({ ...editing, testCases: tcs })}
+            />
+          </div>
+
+          {error && (
+            <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/5 p-3 text-xs text-[var(--color-error)]">
+              {error}
+            </pre>
+          )}
+
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="ghost" onClick={closeEditor}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveLesson} disabled={busy}>
+              <Save size={14} /> {busy ? 'Saving...' : 'Save Lesson'}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {course.lessons.map((l) => (
+          <Card key={l._id} className="flex items-center justify-between gap-4 p-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="grid h-6 w-6 place-items-center rounded bg-surface-tertiary text-xs font-bold text-brand-500">
+                  {l.order}
+                </span>
+                <p className="text-sm font-medium text-text-primary">{l.title}</p>
+                {(l.steps?.length ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-medium text-brand-500">
+                    <ListOrdered size={10} /> {l.steps.length} steps
+                  </span>
+                )}
+                {l.testCases.some((tc) => tc.isHidden) && (
+                  <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-medium text-brand-500">
+                    hidden tests
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 truncate text-xs text-text-muted">{l.slug}</p>
+            </div>
+            <div className="flex gap-1">
+              {perms.canEditContent && (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(l)}>
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDeleting({ slug: l.slug, title: l.title })}
+                  >
+                    <Trash2 size={14} className="text-[var(--color-error)]" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </Card>
+        ))}
+
+        {course.lessons.length === 0 && (
+          <Card className="p-8 text-center text-sm text-text-muted">
+            {perms.canEditContent
+              ? 'No lessons yet. Add the first one above.'
+              : 'No lessons yet.'}
+          </Card>
+        )}
+      </div>
+
+      {perms.canEditContent && <CourseQuizEditor courseSlug={course.slug} lessons={course.lessons} />}
+
+      {perms.canManageCourse && (
+        <div className="mt-8 border-t border-border pt-6">
+          <Button
+            variant="ghost"
+            onClick={deleteCourse}
+            className="text-[var(--color-error)]"
+          >
+            <Trash2 size={14} /> Delete Course
+          </Button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={!!deleting}
+        title="Delete lesson?"
+        message={`This will permanently delete "${deleting?.title}".`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleDeleteLesson}
+        onCancel={() => setDeleting(null)}
+      />
+    </div>
+  );
 };
 
 function autoSlug(val: string) {
-    return val
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
+  return val
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 }
 
 function isWebCourse(language: string): boolean {
-    return language === 'html-css' || language === 'react' || language === 'tailwind';
+  return language === 'html-css' || language === 'react' || language === 'tailwind';
 }

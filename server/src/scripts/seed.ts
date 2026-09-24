@@ -16,8 +16,23 @@ type CourseLanguage = 'html-css' | 'javascript' | 'python' | 'ruby' | 'java' | '
 interface RawTestCase {
   input: string;
   expectedOutput: string;
-  /** Display flag. Hides input/output from the student's test panel. */
   isHidden: boolean;
+}
+
+interface LessonSeedStep {
+  title: string;
+  instructions: string;
+  hint?: string;
+  starterFiles: Partial<{
+    'index.html': string;
+    'styles.css': string;
+    'script.js': string;
+  }>;
+  webChecks: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
 }
 
 interface LessonSeed {
@@ -27,6 +42,13 @@ interface LessonSeed {
   starterCode: string;
   solution: string;
   testCases?: RawTestCase[];
+  starterFiles?: Record<string, string>;
+  webChecks?: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
+  steps?: LessonSeedStep[];
 }
 
 interface CourseSeed {
@@ -36,6 +58,28 @@ interface CourseSeed {
   language: CourseLanguage;
   lessons: LessonSeed[];
 }
+
+// ─── Shared HTML scaffolds ────────────────────────────────────────
+
+const HTML_SHELL = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KodxCamp</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Your markup goes here -->
+  <script src="script.js"></script>
+</body>
+</html>`;
+
+const EMPTY_CSS = `/* Your styles go here */
+`;
+
+const EMPTY_JS = `// Your JavaScript goes here
+`;
 
 // ─── Course seed data ─────────────────────────────────────────────
 
@@ -51,9 +95,31 @@ const courses: CourseSeed[] = [
         title: 'Your First HTML Page',
         slug: 'first-html-page',
         content:
-          'HTML is the skeleton of every webpage. In this lesson, you will create a simple heading using the `<h1>` tag.\n\n**Task:** Write an `<h1>` tag containing the text `Hello, KodxCamp!`',
-        starterCode: '<!-- Write your <h1> below -->\n',
+          'HTML is the skeleton of every webpage. In this lesson, you will create a simple heading using the `<h1>` tag.\n\n**Task:** Write an `<h1>` tag containing the text `Hello, KodxCamp!`\n\nClick **Run** to see your page. Click **Submit** to check your work.',
+        starterCode: '',
         solution: '<h1>Hello, KodxCamp!</h1>',
+        starterFiles: {
+          'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My First Page</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Write your <h1> below -->
+  <script src="script.js"></script>
+</body>
+</html>`,
+          'styles.css': EMPTY_CSS,
+          'script.js': EMPTY_JS,
+        },
+        webChecks: {
+          requiredHtml: ['<h1>', 'Hello, KodxCamp!'],
+          requiredCss: [],
+          requiredJs: [],
+        },
         testCases: [
           { input: '', expectedOutput: 'Hello, KodxCamp!', isHidden: false },
         ],
@@ -62,9 +128,105 @@ const courses: CourseSeed[] = [
         title: 'Styling with CSS',
         slug: 'styling-with-css',
         content:
-          'CSS controls how HTML looks. Use the `style` attribute to color text.\n\n**Task:** Make the heading green using inline styles.',
-        starterCode: '<h1>Styled Text</h1>',
-        solution: '<h1 style="color: green;">Styled Text</h1>',
+          'CSS controls how HTML looks. Use a class and a stylesheet to color text.\n\n**Task:** Give the heading the class `heading`, then in `styles.css` write a rule that sets `.heading { color: green; }`\n\nClick **Run** to see the preview. Click **Submit** to check your work.',
+        starterCode: '',
+        solution: `<h1 class="heading">Styled Text</h1>`,
+        starterFiles: {
+          'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Styled Text</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <h1>Styled Text</h1>
+  <script src="script.js"></script>
+</body>
+</html>`,
+          'styles.css': `/* Add a .heading rule here */
+`,
+          'script.js': EMPTY_JS,
+        },
+        webChecks: {
+          requiredHtml: ['.heading'],
+          requiredCss: ['.heading', 'color'],
+          requiredJs: [],
+        },
+        testCases: [
+          { input: '', expectedOutput: 'Styled Text', isHidden: false },
+        ],
+      },
+      {
+        title: 'Build a Profile Card',
+        slug: 'build-a-profile-card',
+        content:
+          'Follow the steps below to build a complete profile card with HTML and CSS. Each step adds one piece. You cannot skip ahead until the current step passes.\n\nClick **Run** to preview the page at any time. Click **Submit** when you think the current step is complete.',
+        starterCode: '',
+        solution: '',
+        steps: [
+          {
+            title: 'Add the card container',
+            instructions:
+              'Start with the HTML shell. Add a `<div>` with class `card` inside `<body>`.\n\nDon\'t worry about styling yet - that comes next.',
+            hint: 'Use `<div class="card"></div>` and place it between `<body>` and `</body>`.',
+            starterFiles: {
+              'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile Card</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Add a div with class "card" here -->
+  <script src="script.js"></script>
+</body>
+</html>`,
+              'styles.css': EMPTY_CSS,
+              'script.js': EMPTY_JS,
+            },
+            webChecks: {
+              requiredHtml: ['<div class="card"', '</div>'],
+              requiredCss: [],
+              requiredJs: [],
+            },
+          },
+          {
+            title: 'Add the name and bio',
+            instructions:
+              'Inside the card, add an `<h1>` with your name and a `<p>` with class `bio` containing a one-line introduction.\n\nYour HTML from step 1 carries forward - just add the two elements inside the card.',
+            hint: 'Two siblings inside the card div: `<h1>...</h1>` then `<p class="bio">...</p>`.',
+            starterFiles: {
+              'index.html': '',
+            },
+            webChecks: {
+              requiredHtml: ['<h1>', '<p class="bio"'],
+              requiredCss: [],
+              requiredJs: [],
+            },
+          },
+          {
+            title: 'Style the card',
+            instructions:
+              'Now style it. In `styles.css`, add a rule for `.card` that gives it a white background, rounded corners, and padding.',
+            hint: 'Try: `.card { background: white; border-radius: 16px; padding: 2rem; }`',
+            starterFiles: {
+              'styles.css': `/* Style the .card here */
+.card {
+  /* background, border-radius, padding */
+}
+`,
+            },
+            webChecks: {
+              requiredHtml: [],
+              requiredCss: ['.card', 'background', 'border-radius', 'padding'],
+              requiredJs: [],
+            },
+          },
+        ],
       },
     ],
   },
@@ -226,15 +388,10 @@ const courses: CourseSeed[] = [
   },
 ];
 
-// ─── DSA practice problems ────────────────────────────────────────
-//
-// Multi-language starters. Each problem declares `starterCode` for
-// every language the picker should offer. Test cases are stored with
-// plaintext expectedOutput; `isHidden` is a display flag that hides
-// the input/output from the student while they work.
+// ─── DSA + SQL + Web practice problems ────────────────────────────
 
 const problems = [
-    {
+  {
     number: 1,
     title: 'Add Two Numbers',
     slug: 'add-two-numbers',
@@ -305,10 +462,261 @@ const problems = [
       { input: '[[0, -1, -2]]', expectedOutput: '0', isHidden: true },
       { input: '[[100, 100, 100]]', expectedOutput: '100', isHidden: true },
     ],
-  }
+  },
+  {
+    number: 3,
+    title: 'Select All Employees',
+    slug: 'sql-select-all-employees',
+    difficulty: 'easy' as const,
+    topics: ['sql', 'select'],
+    statement:
+      'The `employees` table has columns `id`, `name`, and `department`.\n\nWrite a query that returns **every row** from `employees`, with **all columns**, ordered by `id` ascending.\n\n**Expected output format**\n```\nid | name | department\n--- | --- | ---\n1 | Ada | Engineering\n2 | Alan | Research\n```',
+    functionName: 'query',
+    outputMode: 'print' as const,
+    sqlSetup: `CREATE TABLE employees (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  department TEXT NOT NULL
+);
+
+INSERT INTO employees (id, name, department) VALUES
+  (1, 'Ada', 'Engineering'),
+  (2, 'Alan', 'Research'),
+  (3, 'Grace', 'Engineering');
+`,
+    starterCode: {
+      sql: '-- Return all employees, ordered by id\nSELECT * FROM employees;',
+    },
+    testCases: [
+      {
+        input: '',
+        expectedOutput:
+          'id | name | department\n--- | --- | ---\n1 | Ada | Engineering\n2 | Alan | Research\n3 | Grace | Engineering',
+        isHidden: false,
+      },
+    ],
+  },
+  {
+    number: 4,
+    title: 'Filter by Department',
+    slug: 'sql-filter-by-department',
+    difficulty: 'easy' as const,
+    topics: ['sql', 'select', 'where'],
+    statement:
+      'The `employees` table has columns `id`, `name`, and `department`.\n\nWrite a query that returns the `name` of every employee in the **Engineering** department, ordered by `name` ascending.\n\nOnly the `name` column should appear in the output.',
+    functionName: 'query',
+    outputMode: 'print' as const,
+    sqlSetup: `CREATE TABLE employees (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  department TEXT NOT NULL
+);
+
+INSERT INTO employees (id, name, department) VALUES
+  (1, 'Ada', 'Engineering'),
+  (2, 'Alan', 'Research'),
+  (3, 'Grace', 'Engineering'),
+  (4, 'Linus', 'Engineering'),
+  (5, 'Margaret', 'Research');
+`,
+    starterCode: {
+      sql: "-- Return names in the Engineering department\nSELECT name FROM employees;",
+    },
+    testCases: [
+      {
+        input: '',
+        expectedOutput: 'name\n---\nAda\nGrace\nLinus',
+        isHidden: false,
+      },
+    ],
+  },
+  {
+    number: 5,
+    title: 'Count Rows by Group',
+    slug: 'sql-count-rows-by-group',
+    difficulty: 'medium' as const,
+    topics: ['sql', 'aggregate', 'group-by'],
+    statement:
+      'The `employees` table has columns `id`, `name`, and `department`.\n\nWrite a query that returns the number of employees **per department**. Output two columns: `department` and `count`, sorted by `count` descending, then by `department` ascending to break ties.',
+    functionName: 'query',
+    outputMode: 'print' as const,
+    sqlSetup: `CREATE TABLE employees (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  department TEXT NOT NULL
+);
+
+INSERT INTO employees (id, name, department) VALUES
+  (1, 'Ada', 'Engineering'),
+  (2, 'Alan', 'Research'),
+  (3, 'Grace', 'Engineering'),
+  (4, 'Linus', 'Engineering'),
+  (5, 'Margaret', 'Research'),
+  (6, 'Barbara', 'Engineering'),
+  (7, 'Donald', 'Design');
+`,
+    starterCode: {
+      sql: "-- Count employees per department\nSELECT department, COUNT(*) AS count\nFROM employees\nGROUP BY department;",
+    },
+    testCases: [
+      {
+        input: '',
+        expectedOutput:
+          'department | count\n--- | ---\nEngineering | 4\nResearch | 2\nDesign | 1',
+        isHidden: false,
+      },
+    ],
+  },
+  {
+    number: 6,
+    title: 'Hello, Web',
+    slug: 'web-hello-world',
+    difficulty: 'easy' as const,
+    topics: ['html', 'web'],
+    statement:
+      'Build a webpage that shows the heading `Hello, Web!` on screen.\n\nThe scaffold includes `index.html`, `styles.css`, and `script.js`. For this problem, only `index.html` needs a change - add an `<h1>` with the exact text `Hello, Web!`.',
+    functionName: 'query',
+    outputMode: 'print' as const,
+    starterCode: {
+      'html-css': HTML_SHELL,
+      'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hello, Web</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Add an <h1> that says "Hello, Web!" -->
+  <script src="script.js"></script>
+</body>
+</html>`,
+      'styles.css': EMPTY_CSS,
+      'script.js': EMPTY_JS,
+    },
+    testCases: [
+      {
+        input: '',
+        expectedOutput: 'Hello, Web!',
+        isHidden: false,
+      },
+    ],
+  },
+  {
+    number: 7,
+    title: 'Centered Card',
+    slug: 'web-centered-card',
+    difficulty: 'easy' as const,
+    topics: ['html', 'css', 'layout'],
+    statement:
+      'Build a card centered on the page.\n\n**Requirements:**\n- An element with class `card` containing the text `Card content`\n- The card should be the only text visible on the page',
+    functionName: 'query',
+    outputMode: 'print' as const,
+    starterCode: {
+      'html-css': HTML_SHELL,
+      'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Centered Card</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Add a .card div with the text "Card content" inside -->
+  <script src="script.js"></script>
+</body>
+</html>`,
+      'styles.css': EMPTY_CSS,
+      'script.js': EMPTY_JS,
+    },
+    testCases: [
+      {
+        input: '',
+        expectedOutput: 'Card content',
+        isHidden: false,
+      },
+    ],
+  },
+  {
+    number: 8,
+    title: 'Click Counter',
+    slug: 'web-click-counter',
+    difficulty: 'medium' as const,
+    topics: ['javascript', 'dom', 'events'],
+    statement:
+      'Build a counter that increments when a button is clicked.\n\n**Requirements:**\n- A `<button id="counter">` showing `Clicked 0 times` initially\n- Each click increments the count and updates the button text to `Clicked N times`\n\nYou will need all three files: `index.html` for the button, and `script.js` for the click handler.',
+    functionName: 'query',
+    outputMode: 'print' as const,
+    starterCode: {
+      'html-css': HTML_SHELL,
+      'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Click Counter</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Add a <button id="counter"> showing "Clicked 0 times" -->
+  <script src="script.js"></script>
+</body>
+</html>`,
+      'styles.css': EMPTY_CSS,
+      'script.js': `// Wire up the counter button
+`,
+    },
+    testCases: [
+      {
+        input: '',
+        expectedOutput: 'Clicked 0 times',
+        isHidden: false,
+      },
+    ],
+  },
+  {
+    number: 9,
+    title: 'Styled Bio',
+    slug: 'web-styled-bio',
+    difficulty: 'easy' as const,
+    topics: ['html', 'css'],
+    statement:
+      'Build a small bio section.\n\n**Requirements:**\n- An `<h1>` with your name\n- A `<p class="bio">` with a short intro\n- The paragraph should be styled with a color in `styles.css`',
+    functionName: 'query',
+    outputMode: 'print' as const,
+    starterCode: {
+      'html-css': HTML_SHELL,
+      'index.html': `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <h1>Your Name</h1>
+  <p class="bio">Short intro goes here.</p>
+  <script src="script.js"></script>
+</body>
+</html>`,
+      'styles.css': `/* Style .bio with a color */
+`,
+      'script.js': EMPTY_JS,
+    },
+    testCases: [
+      {
+        input: '',
+        expectedOutput: 'Your Name\nShort intro goes here.',
+        isHidden: false,
+      },
+    ],
+  },
 ];
 
-// ─── Projects ─────────────────────────────────────────────────────
+// ─── Projects (unchanged) ─────────────────────────────────────────
 
 const projects = [
   {
@@ -575,7 +983,7 @@ async function seedInstructorAndClasses() {
     },
     {
       title: 'Building a REST API with Express',
-      slug: 'building-rest-api-with-express',
+      slug: 'building-a-rest-api-with-express',
       description:
         'Hands-on session: routes, controllers, error handling, and a working Express API.',
       instructorId: instructor._id.toString(),
@@ -654,9 +1062,26 @@ async function seed() {
         order: i + 1,
         content: l.content,
         starterCode: l.starterCode,
+        starterFiles: l.starterFiles,
+        webChecks: l.webChecks,
         solution: l.solution,
         language: c.language,
         testCases: l.testCases ?? [],
+        steps: (l.steps ?? []).map((step) => ({
+          title: step.title,
+          instructions: step.instructions,
+          hint: step.hint,
+          starterFiles: {
+            'index.html': step.starterFiles['index.html'] ?? '',
+            'styles.css': step.starterFiles['styles.css'] ?? '',
+            'script.js': step.starterFiles['script.js'] ?? '',
+          },
+          webChecks: {
+            requiredHtml: step.webChecks.requiredHtml,
+            requiredCss: step.webChecks.requiredCss,
+            requiredJs: step.webChecks.requiredJs,
+          },
+        })),
       });
     }
     console.log(`  ✅ ${c.title} (${c.lessons.length} lessons)`);

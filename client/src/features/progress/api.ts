@@ -6,6 +6,8 @@ export interface ApiProgress {
   courseId: string;
   completedLessons: string[];
   currentLessonId?: string;
+  currentStepIndex: number;
+  completedSteps: number[];
   percentage: number;
 }
 
@@ -73,6 +75,19 @@ export const progressApi = {
     return data.data;
   },
 
+  markStepComplete: async (
+    courseId: string,
+    lessonId: string,
+    stepIndex: number
+  ): Promise<ApiProgress> => {
+    const { data } = await api.post('/progress/complete-step', {
+      courseId,
+      lessonId,
+      stepIndex,
+    });
+    return data.data;
+  },
+
   overview: async (): Promise<ApiOverview> => {
     const { data } = await api.get('/analytics/overview');
     return data.data;
@@ -103,4 +118,3 @@ export const progressApi = {
     return data.data;
   },
 };
-

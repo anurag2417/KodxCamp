@@ -39,6 +39,22 @@ export interface ApiLessonTestCase {
   isHidden: boolean;
 }
 
+export interface ApiInstructorWebLessonStep {
+  title: string;
+  instructions: string;
+  hint?: string;
+  starterFiles: {
+    'index.html': string;
+    'styles.css': string;
+    'script.js': string;
+  };
+  webChecks: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
+}
+
 export interface ApiInstructorQuizQuestion {
   _id: string;
   prompt: string;
@@ -67,6 +83,8 @@ export interface ApiInstructorLesson {
   outputMode: 'return' | 'print';
   language: string;
   testCases: ApiLessonTestCase[];
+  /** Step-by-step mode. Empty array means classic single-shot. */
+  steps: ApiInstructorWebLessonStep[];
 }
 
 export interface ApiInstructorCourseFull extends ApiInstructorCourse {

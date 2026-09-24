@@ -40,6 +40,17 @@ const JAVA_FALLBACK_STARTER = `public class Main {
 }
 `;
 
+const SQL_FALLBACK_STARTER = `-- Write your SQL query below
+SELECT * FROM your_table;
+`;
+
+const WEB_FILES = ['index.html', 'styles.css', 'script.js'] as const;
+type WebFile = (typeof WEB_FILES)[number];
+
+function isWebLanguage(lang: string): boolean {
+  return lang === 'html-css' || lang === 'react' || lang === 'tailwind';
+}
+
 function toMonacoLanguage(lang: string): string {
   switch (lang) {
     case 'html-css':
@@ -66,6 +77,44 @@ function toMonacoLanguage(lang: string): string {
   }
 }
 
+/**
+ * Assemble the three web files into a single HTML document ready for
+ * the sandboxed iframe. The `<script src="script.js">` reference in the
+ * student's HTML (if any) is left alone - we inject our own inline
+ * script at the end of body, so the browser sees the real code.
+ */
+function buildWebPreview(files: Record<string, string>): string {
+  const html = files['index.html'] ?? '';
+  const css = files['styles.css'] ?? '';
+  const javascript = files['script.js'] ?? '';
+
+  let doc = html;
+
+  if (css) {
+    const styleTag = `<style>${css}</style>`;
+    if (doc.includes('</head>')) {
+      doc = doc.replace('</head>', `${styleTag}\n</head>`);
+    } else {
+      doc = styleTag + doc;
+    }
+  }
+
+  // Strip any <script src="..."> references so we don't 404 trying to
+  // load a file that only exists in the editor.
+  doc = doc.replace(/<script[^>]*src=[^>]*><\/script>/gi, '');
+
+  if (javascript) {
+    const scriptTag = `<script>${javascript}</script>`;
+    if (doc.includes('</body>')) {
+      doc = doc.replace('</body>', `${scriptTag}\n</body>`);
+    } else {
+      doc += scriptTag;
+    }
+  }
+
+  return doc;
+}
+
 export const ProblemDetail: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const { problem, loading, error, reload } = useProblem(slug);
@@ -86,6 +135,8 @@ export const ProblemDetail: React.FC = () => {
 
   const [language, setLanguage] = useState<string>('javascript');
   const [code, setCode] = useState('');
+  const [files, setFiles] = useState<Record<string, string>>({});
+  const [activeFile, setActiveFile] = useState<WebFile>(WEB_FILES[0]);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<TestRunSummary | undefined>();
   const [accepted, setAccepted] = useState(false);
@@ -93,10 +144,10 @@ export const ProblemDetail: React.FC = () => {
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
   const [showAcceptance, setShowAcceptance] = useState(false);
 
-  // Warm up every language on the problem in the background. The
-  // active language goes to the front of the queue.
   const languageIds = useMemo(() => languages.map((l) => l.id), [languages]);
   const { status: preloadStatus } = useLanguagePreload(languageIds, language);
+
+  const isWebProblem = isWebLanguage(language);
 
   useEffect(() => {
     if (languages.length > 0 && !languages.some((l) => l.id === language)) {
@@ -105,24 +156,54 @@ export const ProblemDetail: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [languages]);
 
+  // Load starter state. For web languages we want three files; for
+  // everything else we want a single code blob.
   useEffect(() => {
     if (!problem) return;
-    const configured = problem.starterCode?.[language];
-    const starter =
-      configured ?? (language === 'java' ? JAVA_FALLBACK_STARTER : '');
+
     const draftKey = `problem:${user?._id ?? 'guest'}:${problem._id}:${language}`;
-    setCode(readStoredValue<string>(draftKey) ?? starter);
+
+    if (isWebLanguage(language)) {
+      const stored = readStoredValue<Record<string, string>>(
+        `${draftKey}:files`
+      );
+      const configured = problem.starterCode ?? {};
+      setFiles(
+        stored ?? {
+          'index.html': configured['index.html'] ?? '',
+          'styles.css': configured['styles.css'] ?? '',
+          'script.js': configured['script.js'] ?? '',
+        }
+      );
+      setActiveFile(WEB_FILES[0]);
+    } else {
+      const configured = problem.starterCode?.[language];
+      const starter =
+        configured ??
+        (language === 'java'
+          ? JAVA_FALLBACK_STARTER
+          : language === 'sql'
+            ? SQL_FALLBACK_STARTER
+            : '');
+      setCode(readStoredValue<string>(draftKey) ?? starter);
+    }
+
     setSummary(undefined);
     setAccepted(false);
   }, [problem, language, user?._id]);
 
+  // Persist drafts.
   useEffect(() => {
-    if (!problem || !code) return;
-    writeStoredValue(
-      `problem:${user?._id ?? 'guest'}:${problem._id}:${language}`,
-      code
-    );
-  }, [code, language, problem, user?._id]);
+    if (!problem) return;
+    const draftKey = `problem:${user?._id ?? 'guest'}:${problem._id}:${language}`;
+    if (isWebLanguage(language)) {
+      if (Object.keys(files).length === 0) return;
+      writeStoredValue(`${draftKey}:files`, files);
+    } else {
+      if (!code) return;
+      writeStoredValue(draftKey, code);
+    }
+  }, [code, files, language, problem, user?._id]);
 
   useEffect(() => {
     if (!user || !problem) return;
@@ -132,8 +213,15 @@ export const ProblemDetail: React.FC = () => {
       .then((rows) => {
         if (!cancelled) {
           setSubmissions(rows);
-          const latest = rows.find((submission) => submission.language === language);
-          if (latest) setCode(latest.code);
+          const latest = rows.find((s) => s.language === language);
+          if (latest) {
+            if (isWebLanguage(language)) {
+              // Legacy submissions stored only a single string; skip
+              // adopting it as files.
+            } else {
+              setCode(latest.code);
+            }
+          }
         }
       })
       .catch(() => {
@@ -164,9 +252,15 @@ export const ProblemDetail: React.FC = () => {
       isHidden: tc.isHidden,
     }));
 
-    const result = await runTests(language, code, visibleCases, {
+    // Web problems: assemble the three files into one HTML document
+    // and run it through the html runner. Non-web problems go straight
+    // through with their code as-is.
+    const submittedCode = isWebProblem ? buildWebPreview(files) : code;
+
+    const result = await runTests(language, submittedCode, visibleCases, {
       functionName: problem.functionName,
       outputMode: problem.outputMode,
+      sqlSetup: problem.sqlSetup,
     });
 
     setSummary(result);
@@ -178,7 +272,7 @@ export const ProblemDetail: React.FC = () => {
         await problemsApi.submit({
           problemId: problem._id,
           language,
-          code,
+          code: submittedCode,
           status: result.allPassed ? 'accepted' : 'wrong_answer',
           passedTests: result.passedTests,
           totalTests: result.totalTests,
@@ -229,6 +323,8 @@ export const ProblemDetail: React.FC = () => {
     );
   }
 
+  const activeCode = isWebProblem ? files[activeFile] ?? '' : code;
+
   return (
     <>
       <div className="flex h-[calc(100vh-64px)] w-full">
@@ -255,11 +351,49 @@ export const ProblemDetail: React.FC = () => {
                     canSubmit={!!user}
                     preloadStatus={preloadStatus}
                   />
+
+                  {/* Web problems: tabbed multi-file editor */}
+                  {isWebProblem && (
+                    <div className="flex items-center gap-1 border-b border-border bg-surface-secondary px-3 py-1.5">
+                      {WEB_FILES.map((fileName) => (
+                        <button
+                          key={fileName}
+                          type="button"
+                          onClick={() => setActiveFile(fileName)}
+                          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                            activeFile === fileName
+                              ? 'bg-surface-tertiary text-brand-500'
+                              : 'text-text-muted hover:bg-surface-tertiary hover:text-text-primary'
+                          }`}
+                        >
+                          {fileName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex-1">
                     <CodeEditor
-                      language={toMonacoLanguage(language)}
-                      value={code}
-                      onChange={setCode}
+                      language={toMonacoLanguage(
+                        isWebProblem
+                          ? activeFile === 'styles.css'
+                            ? 'css'
+                            : activeFile === 'script.js'
+                              ? 'javascript'
+                              : language
+                          : language
+                      )}
+                      value={activeCode}
+                      onChange={(value) => {
+                        if (isWebProblem) {
+                          setFiles((current) => ({
+                            ...current,
+                            [activeFile]: value,
+                          }));
+                        } else {
+                          setCode(value);
+                        }
+                      }}
                     />
                   </div>
                 </div>

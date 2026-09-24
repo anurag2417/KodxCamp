@@ -26,8 +26,10 @@ export const judgeService = {
    * problem's actual test-case count and award XP once per solved
    * problem.
    *
-   * Server-side code judging is future work. Until then, submissions
-   * are self-reported by the client.
+   * For SQL problems the same rule applies: the client runs the
+   * student's query against SQL.js (seeded by `Problem.sqlSetup`),
+   * formats the result table, and compares it to `expectedOutput`.
+   * The server only records the outcome.
    */
   async recordSubmission(input: RecordSubmissionInput) {
     const problem = await Problem.findById(input.problemId);

@@ -20,6 +20,24 @@ interface TestCaseInput {
   isHidden?: boolean;
 }
 
+interface WebChecksInput {
+  requiredHtml?: string[];
+  requiredCss?: string[];
+  requiredJs?: string[];
+}
+
+interface WebLessonStepInput {
+  title: string;
+  instructions: string;
+  hint?: string;
+  starterFiles?: Partial<{
+    'index.html': string;
+    'styles.css': string;
+    'script.js': string;
+  }>;
+  webChecks?: WebChecksInput;
+}
+
 interface LessonInput {
   title: string;
   slug: string;
@@ -28,12 +46,14 @@ interface LessonInput {
   contentType?: string;
   starterCode?: string;
   starterFiles?: Record<string, string>;
+  webChecks?: WebChecksInput;
   solution?: string;
   problemSlug?: string;
   functionName?: string;
   outputMode?: 'return' | 'print';
   language: string;
   testCases?: TestCaseInput[];
+  steps?: WebLessonStepInput[];
 }
 
 function getUser(req: AuthRequest) {
@@ -53,6 +73,58 @@ function normalizeTestCase(tc: TestCaseInput, index: number) {
     expectedOutput: tc.expectedOutput,
     isHidden: Boolean(tc.isHidden),
   };
+}
+
+function normalizeWebChecks(checks?: WebChecksInput) {
+  return {
+    requiredHtml: checks?.requiredHtml ?? [],
+    requiredCss: checks?.requiredCss ?? [],
+    requiredJs: checks?.requiredJs ?? [],
+  };
+}
+
+function normalizeSteps(
+  language: string,
+  steps: WebLessonStepInput[] | undefined
+): Array<{
+  title: string;
+  instructions: string;
+  hint?: string;
+  starterFiles: {
+    'index.html': string;
+    'styles.css': string;
+    'script.js': string;
+  };
+  webChecks: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
+}> {
+  if (!steps || steps.length === 0) return [];
+  if (!['html-css', 'react', 'tailwind'].includes(language)) {
+    return [];
+  }
+
+  return steps.map((step, i) => {
+    if (!step.title || step.title.trim().length === 0) {
+      throw new ApiError(400, `Step #${i + 1}: title is required`);
+    }
+    if (!step.instructions || step.instructions.trim().length === 0) {
+      throw new ApiError(400, `Step #${i + 1}: instructions are required`);
+    }
+    return {
+      title: step.title.trim(),
+      instructions: step.instructions,
+      hint: step.hint,
+      starterFiles: {
+        'index.html': step.starterFiles?.['index.html'] ?? '',
+        'styles.css': step.starterFiles?.['styles.css'] ?? '',
+        'script.js': step.starterFiles?.['script.js'] ?? '',
+      },
+      webChecks: normalizeWebChecks(step.webChecks),
+    };
+  });
 }
 
 function normalizeStarterFiles(
@@ -90,7 +162,7 @@ export const courseService = {
 
     const lessons = await Lesson.find({ courseId: course._id.toString() })
       .sort({ order: 1 })
-      .select('-solution -testCases -starterCode')
+      .select('-solution -testCases -starterCode -steps')
       .lean();
 
     return { ...course, lessons, totalLessons: lessons.length };
@@ -108,8 +180,6 @@ export const courseService = {
       .lean();
     if (!lesson) throw new ApiError(404, 'Lesson not found');
 
-    // Return all test cases with plaintext expected output and a
-    // display flag. The client decides whether to show each one.
     const testCases = (lesson.testCases ?? []).map((tc, i) => ({
       index: i,
       input: tc.input ?? '',
@@ -117,7 +187,20 @@ export const courseService = {
       isHidden: Boolean(tc.isHidden),
     }));
 
-    const safeLesson = { ...lesson, testCases };
+    const safeLesson = {
+      ...lesson,
+      testCases,
+      steps: lesson.steps ?? [],
+    };
+
+    // Sidebar needs the sibling lesson list. Fetch summaries here so
+    // the client doesn't have to make a second request.
+    const siblingLessons = await Lesson.find({
+      courseId: course._id.toString(),
+    })
+      .sort({ order: 1 })
+      .select('_id title slug order language problemSlug')
+      .lean();
 
     const safeCourse = {
       _id: course._id,
@@ -126,7 +209,8 @@ export const courseService = {
       description: course.description,
       language: course.language,
       thumbnail: course.thumbnail,
-      totalLessons: course.totalLessons,
+      totalLessons: siblingLessons.length,
+      lessons: siblingLessons,
     };
 
     return { course: safeCourse, lesson: safeLesson };
@@ -180,7 +264,10 @@ export const courseService = {
 
     return {
       ...course,
-      lessons,
+      lessons: lessons.map((l) => ({
+        ...l,
+        steps: l.steps ?? [],
+      })),
       myRole: role,
       permissions: {
         canEditContent: permissions.canEditContent(user, permissionCourse),
@@ -305,11 +392,15 @@ export const courseService = {
       normalizeTestCase(tc, i)
     );
 
+    const steps = normalizeSteps(input.language, input.steps);
+
     const created = await Lesson.create({
       ...input,
       courseId: course._id.toString(),
       starterFiles: normalizeStarterFiles(course.language, input.starterFiles),
+      webChecks: normalizeWebChecks(input.webChecks),
       testCases,
+      steps,
       functionName: input.functionName ?? 'solve',
       outputMode: input.outputMode ?? 'print',
     });
@@ -350,15 +441,28 @@ export const courseService = {
     }
 
     const update: Record<string, unknown> = { ...patch };
+
     if (patch.starterFiles || patch.language) {
       update.starterFiles = normalizeStarterFiles(
         patch.language ?? course.language,
         patch.starterFiles
       );
     }
+
+    if (patch.webChecks) {
+      update.webChecks = normalizeWebChecks(patch.webChecks);
+    }
+
     if (patch.testCases) {
       update.testCases = patch.testCases.map((tc, i) =>
         normalizeTestCase(tc, i)
+      );
+    }
+
+    if (patch.steps) {
+      update.steps = normalizeSteps(
+        patch.language ?? course.language,
+        patch.steps
       );
     }
 

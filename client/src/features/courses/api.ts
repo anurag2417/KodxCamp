@@ -28,6 +28,22 @@ export interface ApiLessonTestCase {
   isHidden: boolean;
 }
 
+export interface ApiWebLessonStep {
+  title: string;
+  instructions: string;
+  hint?: string;
+  starterFiles: {
+    'index.html': string;
+    'styles.css': string;
+    'script.js': string;
+  };
+  webChecks: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
+}
+
 export interface ApiLessonFull {
   _id: string;
   courseId: string;
@@ -38,12 +54,26 @@ export interface ApiLessonFull {
   contentType?: string;
   starterCode: string;
   starterFiles?: Record<string, string>;
-  webChecks?: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] };
+  webChecks?: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
   problemSlug?: string;
   functionName: string;
   outputMode: 'return' | 'print';
   language: string;
   testCases: ApiLessonTestCase[];
+  /** Step-by-step mode. Empty array means classic single-shot. */
+  steps: ApiWebLessonStep[];
+}
+
+/**
+ * The course payload returned alongside a lesson includes the sibling
+ * lesson summaries so the sidebar can render without a second request.
+ */
+export interface ApiCourseWithLessons extends ApiCourse {
+  lessons: ApiLessonSummary[];
 }
 
 export interface ApiQuizQuestion {
@@ -59,7 +89,12 @@ export interface ApiQuizResult {
   score: number;
   total: number;
   percentage: number;
-  results: { questionId: string; correct: boolean; correctOptionIds?: string[]; explanation?: string }[];
+  results: {
+    questionId: string;
+    correct: boolean;
+    correctOptionIds?: string[];
+    explanation?: string;
+  }[];
 }
 
 export const coursesApi = {
@@ -78,7 +113,7 @@ export const coursesApi = {
   getLesson: async (
     courseSlug: string,
     lessonSlug: string
-  ): Promise<{ course: ApiCourse; lesson: ApiLessonFull }> => {
+  ): Promise<{ course: ApiCourseWithLessons; lesson: ApiLessonFull }> => {
     const { data } = await api.get(
       `/courses/${courseSlug}/lessons/${lessonSlug}`
     );

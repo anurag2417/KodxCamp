@@ -21,6 +21,11 @@ export interface ProblemDocument extends Document {
   outputMode: ProblemOutputMode;
   starterCode: Map<string, string>;
   testCases: ProblemTestCase[];
+  /**
+   * SQL-only. Executed once before any test case runs. See
+   * `shared/src/types/problem.ts` for the full contract.
+   */
+  sqlSetup?: string;
 }
 
 const testCaseSchema = new Schema<ProblemTestCase>(
@@ -57,6 +62,7 @@ const problemSchema = new Schema<ProblemDocument>(
     },
     starterCode: { type: Map, of: String, default: {} },
     testCases: { type: [testCaseSchema], default: [] },
+    sqlSetup: { type: String, default: undefined },
   },
   { timestamps: true }
 );

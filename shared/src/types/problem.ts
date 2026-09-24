@@ -14,6 +14,11 @@ export type ProblemOutputMode = 'return' | 'print';
  * Do not treat `isHidden` as protection against a student who controls
  * the browser. See the project brief for the honest posture on
  * browser-only judging.
+ *
+ * SQL NOTE: for SQL problems, `input` is the query the student's
+ * answer is expected to produce (usually empty - the setup lives in
+ * `Problem.sqlSetup`). `expectedOutput` is the formatted result table
+ * that the student's query must return.
  */
 export interface IProblemTestCase {
   input: string;
@@ -34,6 +39,20 @@ export interface IProblem {
   outputMode: ProblemOutputMode;
   starterCode: Record<string, string>;
   testCases: IProblemTestCase[];
+  /**
+   * SQL-only. A block of SQL executed once against the SQL.js database
+   * before any test case runs. Typically contains CREATE TABLE and
+   * INSERT statements that establish the schema and seed data the
+   * student's query will run against.
+   *
+   * Empty/undefined for non-SQL problems, or for SQL problems that
+   * test against tables the runner creates itself.
+   *
+   * The server performs a structural sanity check on save (balanced
+   * parens, at least one CREATE TABLE and one INSERT INTO) but does
+   * not execute it - execution happens in the browser.
+   */
+  sqlSetup?: string;
   createdAt: Date;
   updatedAt: Date;
 }

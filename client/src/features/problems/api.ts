@@ -38,6 +38,8 @@ export interface ApiProblemFull {
   outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
   testCases: ApiProblemTestCase[];
+  /** SQL-only. Schema + seed SQL executed once before any test case. */
+  sqlSetup?: string;
   solved?: boolean;
 }
 
