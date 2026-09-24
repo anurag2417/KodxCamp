@@ -9,9 +9,16 @@ export const AppLayout: React.FC = () => {
   return (
     <div className="flex min-h-screen w-full flex-col bg-bg">
       <Navbar />
-      <div className="flex w-full flex-1">
+
+      {/*
+        The sidebar is position:sticky against this row so it doesn't
+        scroll with the page. `self-start` is required because flex
+        items default to stretch, and a stretched sticky child has no
+        room to stick.
+      */}
+      <div className="flex w-full flex-1 items-start">
         {!isMarketing && <Sidebar />}
-        <main className="w-full flex-1">
+        <main className="min-w-0 w-full flex-1">
           <Outlet />
         </main>
       </div>

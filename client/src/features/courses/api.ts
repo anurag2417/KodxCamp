@@ -1,5 +1,49 @@
 import { api } from '@/shared/lib/api';
 
+export type CourseBadge = 'LIVE' | 'NEW' | 'POPULAR' | 'STARTING SOON';
+
+export interface ApiCourseFeature {
+  icon?: string;
+  label: string;
+}
+
+export interface ApiCourseSellingPoint {
+  icon?: string;
+  title: string;
+  subtitle?: string;
+}
+
+export interface ApiCourseCurriculumModule {
+  title: string;
+  lessons: number;
+  duration?: string;
+  items: string[];
+}
+
+export interface ApiCourseInstructorLink {
+  label: string;
+  url: string;
+}
+
+export interface ApiCourseInstructor {
+  name: string;
+  role?: string;
+  bio?: string;
+  avatar?: string;
+  links?: ApiCourseInstructorLink[];
+}
+
+export interface ApiCourseFaqItem {
+  question: string;
+  answer: string;
+}
+
+export interface ApiCourseProject {
+  title: string;
+  subtitle?: string;
+  image?: string;
+}
+
 export interface ApiCourse {
   _id: string;
   title: string;
@@ -10,7 +54,22 @@ export interface ApiCourse {
   totalLessons: number;
   thumbnail?: string;
   price?: number;
+  originalPrice?: number;
   isFree: boolean;
+
+  tagline?: string;
+  tags?: string[];
+  badge?: CourseBadge;
+  heroVideoUrl?: string;
+  features?: ApiCourseFeature[];
+  sellingPoints?: ApiCourseSellingPoint[];
+  sellingHeadline?: string;
+  learningOutcomes?: string[];
+  curriculum?: ApiCourseCurriculumModule[];
+  projects?: ApiCourseProject[];
+  instructor?: ApiCourseInstructor;
+  certificateIncluded?: boolean;
+  faq?: ApiCourseFaqItem[];
 }
 
 export interface ApiLessonSummary {
@@ -101,7 +160,7 @@ export const coursesApi = {
 
   getBySlug: async (
     slug: string
-  ): Promise<ApiCourse & { lessons: ApiLessonSummary[] }> => {
+  ): Promise<ApiCourseWithLessons> => {
     const { data } = await api.get(`/courses/${slug}`);
     return data.data;
   },

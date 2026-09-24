@@ -7,6 +7,50 @@ export const COURSE_LANGUAGES = [
 
 export type CourseLanguage = (typeof COURSE_LANGUAGES)[number];
 
+export type CourseBadge = 'LIVE' | 'NEW' | 'POPULAR' | 'STARTING SOON';
+
+export interface ICourseFeature {
+  icon?: string;
+  label: string;
+}
+
+export interface ICourseSellingPoint {
+  icon?: string;
+  title: string;
+  subtitle?: string;
+}
+
+export interface ICourseCurriculumModule {
+  title: string;
+  lessons: number;
+  duration?: string;
+  items: string[];
+}
+
+export interface ICourseInstructorLink {
+  label: string;
+  url: string;
+}
+
+export interface ICourseInstructor {
+  name: string;
+  role?: string;
+  bio?: string;
+  avatar?: string;
+  links?: ICourseInstructorLink[];
+}
+
+export interface ICourseFaqItem {
+  question: string;
+  answer: string;
+}
+
+export interface ICourseProject {
+  title: string;
+  subtitle?: string;
+  image?: string;
+}
+
 export interface ITestCase {
   input: string;
   expectedOutput: string;
@@ -63,13 +107,24 @@ export interface ICourse {
   totalLessons: number;
   createdBy: string;
   published: boolean;
-  /**
-   * Price in INR paise. 49900 = ₹499. Only meaningful when `isFree` is
-   * false. Cleared when `isFree` becomes true.
-   */
   price?: number;
-  /** Free vs paid switch. */
+  originalPrice?: number;
   isFree: boolean;
+
+  tagline?: string;
+  tags?: string[];
+  badge?: CourseBadge;
+  heroVideoUrl?: string;
+  features?: ICourseFeature[];
+  sellingPoints?: ICourseSellingPoint[];
+  sellingHeadline?: string;
+  learningOutcomes?: string[];
+  curriculum?: ICourseCurriculumModule[];
+  projects?: ICourseProject[];
+  instructor?: ICourseInstructor;
+  certificateIncluded?: boolean;
+  faq?: ICourseFaqItem[];
+
   createdAt: Date;
   updatedAt: Date;
 }

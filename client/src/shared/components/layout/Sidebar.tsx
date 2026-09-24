@@ -58,9 +58,7 @@ const sections: NavSection[] = [
 
 const instructorSection: NavSection = {
   title: 'INSTRUCTOR',
-  items: [
-    { to: '/instructor', label: 'My Courses', icon: BookOpen, end: true },
-  ],
+  items: [{ to: '/instructor', label: 'My Courses', icon: BookOpen, end: true }],
 };
 
 const adminSection: NavSection = {
@@ -83,14 +81,16 @@ export const Sidebar: React.FC = () => {
   return (
     <aside
       className={cn(
-        'hidden shrink-0 flex-col border-r border-border bg-surface-secondary transition-[width] duration-200 lg:flex',
+        'hidden shrink-0 flex-col border-r border-border bg-surface-secondary',
+        'sticky top-16 h-[calc(100vh-4rem)]',
+        'transition-[width] duration-200 lg:flex',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
       {/* Scrollable nav region */}
       <div
         className={cn(
-          'flex-1 overflow-y-auto',
+          'min-h-0 flex-1 overflow-y-auto',
           collapsed ? 'p-2' : 'p-5'
         )}
       >
@@ -114,8 +114,8 @@ export const Sidebar: React.FC = () => {
                         'flex items-center rounded-lg py-2 text-sm font-medium transition-colors',
                         collapsed ? 'justify-center px-2' : 'gap-3 px-3',
                         isActive
-                          ? 'bg-surface-tertiary text-brand-700 dark:bg-surface-tertiary dark:text-white'
-                          : 'text-text-secondary hover:bg-surface-tertiary dark:hover:bg-surface-secondary'
+                          ? 'bg-surface-tertiary text-brand-700 dark:text-brand-300'
+                          : 'text-text-secondary hover:bg-surface-tertiary'
                       )
                     }
                   >
