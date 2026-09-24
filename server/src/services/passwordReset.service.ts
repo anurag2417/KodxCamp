@@ -10,11 +10,11 @@ import { logger } from '../utils/logger.js';
  * Password reset.
  *
  * Two steps:
- *   1. `request(email)` — if the email belongs to a user, generate a
+ *   1. `request(email)` - if the email belongs to a user, generate a
  *      single-use reset token and email a link. Always returns
  *      success, even when the email doesn't exist, to prevent account
  *      enumeration.
- *   2. `consume(token, newPassword)` — verify the token, hash the new
+ *   2. `consume(token, newPassword)` - verify the token, hash the new
  *      password, save it, invalidate every other outstanding token
  *      for the user.
  *
@@ -30,7 +30,7 @@ import { logger } from '../utils/logger.js';
  */
 export const passwordResetService = {
   /**
-   * Step 1 — request a reset link.
+   * Step 1 - request a reset link.
    *
    * Silent on unknown emails. The caller always responds with the
    * same neutral message so an attacker can't use this endpoint to
@@ -106,7 +106,7 @@ export const passwordResetService = {
   },
 
   /**
-   * Step 2 — consume a reset token and set a new password.
+   * Step 2 - consume a reset token and set a new password.
    *
    * Returns the user id so the controller can log them in
    * immediately.

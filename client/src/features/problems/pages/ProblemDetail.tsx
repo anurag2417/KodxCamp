@@ -19,6 +19,7 @@ import { TestPanel } from '@/features/problems/components/TestPanel';
 import { EditorToolbar } from '@/features/problems/components/EditorToolbar';
 import { AcceptanceOverlay } from '@/features/problems/components/AcceptanceOverlay';
 import { useToast } from '@/shared/hooks/useToast';
+import { readStoredValue, writeStoredValue } from '@/shared/lib/storage';
 
 const LANGUAGE_LABELS: Record<string, string> = {
   javascript: 'JavaScript',
@@ -109,11 +110,19 @@ export const ProblemDetail: React.FC = () => {
     const configured = problem.starterCode?.[language];
     const starter =
       configured ?? (language === 'java' ? JAVA_FALLBACK_STARTER : '');
-    setCode(starter);
+    const draftKey = `problem:${user?._id ?? 'guest'}:${problem._id}:${language}`;
+    setCode(readStoredValue<string>(draftKey) ?? starter);
     setSummary(undefined);
     setAccepted(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [problem?._id, language]);
+  }, [problem, language, user?._id]);
+
+  useEffect(() => {
+    if (!problem || !code) return;
+    writeStoredValue(
+      `problem:${user?._id ?? 'guest'}:${problem._id}:${language}`,
+      code
+    );
+  }, [code, language, problem, user?._id]);
 
   useEffect(() => {
     if (!user || !problem) return;
@@ -121,7 +130,11 @@ export const ProblemDetail: React.FC = () => {
     problemsApi
       .submissions(problem._id)
       .then((rows) => {
-        if (!cancelled) setSubmissions(rows);
+        if (!cancelled) {
+          setSubmissions(rows);
+          const latest = rows.find((submission) => submission.language === language);
+          if (latest) setCode(latest.code);
+        }
       })
       .catch(() => {
         /* ignore */
@@ -129,8 +142,7 @@ export const ProblemDetail: React.FC = () => {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, problem?._id]);
+  }, [user, problem?._id, language]);
 
   const testCases = useMemo(() => problem?.testCases ?? [], [problem]);
 

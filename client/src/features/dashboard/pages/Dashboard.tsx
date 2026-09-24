@@ -67,7 +67,7 @@ export const Dashboard: React.FC = () => {
           Welcome back, {user?.name ?? 'Learner'}
         </h1>
         <p className="mt-2 max-w-xl text-sm text-[#C7D8D1]">
-          Continue your learning journey — pick up where you left off.
+          Continue your learning journey - pick up where you left off.
         </p>
         <div className="mt-6">
           <Link to="/courses">

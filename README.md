@@ -13,28 +13,28 @@ student code.
 
 ## Features
 
-- **Authentication** — registration, login, logout, JWT HTTP-only cookies, and
+- **Authentication** - registration, login, logout, JWT HTTP-only cookies, and
   Origin-based CSRF protection.
-- **Roles and permissions** — student, instructor, and admin roles, plus
+- **Roles and permissions** - student, instructor, and admin roles, plus
   per-course team roles (`lead`, `author`, `reviewer`, `ta`, `viewer`).
-- **Courses and lessons** — course catalog, interactive Monaco lessons,
+- **Courses and lessons** - course catalog, interactive Monaco lessons,
   completion tracking, progress, and lesson XP.
-- **Problem practice** — difficulty/topic filters, JavaScript/Python editor,
+- **Problem practice** - difficulty/topic filters, JavaScript/Python editor,
   browser test harness, submissions, solved state, and difficulty-based XP.
-- **Browser execution** — JavaScript Web Workers, Python/Pyodide, SQL.js, and
+- **Browser execution** - JavaScript Web Workers, Python/Pyodide, SQL.js, and
   sandboxed frontend previews.
-- **Projects** — multi-file workspace, tabs, live preview, save/load, project
+- **Projects** - multi-file workspace, tabs, live preview, save/load, project
   categories, and project XP.
-- **Live classes** — scheduling, Google Meet links, enrollment, lifecycle
+- **Live classes** - scheduling, Google Meet links, enrollment, lifecycle
   transitions, recording uploads, chapters, playback progress, and catch-up
   recordings.
-- **Progress** — XP, levels, streaks, activity history, weekly data,
+- **Progress** - XP, levels, streaks, activity history, weekly data,
   difficulty breakdown, heatmap data, and achievements.
-- **Admin panel** — users, problems, projects, classes, statistics, and bulk
+- **Admin panel** - users, problems, projects, classes, statistics, and bulk
   import.
-- **Instructor tools** — course editing, publishing, course teams, and
+- **Instructor tools** - course editing, publishing, course teams, and
   permission-aware team management.
-- **Shared UI** — responsive navigation, light/dark themes, toasts, loading
+- **Shared UI** - responsive navigation, light/dark themes, toasts, loading
   states, error boundary, SEO support, and reusable UI components.
 
 ## Technology

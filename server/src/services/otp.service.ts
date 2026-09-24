@@ -9,12 +9,12 @@ import { env } from '../config/env.js';
  * OTP-based signup.
  *
  * Three steps:
- *   1. `requestOtp(email)` — creates (or reuses) a pending user,
+ *   1. `requestOtp(email)` - creates (or reuses) a pending user,
  *      generates a 6-digit code, emails it, and returns the user id.
- *   2. `verifyOtp(email, code)` — checks the code and moves the user
+ *   2. `verifyOtp(email, code)` - checks the code and moves the user
  *      from `pending_verification` to `pending_profile`. Returns a
  *      short-lived setup token.
- *   3. `setPassword(setupToken, name, password)` — completes the
+ *   3. `setPassword(setupToken, name, password)` - completes the
  *      account. Sets the name and bcrypt password, marks it `active`,
  *      and issues the JWT.
  *
@@ -24,7 +24,7 @@ import { env } from '../config/env.js';
  */
 export const otpService = {
   /**
-   * Step 1 — request an OTP for the given email.
+   * Step 1 - request an OTP for the given email.
    *
    * Behavior depends on whether the email already has a user:
    *
@@ -58,7 +58,7 @@ export const otpService = {
           'This signup is already past email verification.'
         );
       }
-      // pending_verification — resend the OTP.
+      // pending_verification - resend the OTP.
     } else {
       user = await User.create({
         email: normalized,
@@ -99,7 +99,7 @@ export const otpService = {
         email: normalized,
         err: err instanceof Error ? err.message : String(err),
       });
-      // Don't surface the email failure to the client — that would
+      // Don't surface the email failure to the client - that would
       // leak SMTP health status. The user sees "check your email"
       // regardless. The dev env has EMAIL_ENABLED=false so the code
       // is logged in the server console.
@@ -119,7 +119,7 @@ export const otpService = {
   },
 
   /**
-   * Step 2 — verify the OTP.
+   * Step 2 - verify the OTP.
    *
    * On success:
    *   - `emailVerified` becomes true.
@@ -142,7 +142,7 @@ export const otpService = {
     }
     if (user.accountStatus === 'active') {
       // They verified out-of-band. Treat as success but don't issue
-      // a setup token — they should just log in.
+      // a setup token - they should just log in.
       throw new ApiError(409, 'This account is already active.');
     }
 
@@ -175,7 +175,7 @@ export const otpService = {
   },
 
   /**
-   * Step 3 — set name and password, activate the account.
+   * Step 3 - set name and password, activate the account.
    *
    * The setup token proves the user just passed OTP verification.
    * Its 5-minute lifetime means an abandoned tab forces the user to

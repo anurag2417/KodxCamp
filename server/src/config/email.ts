@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.js';
  * The one and only Nodemailer transport.
  *
  * Every email KodxCamp sends goes through this instance. Do not
- * construct additional transports elsewhere — Gmail enforces
+ * construct additional transports elsewhere - Gmail enforces
  * per-account connection limits, and multiple transports race each
  * other.
  *
@@ -21,7 +21,7 @@ function createTransport(): Transporter | null {
   const pass = env.SMTP_PASS;
 
   if (!host || !port || !user || !pass) {
-    logger.warn('SMTP not configured — outgoing email is disabled', {
+    logger.warn('SMTP not configured - outgoing email is disabled', {
       host: Boolean(host),
       port: Boolean(port),
       user: Boolean(user),

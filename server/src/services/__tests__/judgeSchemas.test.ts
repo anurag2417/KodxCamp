@@ -5,7 +5,7 @@ function wrap(body: unknown) {
   return { body, query: {}, params: {} };
 }
 
-describe('submitSchema — legacy payload', () => {
+describe('submitSchema - legacy payload', () => {
   const valid = {
     problemId: 'p1',
     language: 'javascript',

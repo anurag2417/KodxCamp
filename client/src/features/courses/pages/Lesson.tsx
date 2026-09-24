@@ -163,7 +163,7 @@ export const Lesson: React.FC = () => {
                 <code className="rounded bg-surface-tertiary px-1.5 py-0.5 font-mono text-text-primary">
                   {lesson.functionName}
                 </code>{' '}
-                — return the result; the platform compares it to the expected
+                - return the result; the platform compares it to the expected
                 output automatically.
               </p>
             )}

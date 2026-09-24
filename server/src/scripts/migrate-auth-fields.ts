@@ -10,7 +10,7 @@ import { logger } from '../utils/logger.js';
  * `authProvider: 'email'` on every existing user.
  *
  * Without this, every user created before the auth flow was introduced
- * would be locked out — they'd have `emailVerified: false` by schema
+ * would be locked out - they'd have `emailVerified: false` by schema
  * default, and the login gate would refuse them.
  *
  * Idempotent: safe to re-run.

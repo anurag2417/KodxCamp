@@ -43,7 +43,7 @@ export const emailService = {
   /**
    * Send a transactional email immediately.
    *
-   * Used for OTP, invitations, password reset — anything the user is
+   * Used for OTP, invitations, password reset - anything the user is
    * waiting on. Returns after the send attempt completes, success or
    * failure. Logs every attempt.
    */
@@ -121,7 +121,7 @@ export const emailService = {
     await EmailLog.insertMany(docs);
 
     if (!EMAIL_ENABLED || !mailTransport) {
-      logger.info('Bulk email queued (SMTP disabled — will be skipped)', {
+      logger.info('Bulk email queued (SMTP disabled - will be skipped)', {
         count: docs.length,
         template: input.template,
       });

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ============================================================
-   KodxCamp Design Tokens — Light Theme (default)
+   KodxCamp Design Tokens - Light Theme (default)
    ============================================================ */
 :root {
   --color-primary-900: #092328;

@@ -208,7 +208,7 @@ export const AdminProblems: React.FC = () => {
       issues.push(
         `Test #${emptyExpected + 1} is missing its expected output${
           editing.testCases[emptyExpected].isHidden
-            ? ' (required even for hidden tests — the server hashes it)'
+            ? ' (required even for hidden tests - the server hashes it)'
             : ''
         }`
       );
@@ -449,7 +449,7 @@ export const AdminProblems: React.FC = () => {
                 <DifficultyBadge difficulty={p.difficulty} />
               </td>
               <td className="px-4 py-3 font-mono text-xs text-text-secondary">
-                {p.functionName ?? '—'}
+                {p.functionName ?? '-'}
               </td>
               <td className="px-4 py-3 text-xs text-text-muted">
                 {p.topics?.join(', ')}

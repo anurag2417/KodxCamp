@@ -49,7 +49,7 @@ export const Streak: React.FC = () => {
 
       <h1 className="text-3xl font-bold text-text-primary">Streak</h1>
       <p className="mt-1 text-sm text-text-muted">
-        Show up every day — even 5 minutes counts.
+        Show up every day - even 5 minutes counts.
       </p>
 
       <Card className="mt-6 flex flex-col items-center gap-6 p-8 sm:flex-row sm:justify-around">
@@ -90,7 +90,7 @@ export const Streak: React.FC = () => {
           <li>• Solve a DSA problem</li>
           <li>• Save or complete a project</li>
           <li>• Attend a live class or finish a recording</li>
-          <li>• Just log in — even that counts</li>
+          <li>• Just log in - even that counts</li>
         </ul>
         {user && (
           <p className="mt-4 text-xs text-text-muted">

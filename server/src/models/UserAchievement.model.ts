@@ -20,7 +20,7 @@ const userAchievementSchema = new Schema<UserAchievementDocument>(
   { timestamps: false }
 );
 
-// Unique — prevents duplicate unlocks under concurrency
+// Unique - prevents duplicate unlocks under concurrency
 userAchievementSchema.index({ userId: 1, achievementKey: 1 }, { unique: true });
 
 export const UserAchievement = mongoose.model<UserAchievementDocument>(

@@ -4,7 +4,7 @@
  * JavaScript sandbox worker.
  *
  * Runs user code in a fresh scope and captures console output.
- * Anything the worker needs must be inlined — do NOT add top-level
+ * Anything the worker needs must be inlined - do NOT add top-level
  * `import` statements. Vite emits module workers when it sees
  * top-level imports, which breaks the classic-worker configuration.
  */

@@ -22,7 +22,7 @@ export function renderPasswordReset(data: PasswordResetData): {
     </div>
     <p style="margin:16px 0 0;font-size:13px;color:#60736d;">
       This link expires in ${data.expiresInMinutes} minutes.
-      If you didn't request this, you can ignore this email — your
+      If you didn't request this, you can ignore this email - your
       password won't change.
     </p>
     <p style="margin:12px 0 0;font-size:12px;color:#60736d;word-break:break-all;">

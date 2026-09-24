@@ -26,7 +26,7 @@ export const problemSlugSchema = z.object({
  *         status, passedTests, totalTests, runtimeMs? }
  *
  * The server distinguishes them by presence of `visibleResults` /
- * `hiddenResults`. Both are `.strict()` — unknown keys are rejected so
+ * `hiddenResults`. Both are `.strict()` - unknown keys are rejected so
  * a client cannot smuggle `expectedOutput` or `stdout` into the
  * payload.
  */

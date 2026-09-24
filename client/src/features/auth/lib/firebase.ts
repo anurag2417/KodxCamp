@@ -1,5 +1,5 @@
 /**
- * Firebase Web SDK — lazy initialization.
+ * Firebase Web SDK - lazy initialization.
  *
  * Everything is dynamically imported so the Firebase SDK only loads
  * when the user actually clicks "Continue with Google". The SDK is

@@ -83,7 +83,7 @@ export function createApp() {
   if (env.NODE_ENV === 'production') {
     const clientDist = path.resolve(process.cwd(), '..', 'client', 'dist');
 
-    // Debug logs — remove after confirming
+    // Debug logs - remove after confirming
     logger.info('Client serving check', {
       cwd: process.cwd(),
       clientDist,
@@ -100,14 +100,14 @@ export function createApp() {
         })
       );
 
-      // SPA fallback — every non-API, non-uploads route returns index.html
+      // SPA fallback - every non-API, non-uploads route returns index.html
       app.get('*', (_req, res) => {
         res.sendFile(path.join(clientDist, 'index.html'));
       });
 
       logger.info('✅ Serving client from', { clientDist });
     } else {
-      logger.warn('⚠️  Client dist not found — API-only mode', {
+      logger.warn('⚠️  Client dist not found - API-only mode', {
         clientDist,
       });
     }
@@ -116,7 +116,7 @@ export function createApp() {
   // 404 (dev only, or if client dist missing in prod)
   app.use(notFound);
 
-  // Error handler — always last
+  // Error handler - always last
   app.use(errorHandler);
 
   return app;

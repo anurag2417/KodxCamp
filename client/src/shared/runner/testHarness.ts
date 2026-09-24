@@ -317,7 +317,7 @@ puts __KODX_RESULT__.to_json
 `;
   }
 
-  // Java — reflective driver. Output is wrapped in markers so the
+  // Java - reflective driver. Output is wrapped in markers so the
   // runtime can distinguish it from CheerpJ's own console noise.
   if (language === 'java') {
     const argList = args.map((a) => javaLiteral(a)).join(', ');
@@ -445,7 +445,7 @@ ${code}
 `;
   }
 
-  // Java — delegate to Main.main, wrapping its stdout in markers so the
+  // Java - delegate to Main.main, wrapping its stdout in markers so the
   // runtime can separate the student's output from CheerpJ's own logs.
   if (language === 'java') {
     const argsLiteral =

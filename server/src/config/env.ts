@@ -83,7 +83,7 @@ if (env.NODE_ENV === 'production') {
     const hit = forbidden.find((bad) => lower.includes(bad));
     if (hit) {
       console.error(
-        `❌ ${name} contains forbidden substring "${hit}" — refusing to start in production.`
+        `❌ ${name} contains forbidden substring "${hit}" - refusing to start in production.`
       );
       process.exit(1);
     }

@@ -4,7 +4,7 @@ import mongoose, { Schema, type Document } from 'mongoose';
  * A student's enrollment in a course.
  *
  * One row per (userId, courseId). Created the first time a student
- * interacts with a course — completing a lesson, starting one, or
+ * interacts with a course - completing a lesson, starting one, or
  * any other course-scoped activity.
  *
  * `joinedAt` is set once, on insert. It never changes. That makes it
@@ -12,7 +12,7 @@ import mongoose, { Schema, type Document } from 'mongoose';
  * from Activity and Progress every time.
  *
  * Naming note: the `Enrollment` model already exists for live
- * classes. This is course-scoped and unrelated — do not confuse them.
+ * classes. This is course-scoped and unrelated - do not confuse them.
  */
 export interface IStudentEnrollment {
   _id: string;

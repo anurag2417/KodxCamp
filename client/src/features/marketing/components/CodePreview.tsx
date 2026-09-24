@@ -32,7 +32,7 @@ export const CodePreview: React.FC = () => {
     setOutput(null);
     setPassed(false);
 
-    // Simulate a quick "run" — this is a marketing demo, not a real runner
+    // Simulate a quick "run" - this is a marketing demo, not a real runner
     await new Promise((r) => setTimeout(r, 600));
 
     setOutput(EXPECTED_OUTPUT);
@@ -62,7 +62,7 @@ export const CodePreview: React.FC = () => {
                 'Split-panel layout: instructions, editor, console',
                 'Auto-invokes your function and compares output',
                 'Beautiful results view with per-test feedback',
-                'Persistent Python runtime — no cold starts',
+                'Persistent Python runtime - no cold starts',
               ].map((line) => (
                 <li key={line} className="flex items-start gap-3">
                   <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-500/10">

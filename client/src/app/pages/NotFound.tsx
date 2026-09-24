@@ -15,7 +15,7 @@ export const NotFound: React.FC = () => (
           This page wandered off
         </h1>
         <p className="mt-2 max-w-md text-sm text-text-muted">
-          The page you're looking for doesn't exist — maybe it was moved, or the
+          The page you're looking for doesn't exist - maybe it was moved, or the
           link is broken.
         </p>
         <div className="mt-6 flex justify-center gap-3">

@@ -98,8 +98,8 @@ const DescriptionView: React.FC<{
           {problem.functionName}
         </code>{' '}
         {problem.outputMode === 'return'
-          ? '— return the result. The platform compares your return value against the expected output.'
-          : '— print the result. The platform compares your stdout against the expected output.'}
+          ? '- return the result. The platform compares your return value against the expected output.'
+          : '- print the result. The platform compares your stdout against the expected output.'}
       </p>
       {hiddenCount > 0 && (
         <p className="mt-3 text-text-muted">

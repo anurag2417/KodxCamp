@@ -80,7 +80,7 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
         </p>
         <p className="mt-2">
           🔒 Hidden tests are only visible to admins. Students see the input
-          during execution but never the expected output — only a
+          during execution but never the expected output - only a
           SHA-256 hash is stored on the server.
         </p>
       </div>
@@ -127,7 +127,7 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
 
           <div className="grid gap-2 md:grid-cols-2">
             <Input
-              placeholder='Input (JSON) — e.g. [2, 3] or "hello" or 5'
+              placeholder='Input (JSON) - e.g. [2, 3] or "hello" or 5'
               value={tc.input}
               onChange={(e) => update(i, { input: e.target.value })}
             />
@@ -135,7 +135,7 @@ export const TestCaseEditor: React.FC<Props> = ({ testCases, onChange }) => {
               placeholder={
                 tc.isHidden
                   ? 'Expected output (hashed on save)'
-                  : 'Expected output — e.g. 5 or Hello, world'
+                  : 'Expected output - e.g. 5 or Hello, world'
               }
               value={tc.expectedOutput}
               onChange={(e) => update(i, { expectedOutput: e.target.value })}
@@ -176,7 +176,7 @@ const InputFormatHint: React.FC<{ input: string }> = ({ input }) => {
   if (!isJson) {
     return (
       <p className="mt-2 text-[10px] text-[var(--color-warning)]">
-        ⚠️ Not valid JSON — will be injected as a string:{' '}
+        ⚠️ Not valid JSON - will be injected as a string:{' '}
         <code className="font-mono">"{trimmed}"</code>
       </p>
     );
@@ -192,7 +192,7 @@ const InputFormatHint: React.FC<{ input: string }> = ({ input }) => {
 
   return (
     <p className="mt-2 text-[10px] text-[var(--color-success)]">
-      ✓ Valid JSON — will be injected as a {kind}
+      ✓ Valid JSON - will be injected as a {kind}
     </p>
   );
 };

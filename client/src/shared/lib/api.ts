@@ -16,7 +16,7 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const url = error.config?.url ?? '';
 
-    // Don't nuke the session on /auth/me — that call *determines* the session
+    // Don't nuke the session on /auth/me - that call *determines* the session
     if (status === 401 && !url.includes('/auth/me')) {
       // Clear auth store lazily to avoid circular import at module load
       void import('@/shared/store/auth.store').then(({ useAuthStore }) => {

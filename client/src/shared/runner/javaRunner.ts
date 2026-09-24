@@ -14,7 +14,7 @@ export async function runJavaCode(
   code: string,
   _opts: { timeoutMs?: number } = {}
 ): Promise<RunResult> {
-  const result = await runJava(code);
+  const result = await runJava(ensureJavaEntryPoint(code));
 
   if (result.ok) {
     return {
@@ -33,4 +33,22 @@ export async function runJavaCode(
     verdict: result.kind === 'syntax' ? 'compile_error' : 'runtime_error',
     runtimeMs: result.runtimeMs,
   };
+}
+
+function ensureJavaEntryPoint(code: string): string {
+  if (/\bclass\s+KodxEntry\b/.test(code)) return code;
+
+  return `${code}
+
+class KodxEntry {
+  public static void main(String[] args) throws Exception {
+    System.out.println("<<<KODX_OUTPUT>>>");
+    try {
+      Main.main(args);
+    } finally {
+      System.out.println("<<<KODX_END>>>");
+    }
+  }
+}
+`;
 }

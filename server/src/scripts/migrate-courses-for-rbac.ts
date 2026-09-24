@@ -77,7 +77,7 @@ async function migrate() {
     membersResult.modifiedCount + createdByResult.modifiedCount;
 
   if (totalModified === 0) {
-    console.log('   Nothing to do — already migrated.');
+    console.log('   Nothing to do - already migrated.');
   }
 
   await mongoose.disconnect();

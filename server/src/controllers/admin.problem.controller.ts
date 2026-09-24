@@ -7,7 +7,7 @@ import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 /**
  * One test case shape. Every test case stores plaintext `expectedOutput`.
- * `isHidden` is a display flag — it hides the input/output from the
+ * `isHidden` is a display flag - it hides the input/output from the
  * student's test panel but does not affect execution or grading.
  */
 const testCaseSchema = z

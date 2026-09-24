@@ -9,7 +9,7 @@ import { logger } from '../utils/logger.js';
  *
  * Called from `activityService.record` and
  * `progressService.markLessonComplete`. Fire-and-forget from those
- * callers — a failure here shouldn't block the activity from being
+ * callers - a failure here shouldn't block the activity from being
  * recorded.
  */
 export const studentEnrollmentService = {
@@ -35,7 +35,7 @@ export const studentEnrollmentService = {
     } catch (err) {
       // Duplicate-key race: two parallel requests both tried to
       // insert. The `$setOnInsert` + unique index means one wins, the
-      // other gets E11000. That's fine — ignore it.
+      // other gets E11000. That's fine - ignore it.
       if (
         typeof err === 'object' &&
         err !== null &&

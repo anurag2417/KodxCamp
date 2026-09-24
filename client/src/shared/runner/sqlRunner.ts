@@ -45,7 +45,7 @@ export async function runSql(
       const trimmed = stmt.trim();
       if (!trimmed) continue;
 
-      const isQuery = /^(select|pragma|with)\b/i.test(trimmed);
+      const isQuery = /^(select|pragma|with)\b/i.test(stripLeadingComments(trimmed));
       const result = db.exec(trimmed);
 
       if (isQuery && result.length > 0) {
@@ -113,4 +113,16 @@ function formatTable(columns: string[], values: unknown[][]): string {
     row.map((v) => (v === null ? 'NULL' : String(v))).join(' | ')
   );
   return [header, sep, ...rows].join('\n');
+}
+
+function stripLeadingComments(sql: string): string {
+  let remaining = sql.trimStart();
+
+  while (remaining.startsWith('--')) {
+    const newlineIndex = remaining.indexOf('\n');
+    if (newlineIndex === -1) return '';
+    remaining = remaining.slice(newlineIndex + 1).trimStart();
+  }
+
+  return remaining;
 }

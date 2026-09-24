@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 /**
- * Python sandbox worker — runs Pyodide off the main thread.
+ * Python sandbox worker - runs Pyodide off the main thread.
  *
  * This worker must not use `importScripts`: Vite 5 emits module workers
  * even when `worker.format: 'iife'` is set, and `importScripts` is
@@ -99,7 +99,7 @@ async function executePython(
   try {
     await py.loadPackagesFromImports(code);
   } catch {
-    /* non-fatal — imports fail at runtime if truly missing */
+    /* non-fatal - imports fail at runtime if truly missing */
   }
 
   try {

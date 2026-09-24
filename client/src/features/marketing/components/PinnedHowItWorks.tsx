@@ -16,7 +16,7 @@ const steps = [
   {
     n: '03',
     title: 'Instant feedback',
-    body: 'Tests run in your browser. Pass, fail, iterate — the loop is seconds.',
+    body: 'Tests run in your browser. Pass, fail, iterate - the loop is seconds.',
     accent: 'from-[#8A5CCF] to-[#2A835F]',
   },
   {

@@ -28,7 +28,7 @@ export const adminBulkController = {
     }
 
     const message = dryRun
-      ? 'Dry run complete — nothing saved'
+      ? 'Dry run complete - nothing saved'
       : `Imported: ${report.created} created, ${report.updated} updated`;
 
     return ApiResponse.success(res, report, message);

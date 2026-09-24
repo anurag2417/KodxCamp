@@ -139,7 +139,7 @@ export const AcceptInvitation: React.FC = () => {
   // state.kind === 'ready' or 'accepting'
   const data = state.data;
 
-  // Edge cases — the invitation might already be accepted, revoked,
+  // Edge cases - the invitation might already be accepted, revoked,
   // or expired.
   if (data.isExpired || data.isRevoked || data.isAlreadyAccepted) {
     const message = data.isExpired
@@ -164,7 +164,7 @@ export const AcceptInvitation: React.FC = () => {
     );
   }
 
-  // Not logged in — route to login with a redirect back here.
+  // Not logged in - route to login with a redirect back here.
   if (!user) {
     const next = `/invitations/${token}`;
     return (
@@ -214,7 +214,7 @@ export const AcceptInvitation: React.FC = () => {
     );
   }
 
-  // Logged in — show the accept button.
+  // Logged in - show the accept button.
   const accepting = state.kind === 'accepting';
 
   return (

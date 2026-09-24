@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 /**
- * Ruby sandbox worker — runs ruby.wasm off the main thread.
+ * Ruby sandbox worker - runs ruby.wasm off the main thread.
  *
  * The loader and the WASM binary live in two different packages:
  *   - @ruby/wasm-wasi        → ESM loader (browser/+esm)
@@ -48,7 +48,7 @@ async function loadRubyOnce(): Promise<RubyVM> {
     const loaderUrl = `${RUBY_LOADER_BASE}browser/+esm`;
 
     // Import the ESM loader directly from jsDelivr. Do NOT fetch this
-    // as text and re-load via a Blob URL — a blob: URL has no real
+    // as text and re-load via a Blob URL - a blob: URL has no real
     // origin, so nested root-relative imports inside the loader fail.
     let mod: RubyWasiModule;
     try {

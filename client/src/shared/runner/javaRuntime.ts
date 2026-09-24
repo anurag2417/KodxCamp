@@ -1,5 +1,5 @@
 /**
- * Java runtime — CheerpJ.
+ * Java runtime - CheerpJ.
  *
  * IMPORTANT: CheerpJ does not run inside a Web Worker. It requires
  * DOM access and its public API operates on the page context.
@@ -82,7 +82,7 @@ export async function preloadJava(): Promise<void> {
   try {
     await loadCheerpJOnce();
   } catch {
-    /* non-fatal — surfaced on first run */
+    /* non-fatal - surfaced on first run */
   }
 }
 

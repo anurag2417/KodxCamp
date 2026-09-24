@@ -10,7 +10,7 @@ interface RunBarProps {
   /** Run button */
   onRun: () => void;
   running?: boolean;
-  /** Run button label — defaults to "Run" */
+  /** Run button label - defaults to "Run" */
   runLabel?: string;
   /** Hide the Run button entirely if not applicable (e.g. read-only views) */
   hideRun?: boolean;

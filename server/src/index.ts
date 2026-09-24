@@ -45,7 +45,7 @@ async function bootstrap() {
   const shutdown = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    logger.info(`${signal} received — shutting down gracefully`);
+    logger.info(`${signal} received - shutting down gracefully`);
 
     stopClassLifecycleJob();
     stopEmailQueueJob();
@@ -91,7 +91,7 @@ async function bootstrap() {
   });
 
   process.on('uncaughtException', (err) => {
-    logger.error('Uncaught exception — exiting', {
+    logger.error('Uncaught exception - exiting', {
       err: err.message,
       stack: err.stack,
     });

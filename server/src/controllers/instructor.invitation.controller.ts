@@ -114,7 +114,7 @@ export const instructorInvitationController = {
   }),
 
   /**
-   * Public — resolve an invitation token so the client can show the
+   * Public - resolve an invitation token so the client can show the
    * right screen ("you've been invited to X"). Does not require auth.
    */
   resolve: asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -143,7 +143,7 @@ export const instructorInvitationController = {
   }),
 
   /**
-   * Authenticated — accept the invitation.
+   * Authenticated - accept the invitation.
    */
   accept: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();

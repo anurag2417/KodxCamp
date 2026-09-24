@@ -24,7 +24,7 @@ export const AuthWorkspacePreview: React.FC = () => {
         setPassedCount(0);
         await sleep(1500, () => cancelled);
 
-        // Running — tests fill in one by one
+        // Running - tests fill in one by one
         setPhase('running');
         for (let i = 0; i < TESTS.length; i++) {
           await sleep(500, () => cancelled);

@@ -8,7 +8,7 @@ export interface SeoMeta {
 
 const SITE_NAME = 'KodxCamp';
 const DEFAULT_DESCRIPTION =
-  'Browser-first, learn-by-doing programming platform — interactive lessons, DSA practice, projects, and live classes.';
+  'Browser-first, learn-by-doing programming platform - interactive lessons, DSA practice, projects, and live classes.';
 
 export function setSeo(meta: SeoMeta) {
   if (typeof document === 'undefined') return;

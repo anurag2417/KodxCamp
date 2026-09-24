@@ -35,7 +35,7 @@ export const storageService = {
   },
 
   /**
-   * Remove a recording by URL. Best-effort — never throws.
+   * Remove a recording by URL. Best-effort - never throws.
    */
   async deleteRecording(url: string): Promise<void> {
     if (!url.startsWith('/uploads/recordings/')) return;
@@ -60,7 +60,7 @@ export const storageService = {
    *
    * - If PUBLIC_UPLOAD_BASE_URL is set (e.g. a CDN), uses it.
    * - If the stored URL is already absolute, returns it as-is.
-   * - Otherwise returns the relative path — the client resolves it against
+   * - Otherwise returns the relative path - the client resolves it against
    *   VITE_API_URL.
    */
   toAbsoluteUrl(storedUrl: string): string {

@@ -11,7 +11,7 @@ export interface GoogleSignInResult {
 
 /**
  * Verify a Firebase ID token and either sign in, link, or create a
- * user. This is the only place that touches Google identity — the
+ * user. This is the only place that touches Google identity - the
  * controller stays thin.
  *
  * Matching is by email, always. A user who registered via email/OTP
@@ -64,7 +64,7 @@ export const googleAuthService = {
     let user = await User.findOne({ email }).select('+password');
 
     if (!user) {
-      // 2a. Brand new user — create with Google as the provider.
+      // 2a. Brand new user - create with Google as the provider.
       user = await User.create({
         email,
         name: displayName,
@@ -107,14 +107,14 @@ export const googleAuthService = {
 
     // 2d. Update the provider. If they already had a password, they
     //     become `both`; if not, they were a Google-only user or a
-    //     pending email signup with no password yet — either way,
+    //     pending email signup with no password yet - either way,
     //     `google` is a subset. Set to `both` only when a password
     //     exists.
     const hasPassword = Boolean(user.password);
     const nextProvider: AuthProvider = hasPassword ? 'both' : 'google';
     user.authProvider = nextProvider;
 
-    // 2e. Store the Google UID. If it changed (rare — Google almost
+    // 2e. Store the Google UID. If it changed (rare - Google almost
     //     never rotates UIDs) or was absent, update it.
     if (user.googleId !== googleId) {
       user.googleId = googleId;

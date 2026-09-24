@@ -100,7 +100,7 @@ function sanitizeUser(user: InstanceType<typeof User>) {
 
 export const authController = {
   /**
-   * Step 1 — request an OTP. Creates a pending user if the email is
+   * Step 1 - request an OTP. Creates a pending user if the email is
    * new, or resends to an unverified user.
    */
   register: asyncHandler(async (req: Request, res: Response) => {
@@ -116,7 +116,7 @@ export const authController = {
   }),
 
   /**
-   * Step 2 — verify the OTP. Returns a setup token.
+   * Step 2 - verify the OTP. Returns a setup token.
    */
   verifyOtp: asyncHandler(async (req: Request, res: Response) => {
     const { email, code } = req.body;
@@ -125,7 +125,7 @@ export const authController = {
   }),
 
   /**
-   * Step 3 — set name and password, activate the account, and log in.
+   * Step 3 - set name and password, activate the account, and log in.
    */
   setPassword: asyncHandler(async (req: Request, res: Response) => {
     const { setupToken, name, password } = req.body;
@@ -215,7 +215,7 @@ export const authController = {
 
   /**
    * Consume a reset token and set a new password. Logs the user in
-   * on success — same session shape as `/auth/login`.
+   * on success - same session shape as `/auth/login`.
    */
   resetPassword: asyncHandler(async (req: Request, res: Response) => {
     const { token, password } = req.body;

@@ -17,7 +17,7 @@ export interface IEmailLog {
   /**
    * The rendered HTML. Stored so retries don't need the original
    * template data. Excluded from default queries to avoid pulling
-   * large blobs into list responses — retries request it explicitly
+   * large blobs into list responses - retries request it explicitly
    * with `.select('+renderedHtml')`.
    */
   renderedHtml?: string;

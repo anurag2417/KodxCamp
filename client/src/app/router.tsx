@@ -77,7 +77,7 @@ export function AppRouter() {
           element={<AcceptInvitation />}
         />
 
-        {/* Legacy route — redirects to the new signup flow. */}
+        {/* Legacy route - redirects to the new signup flow. */}
         <Route path="/register" element={<Navigate to="/signup" replace />} />
 
         <Route path="/" element={<AppLayout />}>
@@ -99,7 +99,7 @@ export function AppRouter() {
           <Route path="playground" element={<Playground />} />
 
           {/* ─── Projects ──────────────────────────────────── */}
-          {/* "mine" must come before ":slug" — otherwise the
+          {/* "mine" must come before ":slug" - otherwise the
               dynamic segment swallows the literal route. */}
           <Route path="projects" element={<Projects />} />
           <Route
@@ -175,7 +175,7 @@ export function AppRouter() {
               path="courses/:slug/students/:userId"
               element={<InstructorStudentDetail />}
             />
-            {/* Legacy redirects — the course editor now lives under
+            {/* Legacy redirects - the course editor now lives under
                 /instructor/courses/:slug but the old link from the
                 sidebar points at /instructor directly. */}
             <Route

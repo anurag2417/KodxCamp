@@ -42,7 +42,7 @@ function buildHtmlPreview(files: ApiProjectFile[]): string {
     }
   }
 
-  // Inject JS — remove the <script src="..."> so it doesn't 404
+  // Inject JS - remove the <script src="..."> so it doesn't 404
   doc = doc.replace(/<script[^>]*src=[^>]*><\/script>/gi, '');
 
   if (js) {

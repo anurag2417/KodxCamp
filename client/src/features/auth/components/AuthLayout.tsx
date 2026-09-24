@@ -60,7 +60,7 @@ export const AuthLayout: React.FC<Props> = ({
             Learn to code by doing.
           </h2>
           <p className="mt-3 max-w-lg text-sm text-[#C7D8D1] xl:text-base">
-            Real lessons. Real tests. Real feedback — all in your browser.
+            Real lessons. Real tests. Real feedback - all in your browser.
           </p>
         </div>
 
@@ -105,7 +105,7 @@ export const AuthLayout: React.FC<Props> = ({
         </Link>
       </div>
 
-      {/* Inner form — wider than before */}
+      {/* Inner form - wider than before */}
       <div className="w-full max-w-lg auth-fade-in xl:max-w-xl">
         <Link
           to="/"

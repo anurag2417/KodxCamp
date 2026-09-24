@@ -55,7 +55,7 @@ export const Hero: React.FC = () => {
           </AnimatedText>
 
           <p className="hero-fade-in mt-8 max-w-xl text-lg leading-relaxed text-[#C7D8D1] md:text-xl" style={{ animationDelay: '700ms' }}>
-            Interactive lessons, DSA practice, live projects, and classes — all
+            Interactive lessons, DSA practice, live projects, and classes - all
             in the browser. Write real code, run real tests, build real things.
           </p>
 

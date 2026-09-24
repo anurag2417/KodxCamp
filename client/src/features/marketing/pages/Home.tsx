@@ -16,7 +16,7 @@ export const Home: React.FC = () => (
   <>
     <Seo
       title="Learn to code by doing"
-      description="Interactive lessons, DSA practice, live projects, and classes — all in the browser. Write real code, run real tests, build real things."
+      description="Interactive lessons, DSA practice, live projects, and classes - all in the browser. Write real code, run real tests, build real things."
     />
 
     <ScrollProgress />

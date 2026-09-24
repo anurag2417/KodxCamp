@@ -49,7 +49,7 @@ export const progressService = {
     await progress.save();
 
     if (wasNew) {
-      // Log the activity — this triggers the enrollment upsert too.
+      // Log the activity - this triggers the enrollment upsert too.
       await activityService.record({
         userId,
         type: 'lesson_completed',

@@ -49,7 +49,7 @@ const features: Feature[] = [
   {
     title: 'Progress & Achievements',
     description:
-      'XP, streaks, and 18 achievements that reward consistency — not competition.',
+      'XP, streaks, and 18 achievements that reward consistency - not competition.',
     icon: Trophy,
   },
 ];

@@ -58,7 +58,7 @@ const instructorSection: NavSection = {
   title: 'INSTRUCTOR',
   items: [
     { to: '/instructor', label: 'My Courses', icon: BookOpen, end: true },
-    // Placeholder for future pages — links will resolve once built
+    // Placeholder for future pages - links will resolve once built
     // { to: '/instructor/students', label: 'Students', icon: Users },
   ],
 };

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-describe('outputsMatch (via runTests) — string comparison behavior', () => {
+describe('outputsMatch (via runTests) - string comparison behavior', () => {
   // These test the comparison rules directly, without needing a runner.
 
   const normalize = (s: string) =>

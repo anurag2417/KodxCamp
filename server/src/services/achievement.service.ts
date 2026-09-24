@@ -317,7 +317,7 @@ async function buildStats(userId: string): Promise<StatsSnapshot> {
 
 export const achievementService = {
   /**
-   * Evaluate all achievements for a user. Idempotent — uses a unique index
+   * Evaluate all achievements for a user. Idempotent - uses a unique index
    * on {userId, achievementKey} so concurrent calls can't double-award XP.
    */
   async evaluate(userId: string): Promise<string[]> {

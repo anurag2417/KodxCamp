@@ -137,7 +137,7 @@ export interface BulkImportReport {
 // ─── API ─────────────────────────────────────────────────────────
 
 export const adminApi = {
-  // ... (unchanged — same as before)
+  // ... (unchanged - same as before)
   getStats: async (): Promise<AdminStats> => {
     const { data } = await api.get('/admin/stats');
     return data.data;

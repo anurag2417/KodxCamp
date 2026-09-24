@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { Check, Save } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { CodeEditor } from '@/shared/components/editor/CodeEditor';
 import { Console } from '@/shared/components/editor/Console';
@@ -7,6 +8,7 @@ import { useRunner } from '@/shared/hooks/useRunner';
 import { useLanguagePreload } from '@/shared/hooks/useLanguagePreload';
 import { cn } from '@/shared/lib/utils';
 import { preloadNow, type PreloadStatus } from '@/shared/runner/preloadManager';
+import { readStoredValue, writeStoredValue } from '@/shared/lib/storage';
 
 const PLAYGROUND_LANGUAGES = [
   { id: 'javascript', label: 'JavaScript' },
@@ -54,7 +56,10 @@ function toMonacoLanguage(lang: string): string {
 
 export const Playground: React.FC = () => {
   const [lang, setLang] = useState<string>('javascript');
-  const [code, setCode] = useState(STARTERS.javascript);
+  const [code, setCode] = useState(
+    () => readStoredValue<string>('playground:javascript') ?? STARTERS.javascript
+  );
+  const [saved, setSaved] = useState(false);
   const { run, running, output, status, reset } = useRunner();
 
   const languageIds = PLAYGROUND_LANGUAGES.map((l) => l.id);
@@ -62,8 +67,16 @@ export const Playground: React.FC = () => {
 
   const switchLang = (next: string) => {
     setLang(next);
-    setCode(STARTERS[next] ?? '');
+    setCode(
+      readStoredValue<string>(`playground:${next}`) ?? STARTERS[next] ?? ''
+    );
+    setSaved(false);
     reset();
+  };
+
+  const saveCode = () => {
+    writeStoredValue(`playground:${lang}`, code);
+    setSaved(true);
   };
 
   return (
@@ -96,6 +109,17 @@ export const Playground: React.FC = () => {
                     );
                   })}
                 </div>
+              }
+              right={
+                <button
+                  type="button"
+                  onClick={saveCode}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-surface-tertiary hover:text-text"
+                  title="Save code locally"
+                >
+                  {saved ? <Check size={14} /> : <Save size={14} />}
+                  {saved ? 'Saved' : 'Save'}
+                </button>
               }
               onRun={() => void run(lang, code)}
               running={running}

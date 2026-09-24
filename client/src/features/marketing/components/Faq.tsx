@@ -6,7 +6,7 @@ import { useInView } from '../hooks/useInView';
 const faqs = [
   {
     q: 'Do I need to install anything?',
-    a: 'No. Everything runs in your browser — the editor, the code execution, even the Python runtime. Just open a course and start coding.',
+    a: 'No. Everything runs in your browser - the editor, the code execution, even the Python runtime. Just open a course and start coding.',
   },
   {
     q: 'What languages can I run?',
@@ -22,7 +22,7 @@ const faqs = [
   },
   {
     q: 'Is it really free?',
-    a: 'The core platform is free — courses, practice, projects, live classes. We will offer a Pro tier for teams and certificates later. Nothing you learn today will ever be paywalled.',
+    a: 'The core platform is free - courses, practice, projects, live classes. We will offer a Pro tier for teams and certificates later. Nothing you learn today will ever be paywalled.',
   },
   {
     q: 'Can I use it on my phone?',

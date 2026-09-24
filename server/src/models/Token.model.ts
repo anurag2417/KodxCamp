@@ -4,9 +4,9 @@ import mongoose, { Schema, type Document } from 'mongoose';
  * Shared token collection for every short-lived, single-use credential
  * in the platform:
  *
- *   otp-signup        — 6-digit code emailed during email signup
- *   password-reset    — reset link or code
- *   invitation        — course team invitation
+ *   otp-signup        - 6-digit code emailed during email signup
+ *   password-reset    - reset link or code
+ *   invitation        - course team invitation
  *
  * Design notes:
  *   - Only the SHA-256 hash of the token is stored, never the raw

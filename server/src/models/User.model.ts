@@ -7,12 +7,12 @@ export type AuthProvider = 'email' | 'google' | 'both';
 /**
  * Where a user is in the signup lifecycle.
  *
- *   pending_verification — created by email signup, has not yet
+ *   pending_verification - created by email signup, has not yet
  *     verified their email via OTP.
- *   pending_profile — verified their email, has not yet set a name
+ *   pending_profile - verified their email, has not yet set a name
  *     and password.
- *   active — fully set up; can log in.
- *   suspended — disabled by an admin. Login is refused.
+ *   active - fully set up; can log in.
+ *   suspended - disabled by an admin. Login is refused.
  *
  * Google signup skips straight to `active` because Google has already
  * verified the email.
@@ -26,7 +26,7 @@ export type AccountStatus =
 export interface UserDocument extends Document {
   name: string;
   email: string;
-  /** Optional — Google-only users have no password. */
+  /** Optional - Google-only users have no password. */
   password?: string;
   role: UserRole;
 

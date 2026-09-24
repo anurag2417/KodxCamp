@@ -6,7 +6,7 @@ export type ProblemOutputMode = 'return' | 'print';
  * A single test case attached to a problem.
  *
  * `expectedOutput` is always stored in plaintext. `isHidden` is a
- * DISPLAY FLAG ONLY — it controls whether the client shows the test's
+ * DISPLAY FLAG ONLY - it controls whether the client shows the test's
  * input and expected output to the student while they work. It is NOT
  * a security boundary: every test runs on every submission, and the
  * pass/fail counts toward the final verdict regardless.

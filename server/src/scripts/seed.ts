@@ -72,7 +72,7 @@ const courses: CourseSeed[] = [
     title: 'JavaScript Essentials',
     slug: 'javascript',
     description:
-      'Learn programming fundamentals with JavaScript — the language of the web.',
+      'Learn programming fundamentals with JavaScript - the language of the web.',
     language: 'javascript',
     lessons: [
       {
@@ -101,7 +101,7 @@ const courses: CourseSeed[] = [
     title: 'Python Fundamentals',
     slug: 'python',
     description:
-      'Learn programming basics with Python — clean, readable, powerful.',
+      'Learn programming basics with Python - clean, readable, powerful.',
     language: 'python',
     lessons: [
       {
@@ -130,7 +130,7 @@ const courses: CourseSeed[] = [
     title: 'Ruby Fundamentals',
     slug: 'ruby',
     description:
-      'Learn programming basics with Ruby — clean syntax, powerful objects.',
+      'Learn programming basics with Ruby - clean syntax, powerful objects.',
     language: 'ruby',
     lessons: [
       {
@@ -159,7 +159,7 @@ const courses: CourseSeed[] = [
     title: 'Java Fundamentals',
     slug: 'java',
     description:
-      'Learn programming basics with Java — the language of enterprise.',
+      'Learn programming basics with Java - the language of enterprise.',
     language: 'java',
     lessons: [
       {

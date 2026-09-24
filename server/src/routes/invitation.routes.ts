@@ -9,14 +9,14 @@ import { requireAuth } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-// Public — resolve an invitation token.
+// Public - resolve an invitation token.
 router.get(
   '/:token',
   validate(resolveInvitationSchema),
   instructorInvitationController.resolve
 );
 
-// Authenticated — accept.
+// Authenticated - accept.
 router.post(
   '/:token/accept',
   requireAuth,

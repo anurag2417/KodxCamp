@@ -42,7 +42,7 @@ export const RecordingPlayer: React.FC<Props> = ({
     localStorage.setItem(SPEED_KEY, String(speed));
   }, [speed]);
 
-  // Interval — never depends on onProgress (that was the bug)
+  // Interval - never depends on onProgress (that was the bug)
   useEffect(() => {
     const id = window.setInterval(() => {
       const v = ref.current;

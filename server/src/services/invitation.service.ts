@@ -57,7 +57,7 @@ export const invitationService = {
 
         // Refuse to invite someone who's already on the team.
         if (course.createdBy === input.invitedBy) {
-            // no-op — the creator is always lead, but we're checking the
+            // no-op - the creator is always lead, but we're checking the
             // invitee below, not the inviter
         }
 
@@ -277,7 +277,7 @@ export const invitationService = {
 
     /**
      * Revoke a pending invitation. Only the original inviter or the
-     * course lead should call this — the caller enforces that.
+     * course lead should call this - the caller enforces that.
      */
     async revoke(invitationId: string, courseId: string): Promise<void> {
         const invitation = await Invitation.findById(invitationId);

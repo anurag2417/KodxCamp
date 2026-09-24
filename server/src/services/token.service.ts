@@ -35,7 +35,7 @@ function generateRaw(purpose: TokenPurpose, userId?: string): string {
   const random = crypto.randomBytes(32).toString('base64url');
   // Password-reset tokens embed the user id so the reset page can
   // look up the token without a preflight request. The user id is
-  // not secret — it's already exposed elsewhere.
+  // not secret - it's already exposed elsewhere.
   if (purpose === 'password-reset' && userId) {
     return `${userId}.${random}`;
   }

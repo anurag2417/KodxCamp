@@ -11,7 +11,7 @@ import { requireAuth, type AuthRequest } from './auth.middleware.js';
  *
  * If a token is present but invalid or expired, we deliberately swallow
  * the error and treat the request as anonymous. This avoids 401s on
- * public pages when a stale cookie is lingering in the browser — the
+ * public pages when a stale cookie is lingering in the browser - the
  * user can still browse, and their next authenticated action will
  * surface the real auth error.
  */

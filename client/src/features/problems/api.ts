@@ -76,7 +76,7 @@ export const problemsApi = {
   },
 
   /**
-   * @deprecated — use `submit` with the legacy payload.
+   * @deprecated - use `submit` with the legacy payload.
    */
   validate: async (input: {
     problemId: string;

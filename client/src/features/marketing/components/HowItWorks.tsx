@@ -14,7 +14,7 @@ const steps = [
   {
     n: '03',
     title: 'See instant feedback',
-    body: 'Tests run in your browser. Pass, fail, iterate — the loop is seconds, not minutes.',
+    body: 'Tests run in your browser. Pass, fail, iterate - the loop is seconds, not minutes.',
   },
   {
     n: '04',

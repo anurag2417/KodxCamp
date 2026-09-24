@@ -17,7 +17,7 @@ export interface RunResult {
 export interface RunnerOptions {
   /** ms before the worker is terminated. Default 5000. */
   timeoutMs?: number;
-  /** For programs that read from stdin (none of our lessons yet — reserved). */
+  /** For programs that read from stdin (none of our lessons yet - reserved). */
   stdin?: string;
 }
 

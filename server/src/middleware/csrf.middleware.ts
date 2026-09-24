@@ -17,7 +17,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  *
  * It does NOT need a token because cross-site POSTs will carry an Origin
  * that isn't in the allowlist. Browsers always set Origin for cross-origin
- * requests, and same-origin ones either set it or leave it undefined — in
+ * requests, and same-origin ones either set it or leave it undefined - in
  * the latter case we fall back to Referer, then to trusting same-origin.
  */
 export function csrfMiddleware(req: Request, _res: Response, next: NextFunction) {
@@ -42,7 +42,7 @@ export function csrfMiddleware(req: Request, _res: Response, next: NextFunction)
 
   if (env.CLIENT_URL.includes(candidateOrigin)) return next();
 
-  // Same host but different port (dev edge case) — allow when the request
+  // Same host but different port (dev edge case) - allow when the request
   // host matches the origin host. This covers dev with 5173 → 5000 through
   // a proxy that rewrites Origin.
   const requestHost = req.get('host');

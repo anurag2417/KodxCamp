@@ -109,7 +109,7 @@ export const ProjectWorkspace: React.FC<Props> = ({
     }
   };
 
-  /** Run the current files immediately — force-refresh the preview iframe. */
+  /** Run the current files immediately - force-refresh the preview iframe. */
   const runNow = () => {
     setRunKey((k) => k + 1);
   };

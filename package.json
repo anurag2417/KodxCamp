@@ -2,7 +2,7 @@
   "name": "kodxcamp",
   "version": "1.0.0",
   "private": true,
-  "description": "Browser-first, learn-by-doing programming platform — MERN + TypeScript monorepo",
+  "description": "Browser-first, learn-by-doing programming platform - MERN + TypeScript monorepo",
   "workspaces": [
     "client",
     "server",

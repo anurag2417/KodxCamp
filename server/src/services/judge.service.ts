@@ -21,7 +21,7 @@ export const judgeService = {
    * Record a submission.
    *
    * The server does not execute code. The client runs every test case
-   * (visible and hidden alike — `isHidden` is a display flag only) and
+   * (visible and hidden alike - `isHidden` is a display flag only) and
    * reports the final status and counts. We clamp the counts to the
    * problem's actual test-case count and award XP once per solved
    * problem.
