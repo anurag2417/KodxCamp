@@ -33,7 +33,9 @@ interface LessonEditorState {
     order: number;
     content: string;
     starterCode: string;
+    starterFiles: Record<string, string>;
     solution: string;
+    problemSlug: string;
     functionName: string;
     outputMode: 'return' | 'print';
     testCases: EditableTestCase[];
@@ -45,7 +47,13 @@ const emptyLesson = (order: number): LessonEditorState => ({
     order,
     content: '',
     starterCode: '',
+    starterFiles: {
+        'index.html': '',
+        'styles.css': '',
+        'script.js': '',
+    },
     solution: '',
+    problemSlug: '',
     functionName: 'solve',
     outputMode: 'print',
     testCases: [],
@@ -125,7 +133,13 @@ export const InstructorCourseEdit: React.FC = () => {
             order: lesson.order,
             content: lesson.content,
             starterCode: lesson.starterCode ?? '',
+            starterFiles: lesson.starterFiles ?? {
+                'index.html': '',
+                'styles.css': '',
+                'script.js': '',
+            },
             solution: lesson.solution ?? '',
+            problemSlug: lesson.problemSlug ?? '',
             functionName: lesson.functionName ?? 'solve',
             outputMode: lesson.outputMode ?? 'print',
             testCases: normalized,
@@ -175,7 +189,11 @@ export const InstructorCourseEdit: React.FC = () => {
             order: editing.order,
             content: editing.content,
             starterCode: editing.starterCode,
+            starterFiles: isWebCourse(course.language)
+                ? editing.starterFiles
+                : undefined,
             solution: editing.solution,
+            problemSlug: editing.problemSlug || undefined,
             functionName: editing.functionName,
             outputMode: editing.outputMode,
             language: course.language,
@@ -361,6 +379,15 @@ export const InstructorCourseEdit: React.FC = () => {
                         className="mt-3 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
                     />
 
+                    <Input
+                        placeholder="Coding problem slug (optional, e.g. two-sum)"
+                        value={editing.problemSlug}
+                        onChange={(e) =>
+                            setEditing({ ...editing, problemSlug: e.target.value.trim() })
+                        }
+                        className="mt-3"
+                    />
+
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <div>
                             <label className="mb-1 block text-xs font-semibold text-text-secondary">
@@ -395,15 +422,40 @@ export const InstructorCourseEdit: React.FC = () => {
                     </div>
 
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <textarea
-                            placeholder="Starter code"
-                            rows={6}
-                            value={editing.starterCode}
-                            onChange={(e) =>
-                                setEditing({ ...editing, starterCode: e.target.value })
-                            }
-                            className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
-                        />
+                        {isWebCourse(course.language) ? (
+                            <div className="grid gap-3 md:col-span-2 md:grid-cols-3">
+                                {(['index.html', 'styles.css', 'script.js'] as const).map(
+                                    (fileName) => (
+                                        <textarea
+                                            key={fileName}
+                                            placeholder={fileName}
+                                            rows={8}
+                                            value={editing.starterFiles[fileName] ?? ''}
+                                            onChange={(e) =>
+                                                setEditing({
+                                                    ...editing,
+                                                    starterFiles: {
+                                                        ...editing.starterFiles,
+                                                        [fileName]: e.target.value,
+                                                    },
+                                                })
+                                            }
+                                            className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
+                                        />
+                                    )
+                                )}
+                            </div>
+                        ) : (
+                            <textarea
+                                placeholder="Starter code"
+                                rows={6}
+                                value={editing.starterCode}
+                                onChange={(e) =>
+                                    setEditing({ ...editing, starterCode: e.target.value })
+                                }
+                                className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary focus:border-brand-500 focus:outline-none"
+                            />
+                        )}
                         <textarea
                             placeholder="Solution (not shown to students)"
                             rows={6}
@@ -519,4 +571,8 @@ function autoSlug(val: string) {
         .replace(/[^a-z0-9\s-]/g, '')
         .replace(/\s+/g, '-')
         .replace(/-+/g, '-');
+}
+
+function isWebCourse(language: string): boolean {
+    return language === 'html-css' || language === 'react' || language === 'tailwind';
 }

@@ -112,7 +112,7 @@ export const RecordingPlayer: React.FC<Props> = ({
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#06191D]">
+    <div className="flex h-full flex-col bg-[var(--color-code-bg)]">
       <div className="relative flex-1 bg-black">
         <video
           ref={ref}
@@ -135,19 +135,19 @@ export const RecordingPlayer: React.FC<Props> = ({
         />
       </div>
 
-      <div className="border-t border-[#1B4844] bg-[#092328] p-4">
+      <div className="border-t border-[var(--color-code-border)] bg-[var(--color-code-surface)] p-4">
         <div className="flex items-center gap-3">
           <Button size="sm" variant="ghost" onClick={toggle}>
             {playing ? <Pause size={16} /> : <Play size={16} />}
           </Button>
 
-          <div className="text-xs text-[#C7D8D1]">
+          <div className="text-xs text-[var(--color-code-text)]">
             {fmt(current)} / {fmt(duration)}
           </div>
 
           <button
             onClick={cycleSpeed}
-            className="ml-auto rounded-md bg-[#0D3032] px-3 py-1 text-xs font-medium text-[#8BBB92] hover:bg-[#12544F]"
+            className="ml-auto rounded-md bg-[var(--color-surface-tertiary)] px-3 py-1 text-xs font-medium text-[var(--color-success)] hover:bg-[var(--color-border)]"
           >
             {speed}×
           </button>
@@ -166,8 +166,8 @@ export const RecordingPlayer: React.FC<Props> = ({
                 className={cn(
                   'rounded-md px-2.5 py-1 text-xs transition-colors',
                   current >= c.startSec
-                    ? 'bg-[#12544F] text-[#8BBB92]'
-                    : 'bg-[#0D3032] text-[#88A39A] hover:bg-[#12544F]'
+                    ? 'bg-[var(--color-primary-700)] text-[var(--color-success)]'
+                    : 'bg-[var(--color-surface-tertiary)] text-[var(--color-code-muted)] hover:bg-[var(--color-border)]'
                 )}
               >
                 {c.title}

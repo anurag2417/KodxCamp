@@ -16,6 +16,9 @@ import {
   type VisibleTestCase,
 } from '@/shared/runner/testHarness';
 import { TestPanel } from '@/features/problems/components/TestPanel';
+import { readStoredValue, writeStoredValue } from '@/shared/lib/storage';
+
+const WEB_FILES = ['index.html', 'styles.css', 'script.js'] as const;
 
 export const Lesson: React.FC = () => {
   const { courseSlug, lessonSlug } = useParams<{
@@ -26,6 +29,8 @@ export const Lesson: React.FC = () => {
   const user = useAuthStore((s) => s.user);
 
   const [code, setCode] = useState('');
+  const [files, setFiles] = useState<Record<string, string>>({});
+  const [activeFile, setActiveFile] = useState<string>(WEB_FILES[0]);
   const [summary, setSummary] = useState<TestRunSummary | undefined>();
   const [accepted, setAccepted] = useState(false);
   const [totalRuntimeMs, setTotalRuntimeMs] = useState(0);
@@ -35,12 +40,32 @@ export const Lesson: React.FC = () => {
 
   useEffect(() => {
     if (data?.lesson) {
-      setCode(data.lesson.starterCode || '');
+      const stored = readStoredValue<{
+        code?: string;
+        files?: Record<string, string>;
+        activeFile?: string;
+      }>(`lesson:${user?._id ?? 'guest'}:${data.lesson._id}`);
+      if (isWebLessonLanguage(data.lesson.language)) {
+        setFiles(
+          stored?.files ?? data.lesson.starterFiles ?? {
+            'index.html': data.lesson.starterCode || '',
+            'styles.css': '',
+            'script.js': '',
+          }
+        );
+        setActiveFile(
+          stored?.activeFile && WEB_FILES.includes(stored.activeFile as (typeof WEB_FILES)[number])
+            ? stored.activeFile
+            : WEB_FILES[0]
+        );
+      } else {
+        setCode(stored?.code ?? data.lesson.starterCode ?? '');
+      }
       setSummary(undefined);
       setAccepted(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.lesson?._id]);
+  }, [data?.lesson?._id, user?._id]);
 
   useEffect(() => {
     if (!user || !data?.course) return;
@@ -53,6 +78,17 @@ export const Lesson: React.FC = () => {
 
   const testCases = useMemo(() => data?.lesson.testCases ?? [], [data?.lesson]);
   const hasTests = testCases.length > 0;
+  const isWebLesson = isWebLessonLanguage(lessonLanguage(data?.lesson?.language));
+  const activeCode = isWebLesson ? files[activeFile] ?? '' : code;
+
+  useEffect(() => {
+    if (!data?.lesson || !activeCode) return;
+    writeStoredValue(`lesson:${user?._id ?? 'guest'}:${data.lesson._id}`, {
+      code: isWebLesson ? undefined : code,
+      files: isWebLesson ? files : undefined,
+      activeFile: isWebLesson ? activeFile : undefined,
+    });
+  }, [activeCode, activeFile, code, data?.lesson, files, isWebLesson, user?._id]);
 
   const handleRunCode = async () => {
     if (!data) return;
@@ -67,7 +103,7 @@ export const Lesson: React.FC = () => {
       isHidden: tc.isHidden,
     }));
 
-    const result = await runTests(data.lesson.language, code, visibleCases, {
+    const result = await runTests(data.lesson.language, activeCode, visibleCases, {
       functionName: data.lesson.functionName ?? 'solve',
       outputMode: data.lesson.outputMode ?? 'print',
     });
@@ -244,6 +280,15 @@ export const Lesson: React.FC = () => {
               )}
             </div>
 
+            {lesson.problemSlug && (
+              <Link
+                to={`/practice/${lesson.problemSlug}`}
+                className="mt-4 inline-flex items-center rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-2 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-500/20"
+              >
+                Practice the related coding problem
+              </Link>
+            )}
+
             {progress && (
               <div className="mt-4 rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">
                 Course progress:{' '}
@@ -261,9 +306,24 @@ export const Lesson: React.FC = () => {
               <div className="flex h-full flex-col bg-surface">
                 <RunBar
                   left={
-                    <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
-                      {getFileName(lesson.language)}
-                    </span>
+                    isWebLesson ? (
+                      <div className="flex gap-1">
+                        {WEB_FILES.map((fileName) => (
+                          <button
+                            key={fileName}
+                            type="button"
+                            onClick={() => setActiveFile(fileName)}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${activeFile === fileName ? 'bg-surface-tertiary text-brand-500' : 'text-text-muted hover:bg-surface-tertiary hover:text-text-primary'}`}
+                          >
+                            {fileName}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
+                        {getFileName(lesson.language)}
+                      </span>
+                    )
                   }
                   onRun={handleRunCode}
                   running={running}
@@ -271,8 +331,14 @@ export const Lesson: React.FC = () => {
                 <div className="flex-1">
                   <CodeEditor
                     language={toMonacoLanguage(lesson.language)}
-                    value={code}
-                    onChange={setCode}
+                    value={activeCode}
+                    onChange={(value) => {
+                      if (isWebLesson) {
+                        setFiles((current) => ({ ...current, [activeFile]: value }));
+                      } else {
+                        setCode(value);
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -348,4 +414,12 @@ function getFileName(lang: string): string {
     default:
       return 'file.txt';
   }
+}
+
+function isWebLessonLanguage(lang: string): boolean {
+  return lang === 'html-css' || lang === 'react' || lang === 'tailwind';
+}
+
+function lessonLanguage(lang: string | undefined): string {
+  return lang ?? '';
 }

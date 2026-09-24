@@ -16,6 +16,7 @@ export interface ApiLessonSummary {
   slug: string;
   order: number;
   language: string;
+  problemSlug?: string;
 }
 
 export interface ApiLessonTestCase {
@@ -34,6 +35,8 @@ export interface ApiLessonFull {
   order: number;
   content: string;
   starterCode: string;
+  starterFiles?: Record<string, string>;
+  problemSlug?: string;
   functionName: string;
   outputMode: 'return' | 'print';
   language: string;

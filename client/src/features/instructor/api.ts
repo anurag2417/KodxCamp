@@ -46,7 +46,9 @@ export interface ApiInstructorLesson {
   order: number;
   content: string;
   starterCode: string;
+  starterFiles?: Record<string, string>;
   solution: string;
+  problemSlug?: string;
   functionName: string;
   outputMode: 'return' | 'print';
   language: string;

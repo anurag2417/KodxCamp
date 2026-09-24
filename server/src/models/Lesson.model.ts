@@ -28,7 +28,9 @@ interface LessonFields {
   order: number;
   content: string;
   starterCode: string;
+  starterFiles?: Record<string, string>;
   solution: string;
+  problemSlug?: string;
   functionName: string;
   outputMode: ProblemOutputMode;
   language: CourseLanguage;
@@ -54,7 +56,9 @@ const lessonSchema = new Schema<LessonDocument>(
     order: { type: Number, required: true },
     content: { type: String, required: true },
     starterCode: { type: String, default: '' },
+    starterFiles: { type: Map, of: String, default: undefined },
     solution: { type: String, default: '' },
+    problemSlug: { type: String, trim: true },
     functionName: { type: String, default: 'solve', trim: true },
     outputMode: {
       type: String,

@@ -9,11 +9,11 @@ export const Console: React.FC<ConsoleProps> = ({ output, status = 'idle' }) => 
       ? 'text-[var(--color-error)]'
       : status === 'success'
         ? 'text-[var(--color-success)]'
-        : 'text-[#D8E7E0]';
+        : 'text-[var(--color-code-text)]';
 
   return (
-    <div className="flex h-full flex-col bg-[#06191D]">
-      <div className="flex items-center gap-2 border-b border-[#1B4844] bg-[#092328] px-4 py-2">
+    <div className="flex h-full flex-col bg-[var(--color-code-bg)]">
+      <div className="flex items-center gap-2 border-b border-[var(--color-code-border)] bg-[var(--color-code-surface)] px-4 py-2">
         <span className="text-xs font-semibold uppercase tracking-widest text-brand-300">
           Console
         </span>

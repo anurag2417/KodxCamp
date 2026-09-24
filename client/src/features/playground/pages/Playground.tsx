@@ -37,6 +37,26 @@ SELECT * FROM users;
 `,
 };
 
+const FILE_EXTENSIONS: Record<string, string> = {
+  javascript: 'js',
+  python: 'py',
+  ruby: 'rb',
+  java: 'java',
+  sql: 'sql',
+};
+
+interface SaveFilePickerOptions {
+  suggestedName?: string;
+  types?: { description: string; accept: Record<string, string[]> }[];
+}
+
+interface SaveFileHandle {
+  createWritable: () => Promise<{
+    write: (contents: string) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+}
+
 function toMonacoLanguage(lang: string): string {
   switch (lang) {
     case 'javascript':
@@ -74,9 +94,50 @@ export const Playground: React.FC = () => {
     reset();
   };
 
-  const saveCode = () => {
-    writeStoredValue(`playground:${lang}`, code);
-    setSaved(true);
+  const saveCode = async () => {
+    const extension = FILE_EXTENSIONS[lang] ?? 'txt';
+    const fileName = `playground-${lang}.${extension}`;
+    const picker = (
+      window as Window & {
+        showSaveFilePicker?: (
+          options?: SaveFilePickerOptions
+        ) => Promise<SaveFileHandle>;
+      }
+    ).showSaveFilePicker;
+
+    try {
+      if (picker) {
+        const fileHandle = await picker({
+          suggestedName: fileName,
+          types: [
+            {
+              description: `${lang} source code`,
+              accept: {
+                'text/plain': [`.${extension}`],
+              },
+            },
+          ],
+        });
+        const writable = await fileHandle.createWritable();
+        await writable.write(code);
+        await writable.close();
+      } else {
+        const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      writeStoredValue(`playground:${lang}`, code);
+      setSaved(true);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        setSaved(false);
+      }
+    }
   };
 
   return (
@@ -115,7 +176,7 @@ export const Playground: React.FC = () => {
                   type="button"
                   onClick={saveCode}
                   className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-surface-tertiary hover:text-text"
-                  title="Save code locally"
+                  title="Choose a location and save code"
                 >
                   {saved ? <Check size={14} /> : <Save size={14} />}
                   {saved ? 'Saved' : 'Save'}

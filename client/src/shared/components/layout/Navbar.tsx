@@ -105,7 +105,7 @@ export const Navbar: React.FC = () => {
                   <Button
                     variant={transparent ? 'ghost' : 'ghost'}
                     size="sm"
-                    className={transparent ? 'text-white hover:bg-white/10' : ''}
+                    className={transparent ? '!text-white hover:bg-white/10' : ''}
                   >
                     Login
                   </Button>

@@ -18,7 +18,7 @@ export const ThemeToggle: React.FC<Props> = ({ transparent }) => {
       onClick={toggle}
       aria-label="Toggle theme"
       title={theme === 'light' ? 'Switch to dark' : 'Switch to light'}
-      className={cn(transparent && 'text-white hover:bg-white/10')}
+      className={cn(transparent && '!text-white hover:bg-white/10')}
     >
       {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
     </Button>

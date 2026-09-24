@@ -40,11 +40,11 @@
   --color-status-cancelled: #8a5ccf;
 
   /* ─── Code surfaces (used in editor areas) ───── */
-  --color-code-bg: #06191d;
-  --color-code-surface: #092328;
-  --color-code-border: #1b4844;
-  --color-code-text: #d8e7e0;
-  --color-code-muted: #88a39a;
+  --color-code-bg: #f5faf7;
+  --color-code-surface: #eaf3ed;
+  --color-code-border: #c9ddd0;
+  --color-code-text: #17352d;
+  --color-code-muted: #60736d;
 }
 
 /* ============================================================
@@ -70,6 +70,12 @@
   --color-success: #8bbb92;
   --color-error: #f07178;
   --color-warning: #ebcb7a;
+
+  --color-code-bg: #06191d;
+  --color-code-surface: #092328;
+  --color-code-border: #1b4844;
+  --color-code-text: #d8e7e0;
+  --color-code-muted: #88a39a;
 }
 
 /* ============================================================
@@ -794,4 +800,12 @@ body {
     opacity: 1 !important;
     transform: none !important;
   }
+}
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }

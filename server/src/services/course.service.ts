@@ -25,7 +25,9 @@ interface LessonInput {
   order: number;
   content: string;
   starterCode?: string;
+  starterFiles?: Record<string, string>;
   solution?: string;
+  problemSlug?: string;
   functionName?: string;
   outputMode?: 'return' | 'print';
   language: string;
@@ -48,6 +50,18 @@ function normalizeTestCase(tc: TestCaseInput, index: number) {
     input: tc.input ?? '',
     expectedOutput: tc.expectedOutput,
     isHidden: Boolean(tc.isHidden),
+  };
+}
+
+function normalizeStarterFiles(
+  language: string,
+  files?: Record<string, string>
+): Record<string, string> | undefined {
+  if (!['html-css', 'react', 'tailwind'].includes(language)) return files;
+  return {
+    'index.html': files?.['index.html'] ?? '',
+    'styles.css': files?.['styles.css'] ?? '',
+    'script.js': files?.['script.js'] ?? '',
   };
 }
 
@@ -292,6 +306,7 @@ export const courseService = {
     const created = await Lesson.create({
       ...input,
       courseId: course._id.toString(),
+      starterFiles: normalizeStarterFiles(course.language, input.starterFiles),
       testCases,
       functionName: input.functionName ?? 'solve',
       outputMode: input.outputMode ?? 'print',
@@ -333,6 +348,12 @@ export const courseService = {
     }
 
     const update: Record<string, unknown> = { ...patch };
+    if (patch.starterFiles || patch.language) {
+      update.starterFiles = normalizeStarterFiles(
+        patch.language ?? course.language,
+        patch.starterFiles
+      );
+    }
     if (patch.testCases) {
       update.testCases = patch.testCases.map((tc, i) =>
         normalizeTestCase(tc, i)
