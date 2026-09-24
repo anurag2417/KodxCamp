@@ -80,7 +80,6 @@ export function AppRouter() {
           element={<AcceptInvitation />}
         />
 
-        {/* Legacy route - redirects to the new signup flow. */}
         <Route path="/register" element={<Navigate to="/signup" replace />} />
 
         <Route path="/" element={<AppLayout />}>
@@ -94,16 +93,28 @@ export function AppRouter() {
             element={<Lesson />}
           />
 
-          {/* ─── Practice ──────────────────────────────────── */}
-          <Route path="practice" element={<Practice />} />
-          <Route path="practice/:slug" element={<ProblemDetail />} />
+          {/* ─── Practice (login required) ─────────────────── */}
+          <Route
+            path="practice"
+            element={
+              <RequireAuth>
+                <Practice />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="practice/:slug"
+            element={
+              <RequireAuth>
+                <ProblemDetail />
+              </RequireAuth>
+            }
+          />
 
           {/* ─── Playground ────────────────────────────────── */}
           <Route path="playground" element={<Playground />} />
 
           {/* ─── Projects ──────────────────────────────────── */}
-          {/* "mine" must come before ":slug" - otherwise the
-              dynamic segment swallows the literal route. */}
           <Route path="projects" element={<Projects />} />
           <Route
             path="projects/mine"
@@ -171,8 +182,6 @@ export function AppRouter() {
             }
           >
             <Route index element={<InstructorCourses />} />
-            {/* Static "students" route must come before dynamic
-                "courses/:slug/..." so the more specific path wins. */}
             <Route path="students" element={<InstructorStudents />} />
             <Route
               path="courses/:slug/students/:userId"

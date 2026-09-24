@@ -25,27 +25,33 @@ export const rosterStudentSchema = z.object({
   }),
 });
 
-function assertCanViewStudents(
+async function assertCanViewStudents(
   req: AuthRequest,
-  course: InstanceType<typeof Course>
-): void {
-  const user = req.user!;
-  if (
-    !permissions.canViewStudents(
-      { _id: user._id.toString(), role: user.role },
-      course as unknown as Parameters<typeof permissions.canViewStudents>[1]
-    )
-  ) {
+  courseSlug: string
+): Promise<string> {
+  const user = {
+    _id: req.user!._id.toString(),
+    role: req.user!.role as string,
+  };
+
+  const course = await Course.findOne({ slug: courseSlug });
+  if (!course) throw new ApiError(404, 'Course not found.');
+
+  const role = await permissions.resolveEffectiveRole(
+    user,
+    course._id.toString()
+  );
+
+  if (!permissions.canViewStudents(role)) {
     throw new ApiError(403, 'You do not have permission to view students.');
   }
+
+  return course._id.toString();
 }
 
 export const instructorStudentController = {
   list: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const course = await Course.findOne({ slug: req.params.slug });
-    if (!course) throw new ApiError(404, 'Course not found.');
-
-    assertCanViewStudents(req, course);
+    const courseId = await assertCanViewStudents(req, String(req.params.slug));
 
     const { search, sort, page, limit } = req.query as {
       search?: string;
@@ -55,7 +61,7 @@ export const instructorStudentController = {
     };
 
     const result = await studentRosterService.list({
-      courseId: course._id.toString(),
+      courseId,
       search,
       sort,
       page,
@@ -66,14 +72,11 @@ export const instructorStudentController = {
   }),
 
   detail: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const course = await Course.findOne({ slug: req.params.slug });
-    if (!course) throw new ApiError(404, 'Course not found.');
-
-    assertCanViewStudents(req, course);
+    const courseId = await assertCanViewStudents(req, String(req.params.slug));
 
     const result = await studentRosterService.detail({
-      courseId: course._id.toString(),
-      userId: req.params.userId,
+      courseId,
+      userId: String(req.params.userId),
     });
 
     return ApiResponse.success(res, result);

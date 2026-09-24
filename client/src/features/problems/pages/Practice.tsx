@@ -4,25 +4,39 @@ import { ProblemCard } from '@/features/problems/components/ProblemCard';
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { ErrorState } from '@/shared/components/ui/ErrorState';
 import { cn } from '@/shared/lib/utils';
-import type { Difficulty } from '@/features/problems/api';
+import type { Difficulty, ProblemTier } from '@/features/problems/api';
 
-type Filter = 'all' | Difficulty;
+type DiffFilter = 'all' | Difficulty;
 
-const filters: { label: string; value: Filter }[] = [
+const diffFilters: { label: string; value: DiffFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Easy', value: 'easy' },
   { label: 'Medium', value: 'medium' },
   { label: 'Hard', value: 'hard' },
 ];
 
+const tiers: { label: string; value: ProblemTier; hint: string }[] = [
+  {
+    label: 'Starter',
+    value: 'starter',
+    hint: 'Learn the fundamentals',
+  },
+  {
+    label: 'Interview',
+    value: 'interview',
+    hint: 'Interview-grade problems',
+  },
+];
+
 export const Practice: React.FC = () => {
-  const { problems, loading, error, reload } = useProblems();
-  const [filter, setFilter] = useState<Filter>('all');
+  const [tier, setTier] = useState<ProblemTier>('starter');
+  const { problems, loading, error, reload } = useProblems(tier);
+  const [diffFilter, setDiffFilter] = useState<DiffFilter>('all');
 
   const filtered = useMemo(() => {
-    if (filter === 'all') return problems;
-    return problems.filter((p) => p.difficulty === filter);
-  }, [problems, filter]);
+    if (diffFilter === 'all') return problems;
+    return problems.filter((p) => p.difficulty === diffFilter);
+  }, [problems, diffFilter]);
 
   const counts = useMemo(
     () => ({
@@ -37,21 +51,40 @@ export const Practice: React.FC = () => {
   return (
     <div className="w-full p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-text-primary">DSA Practice</h1>
+        <h1 className="text-3xl font-bold text-text-primary">Practice</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Real test cases, browser-based execution, zero contest pressure.
+          Solve problems in the browser. Free, no submission limits.
         </p>
       </div>
 
-      {/* Filters */}
+      {/* Tier tabs */}
+      <div className="mb-4 flex gap-1 border-b border-border">
+        {tiers.map((t) => (
+          <button
+            key={t.value}
+            onClick={() => setTier(t.value)}
+            className={cn(
+              'px-4 py-2 text-sm font-medium transition-colors',
+              tier === t.value
+                ? 'border-b-2 border-brand-500 text-brand-500'
+                : 'border-b-2 border-transparent text-text-muted hover:text-text-secondary'
+            )}
+            title={t.hint}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Difficulty filter */}
       <div className="mb-6 flex flex-wrap gap-2">
-        {filters.map((f) => (
+        {diffFilters.map((f) => (
           <button
             key={f.value}
-            onClick={() => setFilter(f.value)}
+            onClick={() => setDiffFilter(f.value)}
             className={cn(
               'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-              filter === f.value
+              diffFilter === f.value
                 ? 'bg-brand-500 text-white'
                 : 'bg-surface-secondary text-text-secondary hover:bg-surface-tertiary'
             )}
@@ -77,7 +110,9 @@ export const Practice: React.FC = () => {
       )}
 
       {!loading && !error && filtered.length === 0 && (
-        <p className="text-text-muted">No problems in this category yet.</p>
+        <p className="text-text-muted">
+          No {tier} problems in this difficulty yet.
+        </p>
       )}
 
       {!loading && !error && filtered.length > 0 && (

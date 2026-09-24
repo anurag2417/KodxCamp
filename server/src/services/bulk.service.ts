@@ -4,6 +4,10 @@ import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { validateSqlSetup } from './sqlSetupValidator.js';
+import {
+  allocateProblemId,
+  inferProblemKind,
+} from './problemNumber.service.js';
 import { z } from 'zod';
 
 // ─── Zod schemas ──────────────────────────────────────────────────
@@ -34,8 +38,10 @@ const problemSchema = z.object({
   outputMode: z.enum(['return', 'print']).default('return'),
   starterCode: z.record(z.string()).default({}),
   testCases: z.array(testCaseSchema).min(1),
-  number: z.number().int().positive().optional(),
   sqlSetup: z.string().optional(),
+  scope: z.enum(['global', 'course']).default('global'),
+  courseId: z.string().optional(),
+  tier: z.enum(['starter', 'interview']).default('starter'),
 });
 
 const projectFileSchema = z.object({
@@ -135,14 +141,6 @@ function zipValidationErrors(
   return { valid, errors };
 }
 
-async function nextProblemNumber(): Promise<number> {
-  const last = await Problem.findOne()
-    .sort({ number: -1 })
-    .select('number')
-    .lean();
-  return (last?.number ?? 0) + 1;
-}
-
 // ─── Service ──────────────────────────────────────────────────────
 
 export const bulkService = {
@@ -166,6 +164,7 @@ export const bulkService = {
     const { valid, errors } = zipValidationErrors(items, problemSchema);
     report.failed = errors;
 
+    // Structural sqlSetup validation.
     const structurallyValid: unknown[] = [];
     valid.forEach((item, i) => {
       const candidate = item as { slug: string; sqlSetup?: string };
@@ -184,11 +183,30 @@ export const bulkService = {
       }
     });
 
-    const seenSlugs = new Set<string>();
-    const seenNumbers = new Set<number>();
-    const deduped: unknown[] = [];
+    // Scope / courseId consistency check.
+    const scopeValid: unknown[] = [];
     structurallyValid.forEach((item, i) => {
-      const { slug, number } = item as { slug: string; number?: number };
+      const c = item as {
+        slug: string;
+        scope: 'global' | 'course';
+        courseId?: string;
+      };
+      if (c.scope === 'course' && !c.courseId) {
+        report.failed.push({
+          index: i,
+          slug: c.slug,
+          error: 'courseId is required when scope is "course"',
+        });
+        return;
+      }
+      scopeValid.push(item);
+    });
+
+    // Dedup within the batch.
+    const seenSlugs = new Set<string>();
+    const deduped: unknown[] = [];
+    scopeValid.forEach((item, i) => {
+      const { slug } = item as { slug: string };
       if (seenSlugs.has(slug)) {
         report.failed.push({
           index: i,
@@ -197,16 +215,7 @@ export const bulkService = {
         });
         return;
       }
-      if (number !== undefined && seenNumbers.has(number)) {
-        report.failed.push({
-          index: i,
-          slug,
-          error: `Duplicate problem number ${number} within import batch`,
-        });
-        return;
-      }
       seenSlugs.add(slug);
-      if (number !== undefined) seenNumbers.add(number);
       deduped.push(item);
     });
 
@@ -217,44 +226,30 @@ export const bulkService = {
     }
 
     for (const item of deduped) {
-      const doc = item as { slug: string; number?: number };
+      const doc = item as {
+        slug: string;
+        starterCode: Record<string, string>;
+      };
       const existing = await Problem.findOne({ slug: doc.slug });
 
       if (existing) {
         if (mode === 'merge') {
-          const { number, ...rest } = doc;
+          // Never reassign problemId on update. Merge the rest.
+          const { ...rest } = doc;
           Object.assign(existing, rest);
-          if (number !== undefined && number !== existing.number) {
-            const clash = await Problem.findOne({ number }).lean();
-            if (clash && clash._id.toString() !== existing._id.toString()) {
-              report.failed.push({
-                index: report.created + report.updated,
-                slug: doc.slug,
-                error: `Problem number ${number} already used by "${clash.title}"`,
-              });
-              continue;
-            }
-            existing.number = number;
-          }
           await existing.save();
           report.updated++;
         } else {
-          const num = doc.number ?? (await nextProblemNumber());
-          await Problem.create({ ...doc, number: num });
+          // Replace mode: assign a fresh problemId.
+          const kind = inferProblemKind(doc.starterCode);
+          const problemId = await allocateProblemId(kind);
+          await Problem.create({ ...doc, problemId });
           report.created++;
         }
       } else {
-        const num = doc.number ?? (await nextProblemNumber());
-        const clash = await Problem.findOne({ number: num }).lean();
-        if (clash) {
-          report.failed.push({
-            index: report.created + report.updated,
-            slug: doc.slug,
-            error: `Problem number ${num} already used by "${clash.title}"`,
-          });
-          continue;
-        }
-        await Problem.create({ ...doc, number: num });
+        const kind = inferProblemKind(doc.starterCode);
+        const problemId = await allocateProblemId(kind);
+        await Problem.create({ ...doc, problemId });
         report.created++;
       }
     }
@@ -309,13 +304,6 @@ export const bulkService = {
     return report;
   },
 
-  /**
-   * Import courses and their lessons.
-   *
-   * `importerId` is required: `Course.createdBy` is a required field
-   * in the schema, and previously this function passed nothing, so
-   * every bulk course import failed with a Mongoose validation error.
-   */
   async importCourses(
     items: unknown,
     mode: ImportMode,
@@ -369,7 +357,6 @@ export const bulkService = {
           language: courseData.language,
           totalLessons: courseData.lessons.length,
           createdBy: importerId,
-          members: [],
           published: false,
         });
         for (const l of courseData.lessons) {

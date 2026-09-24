@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   ListOrdered,
+  Users,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -29,6 +30,7 @@ import {
   type EditableTestCase,
 } from '@/features/admin/components/TestCaseEditor';
 import { CourseQuizEditor } from '@/features/instructor/components/CourseQuizEditor';
+import { CourseTeamPanel } from '@/features/instructor/components/CourseTeamPanel';
 import {
   WebLessonStepsEditor,
   type EditableWebLessonStep,
@@ -72,11 +74,6 @@ const emptyLesson = (order: number): LessonEditorState => ({
   steps: [],
 });
 
-/**
- * Defensive default for the permission block. A malformed or partial
- * server response used to crash the whole page because we destructured
- * `course.permissions` directly and then accessed properties on it.
- */
 const DENY_ALL_PERMISSIONS: ApiCoursePermissions = {
   canEditContent: false,
   canManageCourse: false,
@@ -682,7 +679,32 @@ export const InstructorCourseEdit: React.FC = () => {
         )}
       </div>
 
-      {perms.canEditContent && <CourseQuizEditor courseSlug={course.slug} lessons={course.lessons} />}
+      {/*
+        Course team panel. Rendered whenever the viewer can manage the
+        team (admins and course leads). Instructors on the course who
+        only have `course_author` or below don't see this section.
+      */}
+      {perms.canManageTeam && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-center gap-2">
+            <Users size={18} className="text-brand-500" />
+            <h2 className="text-lg font-semibold text-text-primary">
+              Team
+            </h2>
+          </div>
+          <CourseTeamPanel
+            courseSlug={course.slug}
+            courseId={course._id}
+            members={course.members}
+            createdBy={course.createdBy}
+            onUpdate={refresh}
+          />
+        </div>
+      )}
+
+      {perms.canEditContent && (
+        <CourseQuizEditor courseSlug={course.slug} lessons={course.lessons} />
+      )}
 
       {perms.canManageCourse && (
         <div className="mt-8 border-t border-border pt-6">

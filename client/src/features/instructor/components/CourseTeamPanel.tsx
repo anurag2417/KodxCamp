@@ -21,9 +21,22 @@ interface Props {
 }
 
 const ROLE_OPTIONS: { value: CourseTeamRole; label: string; hint: string }[] = [
-  { value: 'lead', label: 'Lead', hint: 'Full control of the course' },
-  { value: 'author', label: 'Author', hint: 'Create and edit lessons' },
-  { value: 'reviewer', label: 'Reviewer', hint: 'Approve content' },
+  { value: 'lead', label: 'Lead', hint: 'Full control of the course and team' },
+  {
+    value: 'course_author',
+    label: 'Course Author',
+    hint: 'Create and edit lessons, quizzes',
+  },
+  {
+    value: 'problem_author',
+    label: 'Problem Author',
+    hint: 'Manage problems attached to this course',
+  },
+  {
+    value: 'class_coordinator',
+    label: 'Class Coordinator',
+    hint: 'Schedule classes, upload recordings',
+  },
   { value: 'ta', label: 'TA', hint: 'See students, no content edits' },
   { value: 'viewer', label: 'Viewer', hint: 'Read-only' },
 ];
@@ -37,7 +50,7 @@ export const CourseTeamPanel: React.FC<Props> = ({
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<CourseTeamRole>('author');
+  const [role, setRole] = useState<CourseTeamRole>('course_author');
   const [busy, setBusy] = useState(false);
   const [invitations, setInvitations] = useState<ApiInvitation[]>([]);
 
@@ -65,7 +78,7 @@ export const CourseTeamPanel: React.FC<Props> = ({
       await instructorApi.createInvitation(courseSlug, email.trim(), role);
       toast.success(`Invitation sent to ${email.trim()}`);
       setEmail('');
-      setRole('author');
+      setRole('course_author');
       setAdding(false);
       await reloadInvitations();
     } catch (err) {
@@ -174,7 +187,7 @@ export const CourseTeamPanel: React.FC<Props> = ({
         )}
 
         <div className="flex flex-col gap-2">
-          {/* Creator */}
+          {/* Creator row */}
           <div className="flex items-center justify-between rounded-lg bg-surface-secondary p-3">
             <div className="flex items-center gap-3">
               <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-500 text-xs font-bold text-white">
@@ -194,45 +207,47 @@ export const CourseTeamPanel: React.FC<Props> = ({
             </span>
           </div>
 
-          {members.map((m) => (
-            <div
-              key={m.userId}
-              className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
-            >
-              <div className="flex items-center gap-3">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-surface-tertiary text-xs font-bold text-text-secondary">
-                  {m.userId.slice(-2).toUpperCase()}
-                </span>
-                <p className="text-[10px] font-mono text-text-muted">
-                  {m.userId}
-                </p>
+          {members
+            .filter((m) => m.userId !== createdBy)
+            .map((m) => (
+              <div
+                key={m.userId}
+                className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-surface-tertiary text-xs font-bold text-text-secondary">
+                    {m.userId.slice(-2).toUpperCase()}
+                  </span>
+                  <p className="text-[10px] font-mono text-text-muted">
+                    {m.userId}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={m.role}
+                    onChange={(e) =>
+                      changeRole(m.userId, e.target.value as CourseTeamRole)
+                    }
+                    className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-text-primary"
+                  >
+                    {ROLE_OPTIONS.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => remove(m.userId)}
+                    className="rounded p-1 text-[var(--color-error)] hover:bg-[var(--color-error)]/10"
+                    title="Remove"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={m.role}
-                  onChange={(e) =>
-                    changeRole(m.userId, e.target.value as CourseTeamRole)
-                  }
-                  className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-text-primary"
-                >
-                  {ROLE_OPTIONS.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => remove(m.userId)}
-                  className="rounded p-1 text-[var(--color-error)] hover:bg-[var(--color-error)]/10"
-                  title="Remove"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
+            ))}
 
-          {members.length === 0 && (
+          {members.filter((m) => m.userId !== createdBy).length === 0 && (
             <p className="text-xs text-text-muted">
               No team members yet. Invite a colleague by email above.
             </p>

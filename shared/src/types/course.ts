@@ -1,17 +1,11 @@
+import type { GlobalPermission, CourseTeamRole } from './permissions.js';
+
 export const COURSE_LANGUAGES = [
   'html-css', 'javascript', 'typescript', 'python', 'ruby', 'java',
   'sql', 'react', 'tailwind', 'dsa-python', 'dsa-javascript',
 ] as const;
 
 export type CourseLanguage = (typeof COURSE_LANGUAGES)[number];
-export type CourseTeamRole = 'lead' | 'author' | 'reviewer' | 'ta' | 'viewer';
-
-export interface ICourseTeamMember {
-  userId: string;
-  role: CourseTeamRole;
-  addedAt: Date;
-  addedBy: string;
-}
 
 /**
  * Lesson test case. Same semantics as `IProblemTestCase`:
@@ -25,42 +19,16 @@ export interface ITestCase {
 
 /**
  * A single step inside a step-by-step web lesson.
- *
- * Steps are only meaningful for lessons whose `language` is one of the
- * web languages (`html-css`, `react`, `tailwind`). For other languages
- * `Lesson.steps` is an empty array and the classic single-shot
- * experience applies.
- *
- * A student can only move to step N+1 after their current files pass
- * step N's `webChecks`. The check runs client-side, in the same
- * validator that already exists for classic web lessons.
  */
 export interface IWebLessonStep {
-  /** Short title shown in the step header. */
   title: string;
-  /** Markdown-ish instructions shown above the editor for this step. */
   instructions: string;
-  /** Optional hint shown if the student is stuck. */
   hint?: string;
-  /**
-   * Starter files for this step. Each step starts the student from
-   * this snapshot so a broken earlier step doesn't cascade.
-   *
-   * Keys are fixed: 'index.html', 'styles.css', 'script.js'.
-   * Missing keys are treated as empty strings.
-   */
   starterFiles: {
     'index.html': string;
     'styles.css': string;
     'script.js': string;
   };
-  /**
-   * Tokens that must be present in the corresponding file for the step
-   * to pass. Empty arrays mean "no requirement for that file".
-   *
-   * Same semantics as the classic web-lesson `webChecks`, but scoped
-   * to this step.
-   */
   webChecks: {
     requiredHtml: string[];
     requiredCss: string[];
@@ -87,16 +55,16 @@ export interface ILesson {
   outputMode: 'return' | 'print';
   language: CourseLanguage;
   testCases: ITestCase[];
-  /**
-   * Step-by-step mode. When this array is non-empty AND the lesson's
-   * language is a web language, the lesson renders in guided mode.
-   * When empty, the classic single-shot editor is used.
-   */
   steps: IWebLessonStep[];
   createdAt: Date;
   updatedAt: Date;
 }
 
+/**
+ * A course. Team members are no longer embedded here — see
+ * `CourseMembership` in `permissions.ts` (or in the server's
+ * `CourseMembership.model.ts`).
+ */
 export interface ICourse {
   _id: string;
   title: string;
@@ -106,8 +74,25 @@ export interface ICourse {
   thumbnail?: string;
   totalLessons: number;
   createdBy: string;
-  members: ICourseTeamMember[];
   published: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
+
+/**
+ * A staff membership in a course. One row per (userId, courseId)
+ * pair. Written by the team management flows and read by every
+ * permission check.
+ */
+export interface ICourseMembership {
+  _id: string;
+  userId: string;
+  courseId: string;
+  role: CourseTeamRole;
+  addedAt: Date;
+  addedBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type { GlobalPermission, CourseTeamRole };

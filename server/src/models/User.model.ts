@@ -5,17 +5,17 @@ export type UserRole = 'student' | 'instructor' | 'admin';
 export type AuthProvider = 'email' | 'google' | 'both';
 
 /**
+ * Global permission set. Values must match `GLOBAL_PERMISSIONS` in
+ * `shared/src/types/permissions.ts`.
+ */
+export type GlobalPermission =
+  | 'problem_author'
+  | 'project_author'
+  | 'course_author'
+  | 'class_coordinator';
+
+/**
  * Where a user is in the signup lifecycle.
- *
- *   pending_verification - created by email signup, has not yet
- *     verified their email via OTP.
- *   pending_profile - verified their email, has not yet set a name
- *     and password.
- *   active - fully set up; can log in.
- *   suspended - disabled by an admin. Login is refused.
- *
- * Google signup skips straight to `active` because Google has already
- * verified the email.
  */
 export type AccountStatus =
   | 'pending_verification'
@@ -29,12 +29,19 @@ export interface UserDocument extends Document {
   /** Optional - Google-only users have no password. */
   password?: string;
   role: UserRole;
+  /**
+   * Global permission set. Independent of `role`. `admin` implicitly
+   * has every permission; the check helper in `permissions.service.ts`
+   * short-circuits admins.
+   *
+   * Defaults to `[]` so a newly created user (or one from before the
+   * Batch 2 rollout) has no elevated permissions.
+   */
+  permissions: GlobalPermission[];
 
-  /** Set by the signup flow. Never reverts to false once true. */
   emailVerified: boolean;
   accountStatus: AccountStatus;
   authProvider: AuthProvider;
-  /** Firebase UID for Google-linked accounts. */
   googleId?: string;
 
   avatar?: string;
@@ -61,6 +68,16 @@ const userSchema = new Schema<UserDocument>(
       type: String,
       enum: ['student', 'instructor', 'admin'] as UserRole[],
       default: 'student',
+    },
+    permissions: {
+      type: [String],
+      enum: [
+        'problem_author',
+        'project_author',
+        'course_author',
+        'class_coordinator',
+      ] as GlobalPermission[],
+      default: [],
     },
 
     emailVerified: { type: Boolean, default: false, index: true },

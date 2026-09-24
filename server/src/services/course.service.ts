@@ -1,8 +1,10 @@
 import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { Progress } from '../models/Progress.model.js';
+import { CourseMembership } from '../models/CourseMembership.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { permissions } from './permissions.service.js';
+import { courseMembershipService } from './courseMembership.service.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 interface CourseInput {
@@ -59,6 +61,23 @@ interface LessonInput {
 function getUser(req: AuthRequest) {
   const u = req.user!;
   return { _id: u._id.toString(), role: u.role as string };
+}
+
+async function resolveCourseAndRole(
+  req: AuthRequest,
+  slug: string
+): Promise<{
+  course: InstanceType<typeof Course>;
+  role: Awaited<ReturnType<typeof permissions.resolveEffectiveRole>>;
+}> {
+  const user = getUser(req);
+  const course = await Course.findOne({ slug });
+  if (!course) throw new ApiError(404, 'Course not found');
+  const role = await permissions.resolveEffectiveRole(
+    user,
+    course._id.toString()
+  );
+  return { course, role };
 }
 
 function normalizeTestCase(tc: TestCaseInput, index: number) {
@@ -216,6 +235,7 @@ export const courseService = {
 
   async listForUser(req: AuthRequest) {
     const user = getUser(req);
+
     if (user.role === 'admin') {
       const all = await Course.find().sort({ createdAt: -1 }).lean();
       const withCounts = await Promise.all(
@@ -227,8 +247,16 @@ export const courseService = {
       return withCounts;
     }
 
+    const memberships = await CourseMembership.find({ userId: user._id })
+      .select('courseId')
+      .lean();
+    const memberCourseIds = memberships.map((m) => m.courseId);
+
     const mine = await Course.find({
-      $or: [{ createdBy: user._id }, { 'members.userId': user._id }],
+      $or: [
+        { createdBy: user._id },
+        { _id: { $in: memberCourseIds } },
+      ],
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -243,14 +271,9 @@ export const courseService = {
   },
 
   async getFullForEditor(req: AuthRequest, slug: string) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug }).lean();
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role } = await resolveCourseAndRole(req, slug);
 
-    const permissionCourse =
-      course as unknown as Parameters<typeof permissions.canAccessCourse>[1];
-
-    if (!permissions.canAccessCourse(user, permissionCourse)) {
+    if (!permissions.canAccessCourse(role)) {
       throw new ApiError(403, 'You do not have access to this course');
     }
 
@@ -258,21 +281,26 @@ export const courseService = {
       .sort({ order: 1 })
       .lean();
 
-    const role = permissions.courseRole(user, permissionCourse);
+    const members = await courseMembershipService.listForCourse(
+      course._id.toString()
+    );
+
+    const courseObj = course.toObject();
 
     return {
-      ...course,
+      ...courseObj,
       lessons: lessons.map((l) => ({
         ...l,
         steps: l.steps ?? [],
       })),
+      members,
       myRole: role,
       permissions: {
-        canEditContent: permissions.canEditContent(user, permissionCourse),
-        canManageCourse: permissions.canManageCourse(user, permissionCourse),
-        canManageTeam: permissions.canManageTeam(user, permissionCourse),
-        canViewStudents: permissions.canViewStudents(user, permissionCourse),
-        canManageClasses: permissions.canManageClasses(user, permissionCourse),
+        canEditContent: permissions.canEditContent(role),
+        canManageCourse: permissions.canManageCourse(role),
+        canManageTeam: permissions.canManageTeam(role),
+        canViewStudents: permissions.canViewStudents(role),
+        canManageClasses: permissions.canManageClasses(role),
       },
     };
   },
@@ -291,24 +319,23 @@ export const courseService = {
       ...input,
       totalLessons: 0,
       createdBy: user._id,
-      members: [],
       published: false,
+    });
+
+    await courseMembershipService.upsert({
+      userId: user._id,
+      courseId: created._id.toString(),
+      role: 'lead',
+      addedBy: user._id,
     });
 
     return created.toObject();
   },
 
   async updateCourse(req: AuthRequest, slug: string, patch: Partial<CourseInput>) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role } = await resolveCourseAndRole(req, slug);
 
-    if (
-      !permissions.canManageCourse(
-        user,
-        course as unknown as Parameters<typeof permissions.canManageCourse>[1]
-      )
-    ) {
+    if (!permissions.canManageCourse(role)) {
       throw new ApiError(403, 'Only the course lead can edit course details');
     }
 
@@ -323,16 +350,9 @@ export const courseService = {
   },
 
   async setPublished(req: AuthRequest, slug: string, published: boolean) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role } = await resolveCourseAndRole(req, slug);
 
-    if (
-      !permissions.canManageCourse(
-        user,
-        course as unknown as Parameters<typeof permissions.canManageCourse>[1]
-      )
-    ) {
+    if (!permissions.canManageCourse(role)) {
       throw new ApiError(403, 'Only the course lead can publish this course');
     }
 
@@ -342,16 +362,9 @@ export const courseService = {
   },
 
   async deleteCourse(req: AuthRequest, slug: string) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role } = await resolveCourseAndRole(req, slug);
 
-    if (
-      !permissions.canManageCourse(
-        user,
-        course as unknown as Parameters<typeof permissions.canManageCourse>[1]
-      )
-    ) {
+    if (!permissions.canManageCourse(role)) {
       throw new ApiError(403, 'Only the course lead can delete this course');
     }
 
@@ -360,6 +373,7 @@ export const courseService = {
     await Promise.all([
       Lesson.deleteMany({ courseId }),
       Progress.deleteMany({ courseId }),
+      CourseMembership.deleteMany({ courseId }),
       Course.deleteOne({ _id: course._id }),
     ]);
 
@@ -367,16 +381,9 @@ export const courseService = {
   },
 
   async createLesson(req: AuthRequest, courseSlug: string, input: LessonInput) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug: courseSlug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role } = await resolveCourseAndRole(req, courseSlug);
 
-    if (
-      !permissions.canEditContent(
-        user,
-        course as unknown as Parameters<typeof permissions.canEditContent>[1]
-      )
-    ) {
+    if (!permissions.canEditContent(role)) {
       throw new ApiError(403, 'You do not have permission to edit this course');
     }
 
@@ -415,16 +422,9 @@ export const courseService = {
     lessonSlug: string,
     patch: Partial<LessonInput>
   ) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug: courseSlug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role } = await resolveCourseAndRole(req, courseSlug);
 
-    if (
-      !permissions.canEditContent(
-        user,
-        course as unknown as Parameters<typeof permissions.canEditContent>[1]
-      )
-    ) {
+    if (!permissions.canEditContent(role)) {
       throw new ApiError(403, 'You do not have permission to edit this course');
     }
 
@@ -474,16 +474,9 @@ export const courseService = {
   },
 
   async deleteLesson(req: AuthRequest, courseSlug: string, lessonSlug: string) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug: courseSlug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role } = await resolveCourseAndRole(req, courseSlug);
 
-    if (
-      !permissions.canEditContent(
-        user,
-        course as unknown as Parameters<typeof permissions.canEditContent>[1]
-      )
-    ) {
+    if (!permissions.canEditContent(role)) {
       throw new ApiError(403, 'You do not have permission to edit this course');
     }
 
@@ -498,38 +491,24 @@ export const courseService = {
   },
 
   async listTeam(req: AuthRequest, slug: string) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug }).lean();
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role } = await resolveCourseAndRole(req, slug);
 
-    if (
-      !permissions.canAccessCourse(
-        user,
-        course as unknown as Parameters<typeof permissions.canAccessCourse>[1]
-      )
-    ) {
+    if (!permissions.canAccessCourse(role)) {
       throw new ApiError(403, 'You do not have access to this course');
     }
 
-    return course.members;
+    return courseMembershipService.listForCourse(course._id.toString());
   },
 
   async addTeamMember(
     req: AuthRequest,
     slug: string,
     memberUserId: string,
-    role: 'lead' | 'author' | 'reviewer' | 'ta' | 'viewer'
+    role: 'lead' | 'course_author' | 'problem_author' | 'class_coordinator' | 'ta' | 'viewer'
   ) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role: callerRole } = await resolveCourseAndRole(req, slug);
 
-    if (
-      !permissions.canManageTeam(
-        user,
-        course as unknown as Parameters<typeof permissions.canManageTeam>[1]
-      )
-    ) {
+    if (!permissions.canManageTeam(callerRole)) {
       throw new ApiError(403, 'Only the course lead can manage the team');
     }
 
@@ -537,64 +516,63 @@ export const courseService = {
       throw new ApiError(400, 'This user is the course creator (already lead)');
     }
 
-    const existing = course.members.find((m) => m.userId === memberUserId);
+    const existing = await CourseMembership.findOne({
+      userId: memberUserId,
+      courseId: course._id.toString(),
+    }).lean();
     if (existing) {
       throw new ApiError(409, 'User is already on this team');
     }
 
-    course.members.push({
+    const user = getUser(req);
+    await courseMembershipService.upsert({
       userId: memberUserId,
+      courseId: course._id.toString(),
       role,
-      addedAt: new Date(),
       addedBy: user._id,
     });
-    await course.save();
-    return course.members;
+
+    return courseMembershipService.listForCourse(course._id.toString());
   },
 
   async updateTeamMemberRole(
     req: AuthRequest,
     slug: string,
     memberUserId: string,
-    role: 'lead' | 'author' | 'reviewer' | 'ta' | 'viewer'
+    role: 'lead' | 'course_author' | 'problem_author' | 'class_coordinator' | 'ta' | 'viewer'
   ) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role: callerRole } = await resolveCourseAndRole(req, slug);
 
-    if (
-      !permissions.canManageTeam(
-        user,
-        course as unknown as Parameters<typeof permissions.canManageTeam>[1]
-      )
-    ) {
+    if (!permissions.canManageTeam(callerRole)) {
       throw new ApiError(403, 'Only the course lead can manage the team');
     }
 
-    const member = course.members.find((m) => m.userId === memberUserId);
+    const member = await CourseMembership.findOne({
+      userId: memberUserId,
+      courseId: course._id.toString(),
+    });
     if (!member) throw new ApiError(404, 'User is not on this team');
 
-    member.role = role;
-    await course.save();
-    return course.members;
+    const user = getUser(req);
+    await courseMembershipService.upsert({
+      userId: memberUserId,
+      courseId: course._id.toString(),
+      role,
+      addedBy: user._id,
+    });
+
+    return courseMembershipService.listForCourse(course._id.toString());
   },
 
   async removeTeamMember(req: AuthRequest, slug: string, memberUserId: string) {
-    const user = getUser(req);
-    const course = await Course.findOne({ slug });
-    if (!course) throw new ApiError(404, 'Course not found');
+    const { course, role: callerRole } = await resolveCourseAndRole(req, slug);
 
-    if (
-      !permissions.canManageTeam(
-        user,
-        course as unknown as Parameters<typeof permissions.canManageTeam>[1]
-      )
-    ) {
+    if (!permissions.canManageTeam(callerRole)) {
       throw new ApiError(403, 'Only the course lead can manage the team');
     }
 
-    course.members = course.members.filter((m) => m.userId !== memberUserId);
-    await course.save();
-    return course.members;
+    await courseMembershipService.remove(memberUserId, course._id.toString());
+
+    return courseMembershipService.listForCourse(course._id.toString());
   },
 };

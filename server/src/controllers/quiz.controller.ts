@@ -16,11 +16,6 @@ const optionSchema = z
   })
   .strict();
 
-/**
- * Body-only schema. Kept exported for callers that already know the
- * route params are correct (there are none right now, but the name is
- * stable).
- */
 export const quizQuestionSchema = z.object({
   body: z
     .object({
@@ -35,15 +30,6 @@ export const quizQuestionSchema = z.object({
     .strict(),
 });
 
-/**
- * Combined schema used by the create route. Both `params` and `body`
- * are declared so the single `validate()` call doesn't wipe `req.body`.
- *
- * History: this route previously called `validate()` twice, once with
- * a params-only schema and once with a body-only schema. The first
- * call replaced `req.body` with `undefined`, so the second one always
- * failed with "Validation failed". Merging into one schema fixes that.
- */
 export const createQuizQuestionSchema = z.object({
   params: z.object({
     slug: z.string().min(1),
@@ -89,6 +75,21 @@ async function getLessonId(courseId: string, lessonSlug?: string) {
   return lesson._id.toString();
 }
 
+/**
+ * Resolve the caller's effective role on a course and assert they can
+ * edit content. Shared by every mutating quiz handler.
+ */
+async function assertCanEditContent(req: AuthRequest, courseId: string) {
+  const user = {
+    _id: req.user!._id.toString(),
+    role: req.user!.role as string,
+  };
+  const role = await permissions.resolveEffectiveRole(user, courseId);
+  if (!permissions.canEditContent(role)) {
+    throw new ApiError(403, 'You do not have permission to edit this course');
+  }
+}
+
 export const quizController = {
   list: asyncHandler(async (req: AuthRequest, res: Response) => {
     const course = await getCourse(String(req.params.slug));
@@ -124,12 +125,18 @@ export const quizController = {
       results: questions.map((q) => ({
         questionId: q._id,
         correct: (() => {
-          const expected = q.correctOptionIds?.length ? q.correctOptionIds : q.correctOptionId ? [q.correctOptionId] : [];
+          const expected = q.correctOptionIds?.length
+            ? q.correctOptionIds
+            : q.correctOptionId
+              ? [q.correctOptionId]
+              : [];
           const rawAnswer = answers[q._id.toString()];
           const actual = Array.isArray(rawAnswer) ? rawAnswer : rawAnswer ? [rawAnswer] : [];
           return expected.length === actual.length && expected.every((id) => actual.includes(id));
         })(),
-        correctOptionIds: q.correctOptionIds?.length ? q.correctOptionIds : [q.correctOptionId],
+        correctOptionIds: q.correctOptionIds?.length
+          ? q.correctOptionIds
+          : [q.correctOptionId],
         explanation: q.explanation,
       })),
     });
@@ -137,10 +144,7 @@ export const quizController = {
 
   manageList: asyncHandler(async (req: AuthRequest, res: Response) => {
     const course = await getCourse(String(req.params.slug));
-    const user = { _id: req.user!._id.toString(), role: req.user!.role };
-    if (!permissions.canEditContent(user, course as unknown as Parameters<typeof permissions.canEditContent>[1])) {
-      throw new ApiError(403, 'You do not have permission to edit this course');
-    }
+    await assertCanEditContent(req, course._id.toString());
     const questions = await QuizQuestion.find({ courseId: course._id.toString() })
       .sort({ order: 1 })
       .lean();
@@ -149,26 +153,36 @@ export const quizController = {
 
   create: asyncHandler(async (req: AuthRequest, res: Response) => {
     const course = await getCourse(String(req.params.slug));
-    const user = { _id: req.user!._id.toString(), role: req.user!.role };
-    if (!permissions.canEditContent(user, course as unknown as Parameters<typeof permissions.canEditContent>[1])) {
-      throw new ApiError(403, 'You do not have permission to edit this course');
-    }
+    await assertCanEditContent(req, course._id.toString());
+
     const input = req.body;
     const lesson = await Lesson.findOne({
       _id: input.lessonId,
       courseId: course._id.toString(),
-    }).select('_id').lean();
+    })
+      .select('_id')
+      .lean();
     if (!lesson) throw new ApiError(404, 'Lesson not found');
     const lessonId = lesson._id.toString();
+
     if (input.mode === 'single' && input.correctOptionIds.length !== 1) {
-      throw new ApiError(400, 'Single-correct questions must have exactly one correct option');
+      throw new ApiError(
+        400,
+        'Single-correct questions must have exactly one correct option'
+      );
     }
-    if (input.correctOptionIds.some((id: string) => !input.options.some((option: { id: string }) => option.id === id))) {
+    if (
+      input.correctOptionIds.some(
+        (id: string) => !input.options.some((option: { id: string }) => option.id === id)
+      )
+    ) {
       throw new ApiError(400, 'Every correct option must match one of the options');
     }
+
     const question = await QuizQuestion.create({
       ...input,
-      correctOptionId: input.mode === 'single' ? input.correctOptionIds[0] : undefined,
+      correctOptionId:
+        input.mode === 'single' ? input.correctOptionIds[0] : undefined,
       lessonId,
       courseId: course._id.toString(),
     });
@@ -177,11 +191,11 @@ export const quizController = {
 
   remove: asyncHandler(async (req: AuthRequest, res: Response) => {
     const course = await getCourse(String(req.params.slug));
-    const user = { _id: req.user!._id.toString(), role: req.user!.role };
-    if (!permissions.canEditContent(user, course as unknown as Parameters<typeof permissions.canEditContent>[1])) {
-      throw new ApiError(403, 'You do not have permission to edit this course');
-    }
-    await QuizQuestion.deleteOne({ _id: req.params.questionId, courseId: course._id.toString() });
+    await assertCanEditContent(req, course._id.toString());
+    await QuizQuestion.deleteOne({
+      _id: req.params.questionId,
+      courseId: course._id.toString(),
+    });
     return ApiResponse.success(res, { ok: true });
   }),
 };

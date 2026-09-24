@@ -1,12 +1,22 @@
 import { api } from '@/shared/lib/api';
 
-export type CourseTeamRole = 'lead' | 'author' | 'reviewer' | 'ta' | 'viewer';
+export type CourseTeamRole =
+  | 'lead'
+  | 'course_author'
+  | 'problem_author'
+  | 'class_coordinator'
+  | 'ta'
+  | 'viewer';
 
 export interface ApiCourseTeamMember {
+  _id?: string;
   userId: string;
+  courseId?: string;
   role: CourseTeamRole;
   addedAt: string;
   addedBy: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ApiCoursePermissions {
@@ -27,7 +37,6 @@ export interface ApiInstructorCourse {
   thumbnail?: string;
   totalLessons: number;
   createdBy: string;
-  members: ApiCourseTeamMember[];
   published: boolean;
   createdAt: string;
 }
@@ -35,7 +44,6 @@ export interface ApiInstructorCourse {
 export interface ApiLessonTestCase {
   input: string;
   expectedOutput: string;
-  /** Display flag. Hides input/output from the student's test panel. */
   isHidden: boolean;
 }
 
@@ -83,12 +91,12 @@ export interface ApiInstructorLesson {
   outputMode: 'return' | 'print';
   language: string;
   testCases: ApiLessonTestCase[];
-  /** Step-by-step mode. Empty array means classic single-shot. */
   steps: ApiInstructorWebLessonStep[];
 }
 
 export interface ApiInstructorCourseFull extends ApiInstructorCourse {
   lessons: ApiInstructorLesson[];
+  members: ApiCourseTeamMember[];
   myRole: 'admin' | CourseTeamRole | null;
   permissions: ApiCoursePermissions;
 }
@@ -258,7 +266,6 @@ export const instructorApi = {
     return data.data;
   },
 
-  // ─── Lessons ───────────────────────────────────────────────
   createLesson: async (
     courseSlug: string,
     input: Record<string, unknown>
@@ -292,7 +299,6 @@ export const instructorApi = {
     return data.data;
   },
 
-  // ─── Team (by user id) ────────────────────────────────────
   listTeam: async (slug: string): Promise<ApiCourseTeamMember[]> => {
     const { data } = await api.get(`/instructor/courses/${slug}/team`);
     return data.data;
@@ -332,7 +338,6 @@ export const instructorApi = {
     return data.data;
   },
 
-  // ─── Invitations ──────────────────────────────────────────
   listInvitations: async (slug: string): Promise<ApiInvitation[]> => {
     const { data } = await api.get(`/instructor/courses/${slug}/invitations`);
     return data.data;
@@ -360,7 +365,6 @@ export const instructorApi = {
     return data.data;
   },
 
-  // ─── Students ─────────────────────────────────────────────
   listStudents: async (
     slug: string,
     params: {
@@ -404,8 +408,6 @@ export const instructorApi = {
     await api.delete(`/instructor/courses/${courseSlug}/quiz/${questionId}`);
   },
 };
-
-// ─── Invitation API (public + authenticated accept) ──────────────
 
 export const invitationApi = {
   resolve: async (token: string): Promise<ResolvedInvitation> => {

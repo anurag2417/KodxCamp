@@ -55,7 +55,8 @@ const DescriptionView: React.FC<{
 }> = ({ problem, hiddenCount }) => (
   <>
     <h1 className="text-xl font-bold text-text-primary">
-      <span className="text-text-muted">{problem.number}.</span> {problem.title}
+      <span className="font-mono text-text-muted">{problem.problemId}.</span>{' '}
+      {problem.title}
     </h1>
 
     <div className="mt-3 flex flex-wrap items-center gap-2">

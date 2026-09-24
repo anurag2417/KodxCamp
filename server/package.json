@@ -12,6 +12,8 @@
     "make-admin": "tsx src/scripts/make-admin.ts",
     "migrate:rbac": "tsx src/scripts/migrate-courses-for-rbac.ts",
     "migrate:auth": "tsx src/scripts/migrate-auth-fields.ts",
+    "migrate:memberships": "tsx src/scripts/migrate-memberships.ts",
+    "migrate:problems": "tsx src/scripts/migrate-problems.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -1,6 +1,8 @@
 import { api } from '@/shared/lib/api';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
+export type ProblemScope = 'global' | 'course';
+export type ProblemTier = 'starter' | 'interview';
 
 export type SubmissionStatus =
   | 'accepted'
@@ -10,11 +12,16 @@ export type SubmissionStatus =
 
 export interface ApiProblemSummary {
   _id: string;
-  number: number;
+  problemId: number;
+  /** @deprecated Legacy sequence. Present one batch, then gone. */
+  number?: number;
   title: string;
   slug: string;
   difficulty: Difficulty;
   topics: string[];
+  scope: ProblemScope;
+  courseId?: string;
+  tier: ProblemTier;
   solved?: boolean;
 }
 
@@ -22,13 +29,14 @@ export interface ApiProblemTestCase {
   index: number;
   input: string;
   expectedOutput: string;
-  /** Display flag. Hide input/output from the student's test panel. */
   isHidden: boolean;
 }
 
 export interface ApiProblemFull {
   _id: string;
-  number: number;
+  problemId: number;
+  /** @deprecated Legacy sequence. Present one batch, then gone. */
+  number?: number;
   title: string;
   slug: string;
   difficulty: Difficulty;
@@ -38,8 +46,10 @@ export interface ApiProblemFull {
   outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
   testCases: ApiProblemTestCase[];
-  /** SQL-only. Schema + seed SQL executed once before any test case. */
   sqlSetup?: string;
+  scope: ProblemScope;
+  courseId?: string;
+  tier: ProblemTier;
   solved?: boolean;
 }
 
@@ -67,8 +77,10 @@ export interface SubmitInput {
 }
 
 export const problemsApi = {
-  list: async (): Promise<ApiProblemSummary[]> => {
-    const { data } = await api.get('/problems');
+  list: async (tier?: ProblemTier): Promise<ApiProblemSummary[]> => {
+    const { data } = await api.get('/problems', {
+      params: tier ? { tier } : undefined,
+    });
     return data.data;
   },
 
@@ -77,9 +89,6 @@ export const problemsApi = {
     return data.data;
   },
 
-  /**
-   * @deprecated - use `submit` with the legacy payload.
-   */
   validate: async (input: {
     problemId: string;
     reportedResults: { index: number; passed: boolean }[];

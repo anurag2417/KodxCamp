@@ -2,6 +2,10 @@ export type Difficulty = 'easy' | 'medium' | 'hard';
 
 export type ProblemOutputMode = 'return' | 'print';
 
+export type ProblemScope = 'global' | 'course';
+
+export type ProblemTier = 'starter' | 'interview';
+
 /**
  * A single test case attached to a problem.
  *
@@ -14,22 +18,30 @@ export type ProblemOutputMode = 'return' | 'print';
  * Do not treat `isHidden` as protection against a student who controls
  * the browser. See the project brief for the honest posture on
  * browser-only judging.
- *
- * SQL NOTE: for SQL problems, `input` is the query the student's
- * answer is expected to produce (usually empty - the setup lives in
- * `Problem.sqlSetup`). `expectedOutput` is the formatted result table
- * that the student's query must return.
  */
 export interface IProblemTestCase {
   input: string;
   expectedOutput: string;
-  /** Display flag. Hide the input/output from the student's test panel. */
   isHidden: boolean;
 }
 
 export interface IProblem {
   _id: string;
-  number: number;
+  /**
+   * 5-digit public identifier assigned by the backend.
+   *
+   * Programming problems: 10001, 10002, 10003, ...
+   * SQL problems:         20001, 20002, 20003, ...
+   *
+   * Never supplied by the client. Never edited. Stable once assigned.
+   */
+  problemId: number;
+  /**
+   * @deprecated Legacy sequence number from before the problemId
+   * system. Still returned for one batch for backwards compatibility.
+   * Drop in a later batch.
+   */
+  number?: number;
   title: string;
   slug: string;
   difficulty: Difficulty;
@@ -39,32 +51,32 @@ export interface IProblem {
   outputMode: ProblemOutputMode;
   /**
    * Map of language id (or web filename) -> starter code.
-   *
-   * For classic single-language problems, keys are the language id
-   * (`javascript`, `python`, `sql`, ...).
-   *
-   * For web problems (HTML/CSS/JS), the map also carries per-file
-   * starters under keys `index.html`, `styles.css`, `script.js`, plus
-   * the language key `html-css` pointing at a full merged page.
-   * The client uses the per-file keys for the tabbed editor and the
-   * language key as a legacy fallback for the single-code editor.
    */
   starterCode: Record<string, string>;
   testCases: IProblemTestCase[];
   /**
    * SQL-only. A block of SQL executed once against the SQL.js database
-   * before any test case runs. Typically contains CREATE TABLE and
-   * INSERT statements that establish the schema and seed data the
-   * student's query will run against.
-   *
-   * Empty/undefined for non-SQL problems, or for SQL problems that
-   * test against tables the runner creates itself.
-   *
-   * The server performs a structural sanity check on save (balanced
-   * parens, at least one CREATE TABLE and one INSERT INTO) but does
-   * not execute it - execution happens in the browser.
+   * before any test case runs.
    */
   sqlSetup?: string;
+  /**
+   * Visibility scope.
+   *
+   *   - `global` -> appears in the global `/practice` catalog.
+   *   - `course` -> hidden from the global catalog; only reachable
+   *     through a lesson that references it via `problemSlug`, and
+   *     only for users with access to that course.
+   */
+  scope: ProblemScope;
+  /**
+   * Required when `scope === 'course'`, ignored otherwise.
+   */
+  courseId?: string;
+  /**
+   * Content tier. `starter` is the initial batch of learning problems;
+   * `interview` is the industry-grade set for interview prep.
+   */
+  tier: ProblemTier;
   createdAt: Date;
   updatedAt: Date;
 }

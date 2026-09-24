@@ -4,37 +4,34 @@ import {
   problemSlugSchema,
   submitSchema,
   validateResultsSchema,
+  listProblemsSchema,
 } from '../controllers/problem.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { optionalAuth } from '../middleware/optionalAuth.middleware.js';
 
 const router = Router();
 
-router.get('/', optionalAuth, problemController.list);
+// Practice requires login. Browsing and submitting both need an
+// authenticated user, so `requireAuth` gates the entire router.
+router.use(requireAuth);
+
+router.get('/', validate(listProblemsSchema), problemController.list);
 router.get(
   '/:slug',
   validate(problemSlugSchema),
-  optionalAuth,
   problemController.getBySlug
 );
 
 router.post(
   '/validate',
-  requireAuth,
   validate(validateResultsSchema),
   problemController.validate
 );
 router.post(
   '/submit',
-  requireAuth,
   validate(submitSchema),
   problemController.submit
 );
-router.get(
-  '/:problemId/submissions',
-  requireAuth,
-  problemController.submissions
-);
+router.get('/:problemId/submissions', problemController.submissions);
 
 export default router;

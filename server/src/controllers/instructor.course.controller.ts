@@ -5,10 +5,6 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
-/**
- * One test-case shape. See `admin.problem.controller.ts` for the
- * semantics of `isHidden`.
- */
 const testCaseSchema = z
   .object({
     input: z.string().default(''),
@@ -50,6 +46,15 @@ const webLessonStepSchema = z
     }),
   })
   .strict();
+
+const courseTeamRoleSchema = z.enum([
+  'lead',
+  'course_author',
+  'problem_author',
+  'class_coordinator',
+  'ta',
+  'viewer',
+]);
 
 export const createCourseSchema = z.object({
   body: z.object({
@@ -140,9 +145,7 @@ export const addTeamMemberSchema = z.object({
     slug: z.string().min(1),
     userId: z.string().min(1),
   }),
-  body: z.object({
-    role: z.enum(['lead', 'author', 'reviewer', 'ta', 'viewer']),
-  }),
+  body: z.object({ role: courseTeamRoleSchema }),
 });
 
 export const updateTeamMemberSchema = z.object({
@@ -150,9 +153,7 @@ export const updateTeamMemberSchema = z.object({
     slug: z.string().min(1),
     userId: z.string().min(1),
   }),
-  body: z.object({
-    role: z.enum(['lead', 'author', 'reviewer', 'ta', 'viewer']),
-  }),
+  body: z.object({ role: courseTeamRoleSchema }),
 });
 
 export const teamMemberParamsSchema = z.object({

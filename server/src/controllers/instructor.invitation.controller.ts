@@ -12,7 +12,14 @@ export const createInvitationSchema = z.object({
   params: z.object({ slug: z.string().min(1) }),
   body: z.object({
     email: z.string().email('Enter a valid email address'),
-    role: z.enum(['lead', 'author', 'reviewer', 'ta', 'viewer']),
+    role: z.enum([
+      'lead',
+      'course_author',
+      'problem_author',
+      'class_coordinator',
+      'ta',
+      'viewer',
+    ]),
   }),
 });
 
@@ -31,30 +38,41 @@ export const acceptInvitationSchema = z.object({
   params: z.object({ token: z.string().min(1) }),
 });
 
+/**
+ * Resolve the caller's effective role on a course. Throws 404 if the
+ * course doesn't exist.
+ */
+async function resolveCourseAndRole(req: AuthRequest, slug: string) {
+  const user = {
+    _id: req.user!._id.toString(),
+    role: req.user!.role as string,
+  };
+  const course = await Course.findOne({ slug });
+  if (!course) throw new ApiError(404, 'Course not found.');
+  const role = await permissions.resolveEffectiveRole(
+    user,
+    course._id.toString()
+  );
+  return { course, role };
+}
+
 export const instructorInvitationController = {
-  /**
-   * Create a new invitation for a course.
-   * Requires `canManageTeam` permission on the course.
-   */
   create: asyncHandler(async (req: AuthRequest, res: Response) => {
     const user = req.user!;
-    const course = await Course.findOne({ slug: req.params.slug });
-    if (!course) throw new ApiError(404, 'Course not found.');
+    const { course, role } = await resolveCourseAndRole(
+      req,
+      String(req.params.slug)
+    );
 
-    if (
-      !permissions.canManageTeam(
-        { _id: user._id.toString(), role: user.role },
-        course as unknown as Parameters<typeof permissions.canManageTeam>[1]
-      )
-    ) {
+    if (!permissions.canManageTeam(role)) {
       throw new ApiError(403, 'You do not have permission to invite members.');
     }
 
-    const { email, role } = req.body;
+    const { email, role: inviteRole } = req.body;
     const { invitationId } = await invitationService.create({
       courseId: course._id.toString(),
       email,
-      role,
+      role: inviteRole,
       invitedBy: user._id.toString(),
     });
 
@@ -66,20 +84,13 @@ export const instructorInvitationController = {
     );
   }),
 
-  /**
-   * List pending and past invitations for a course.
-   */
   list: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const user = req.user!;
-    const course = await Course.findOne({ slug: req.params.slug });
-    if (!course) throw new ApiError(404, 'Course not found.');
+    const { course, role } = await resolveCourseAndRole(
+      req,
+      String(req.params.slug)
+    );
 
-    if (
-      !permissions.canAccessCourse(
-        { _id: user._id.toString(), role: user.role },
-        course as unknown as Parameters<typeof permissions.canAccessCourse>[1]
-      )
-    ) {
+    if (!permissions.canAccessCourse(role)) {
       throw new ApiError(403, 'You do not have access to this course.');
     }
 
@@ -89,37 +100,26 @@ export const instructorInvitationController = {
     return ApiResponse.success(res, invitations);
   }),
 
-  /**
-   * Revoke a pending invitation.
-   */
   revoke: asyncHandler(async (req: AuthRequest, res: Response) => {
-    const user = req.user!;
-    const course = await Course.findOne({ slug: req.params.slug });
-    if (!course) throw new ApiError(404, 'Course not found.');
+    const { course, role } = await resolveCourseAndRole(
+      req,
+      String(req.params.slug)
+    );
 
-    if (
-      !permissions.canManageTeam(
-        { _id: user._id.toString(), role: user.role },
-        course as unknown as Parameters<typeof permissions.canManageTeam>[1]
-      )
-    ) {
+    if (!permissions.canManageTeam(role)) {
       throw new ApiError(403, 'You do not have permission to manage invites.');
     }
 
     await invitationService.revoke(
-      req.params.invitationId,
+      String(req.params.invitationId),
       course._id.toString()
     );
     return ApiResponse.success(res, { ok: true }, 'Invitation revoked');
   }),
 
-  /**
-   * Public - resolve an invitation token so the client can show the
-   * right screen ("you've been invited to X"). Does not require auth.
-   */
   resolve: asyncHandler(async (req: AuthRequest, res: Response) => {
     const { invitation, course, isExpired, isAlreadyAccepted, isRevoked } =
-      await invitationService.resolve(req.params.token);
+      await invitationService.resolve(String(req.params.token));
 
     return ApiResponse.success(res, {
       invitation: {
@@ -142,13 +142,10 @@ export const instructorInvitationController = {
     });
   }),
 
-  /**
-   * Authenticated - accept the invitation.
-   */
   accept: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();
     const { courseSlug } = await invitationService.accept({
-      rawToken: req.params.token,
+      rawToken: String(req.params.token),
       userId,
     });
     return ApiResponse.success(

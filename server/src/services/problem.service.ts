@@ -2,6 +2,10 @@ import { Problem } from '../models/Problem.model.js';
 import { judgeService } from './judge.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import { validateSqlSetup } from './sqlSetupValidator.js';
+import {
+  allocateProblemId,
+  inferProblemKind,
+} from './problemNumber.service.js';
 
 interface TestCaseInput {
   input: string;
@@ -10,7 +14,6 @@ interface TestCaseInput {
 }
 
 interface ProblemInput {
-  number?: number;
   title: string;
   slug: string;
   difficulty: 'easy' | 'medium' | 'hard';
@@ -21,14 +24,9 @@ interface ProblemInput {
   starterCode: Record<string, string>;
   testCases: TestCaseInput[];
   sqlSetup?: string;
-}
-
-async function nextProblemNumber(): Promise<number> {
-  const last = await Problem.findOne()
-    .sort({ number: -1 })
-    .select('number')
-    .lean();
-  return (last?.number ?? 0) + 1;
+  scope?: 'global' | 'course';
+  courseId?: string;
+  tier?: 'starter' | 'interview';
 }
 
 function normalizeTestCase(tc: TestCaseInput, index: number) {
@@ -45,14 +43,40 @@ function normalizeTestCase(tc: TestCaseInput, index: number) {
   };
 }
 
+function normalizeScope(input: {
+  scope?: 'global' | 'course';
+  courseId?: string;
+}): { scope: 'global' | 'course'; courseId?: string } {
+  const scope = input.scope ?? 'global';
+  if (scope === 'course') {
+    if (!input.courseId) {
+      throw new ApiError(400, 'courseId is required when scope is "course"');
+    }
+    return { scope: 'course', courseId: input.courseId };
+  }
+  return { scope: 'global', courseId: undefined };
+}
+
 export const problemService = {
-  async list(userId?: string) {
-    const problems = await Problem.find()
+  /**
+   * Global catalog. Returns only problems with `scope: 'global'`.
+   *
+   * `tier` filter is optional. When absent, every global problem is
+   * returned. The practice UI will use this to switch between
+   * "Starter" and "Interview" tabs.
+   */
+  async listGlobal(userId: string | undefined, tier?: 'starter' | 'interview') {
+    const filter: Record<string, unknown> = { scope: 'global' };
+    if (tier) filter.tier = tier;
+
+    const problems = await Problem.find(filter)
       .select('-testCases -starterCode -statement -sqlSetup')
-      .sort({ number: 1 })
+      .sort({ problemId: 1 })
       .lean();
 
-    const solvedIds = userId ? await judgeService.getSolvedProblemIds(userId) : [];
+    const solvedIds = userId
+      ? await judgeService.getSolvedProblemIds(userId)
+      : [];
 
     return problems.map((p) => ({
       ...p,
@@ -60,9 +84,46 @@ export const problemService = {
     }));
   },
 
-  async getBySlug(slug: string, userId?: string) {
+  /**
+   * Course-scoped problems for a specific course. Caller is responsible
+   * for verifying access to the course before calling.
+   */
+  async listForCourse(courseId: string, userId?: string) {
+    const problems = await Problem.find({ scope: 'course', courseId })
+      .select('-testCases -starterCode -statement -sqlSetup')
+      .sort({ problemId: 1 })
+      .lean();
+
+    const solvedIds = userId
+      ? await judgeService.getSolvedProblemIds(userId)
+      : [];
+
+    return problems.map((p) => ({
+      ...p,
+      solved: solvedIds.includes(p._id.toString()),
+    }));
+  },
+
+  /**
+   * Get a single problem by slug.
+   *
+   * Course-scoped problems are only returned to users with access to
+   * the owning course. Access check is done by the caller and passed
+   * in as `hasCourseAccess`.
+   */
+  async getBySlug(
+    slug: string,
+    userId?: string,
+    hasCourseAccess?: boolean
+  ) {
     const problem = await Problem.findOne({ slug }).lean();
     if (!problem) throw new ApiError(404, 'Problem not found');
+
+    if (problem.scope === 'course' && !hasCourseAccess) {
+      // Return 404, not 403, so course-scoped problems are invisible
+      // to users who don't have access.
+      throw new ApiError(404, 'Problem not found');
+    }
 
     const testCases = problem.testCases.map((tc, i) => ({
       index: i,
@@ -71,10 +132,13 @@ export const problemService = {
       isHidden: Boolean(tc.isHidden),
     }));
 
-    const solvedIds = userId ? await judgeService.getSolvedProblemIds(userId) : [];
+    const solvedIds = userId
+      ? await judgeService.getSolvedProblemIds(userId)
+      : [];
 
     return {
       _id: problem._id,
+      problemId: problem.problemId,
       number: problem.number ?? 0,
       title: problem.title,
       slug: problem.slug,
@@ -86,6 +150,9 @@ export const problemService = {
       starterCode: problem.starterCode,
       testCases,
       sqlSetup: problem.sqlSetup,
+      scope: problem.scope,
+      courseId: problem.courseId,
+      tier: problem.tier,
       solved: solvedIds.includes(problem._id.toString()),
     };
   },
@@ -107,22 +174,20 @@ export const problemService = {
 
     validateSqlSetup(input.sqlSetup);
 
-    let number = input.number;
-    if (number === undefined) {
-      number = await nextProblemNumber();
-    } else {
-      const clash = await Problem.findOne({ number }).lean();
-      if (clash) {
-        throw new ApiError(
-          409,
-          `Problem number ${number} is already used by "${clash.title}"`
-        );
-      }
-    }
-
+    const kind = inferProblemKind(input.starterCode);
+    const problemId = await allocateProblemId(kind);
+    const { scope, courseId } = normalizeScope(input);
     const testCases = input.testCases.map((tc, i) => normalizeTestCase(tc, i));
 
-    const created = await Problem.create({ ...input, number, testCases });
+    const created = await Problem.create({
+      ...input,
+      problemId,
+      scope,
+      courseId,
+      tier: input.tier ?? 'starter',
+      testCases,
+    });
+
     return created.toObject();
   },
 
@@ -132,26 +197,23 @@ export const problemService = {
       if (collision) throw new ApiError(409, 'Slug already exists');
     }
 
-    if (patch.number !== undefined) {
-      const existing = await Problem.findOne({ slug }).lean();
-      if (!existing) throw new ApiError(404, 'Problem not found');
-
-      if (patch.number !== existing.number) {
-        const clash = await Problem.findOne({ number: patch.number }).lean();
-        if (clash && clash._id.toString() !== existing._id.toString()) {
-          throw new ApiError(
-            409,
-            `Problem number ${patch.number} is already used by "${clash.title}"`
-          );
-        }
-      }
-    }
-
     if ('sqlSetup' in patch) {
       validateSqlSetup(patch.sqlSetup);
     }
 
     const update: Record<string, unknown> = { ...patch };
+
+    // Scope/courseId are a pair. If either is present, both are
+    // normalized together; otherwise the existing values are kept.
+    if ('scope' in patch || 'courseId' in patch) {
+      const normalized = normalizeScope({
+        scope: patch.scope,
+        courseId: patch.courseId,
+      });
+      update.scope = normalized.scope;
+      update.courseId = normalized.courseId;
+    }
+
     if (patch.testCases) {
       update.testCases = patch.testCases.map((tc, i) =>
         normalizeTestCase(tc, i)

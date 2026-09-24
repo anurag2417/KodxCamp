@@ -16,8 +16,8 @@ export const ProblemCard: React.FC<Props> = ({ problem }) => (
           {problem.solved && (
             <CheckCircle2 size={16} className="shrink-0 text-brand-500" />
           )}
-          <span className="shrink-0 text-xs font-mono text-text-muted">
-            {problem.number}.
+          <span className="shrink-0 font-mono text-xs text-text-muted">
+            {problem.problemId}
           </span>
           <h3 className="line-clamp-1 text-sm font-semibold text-text-primary">
             {problem.title}

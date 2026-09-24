@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { problemsApi } from '@/features/problems/api';
+import { problemsApi, type ProblemTier } from '@/features/problems/api';
 import { queryKeys } from '@/shared/lib/queryKeys';
 
-export function useProblems() {
+export function useProblems(tier?: ProblemTier) {
   const query = useQuery({
-    queryKey: queryKeys.problems.all,
-    queryFn: () => problemsApi.list(),
+    queryKey: [...queryKeys.problems.all, tier ?? 'all'],
+    queryFn: () => problemsApi.list(tier),
   });
 
   return {

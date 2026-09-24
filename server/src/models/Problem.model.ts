@@ -2,16 +2,19 @@ import mongoose, { Schema, type Document } from 'mongoose';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type ProblemOutputMode = 'return' | 'print';
+type ProblemScope = 'global' | 'course';
+type ProblemTier = 'starter' | 'interview';
 
 export interface ProblemTestCase {
   input: string;
   expectedOutput: string;
-  /** Display flag. Hides input/output from the student's test panel. */
   isHidden: boolean;
 }
 
 export interface ProblemDocument extends Document {
-  number: number;
+  problemId: number;
+  /** @deprecated Legacy field. Kept one batch, then removed. */
+  number?: number;
   title: string;
   slug: string;
   difficulty: Difficulty;
@@ -19,30 +22,12 @@ export interface ProblemDocument extends Document {
   statement: string;
   functionName: string;
   outputMode: ProblemOutputMode;
-  /**
-   * Map of language id (or web filename) -> starter code.
-   *
-   * Stored as Mixed rather than Schema.Map because Mongoose Map
-   * rejects keys containing a dot, and web problems use
-   * `index.html` / `styles.css` / `script.js` as keys.
-   *
-   * Expected shape:
-   *   {
-   *     javascript: '...',
-   *     python: '...',
-   *     'html-css': '...',        // full merged page
-   *     'index.html': '...',      // per-file starter for the editor
-   *     'styles.css': '...',
-   *     'script.js': '...',
-   *   }
-   */
   starterCode: Record<string, string>;
   testCases: ProblemTestCase[];
-  /**
-   * SQL-only. Executed once before any test case runs. See
-   * `shared/src/types/problem.ts` for the full contract.
-   */
   sqlSetup?: string;
+  scope: ProblemScope;
+  courseId?: string;
+  tier: ProblemTier;
 }
 
 const testCaseSchema = new Schema<ProblemTestCase>(
@@ -56,7 +41,13 @@ const testCaseSchema = new Schema<ProblemTestCase>(
 
 const problemSchema = new Schema<ProblemDocument>(
   {
-    number: { type: Number, required: true, unique: true, index: true },
+    problemId: {
+      type: Number,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    number: { type: Number, index: true },
     title: { type: String, required: true },
     slug: { type: String, required: true, unique: true },
     difficulty: {
@@ -80,11 +71,31 @@ const problemSchema = new Schema<ProblemDocument>(
     starterCode: { type: Schema.Types.Mixed, default: {} },
     testCases: { type: [testCaseSchema], default: [] },
     sqlSetup: { type: String, default: undefined },
+    scope: {
+      type: String,
+      enum: ['global', 'course'] as ProblemScope[],
+      default: 'global',
+      index: true,
+    },
+    courseId: {
+      type: String,
+      default: undefined,
+      index: true,
+    },
+    tier: {
+      type: String,
+      enum: ['starter', 'interview'] as ProblemTier[],
+      default: 'starter',
+      index: true,
+    },
   },
   { timestamps: true }
 );
 
-export const Problem = mongoose.model<ProblemDocument>(
-  'Problem',
-  problemSchema
-);
+// Compound index for the "global practice catalog, filtered by tier" query.
+problemSchema.index({ scope: 1, tier: 1, problemId: 1 });
+
+// Compound index for "course-scoped problems attached to a course".
+problemSchema.index({ scope: 1, courseId: 1 });
+
+export const Problem = mongoose.model<ProblemDocument>('Problem', problemSchema);

@@ -11,30 +11,10 @@ export interface CourseDocument extends Document {
   thumbnail?: string;
   totalLessons: number;
   createdBy: string;
-  members: CourseTeamMember[];
   published: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
-
-interface CourseTeamMember {
-  userId: string;
-  role: 'lead' | 'author' | 'reviewer' | 'ta' | 'viewer';
-  addedAt?: Date;
-  addedBy: string;
-}
-
-const teamMemberSchema = new Schema<CourseTeamMember>(
-  {
-    userId: { type: String, required: true },
-    role: {
-      type: String,
-      enum: ['lead', 'author', 'reviewer', 'ta', 'viewer'],
-      required: true,
-    },
-    addedAt: { type: Date, default: Date.now },
-    addedBy: { type: String, required: true },
-  },
-  { _id: false }
-);
 
 const courseSchema = new Schema<CourseDocument>(
   {
@@ -49,12 +29,9 @@ const courseSchema = new Schema<CourseDocument>(
     thumbnail: { type: String },
     totalLessons: { type: Number, default: 0 },
     createdBy: { type: String, required: true, index: true },
-    members: { type: [teamMemberSchema], default: [] },
     published: { type: Boolean, default: false, index: true },
   },
   { timestamps: true }
 );
-
-courseSchema.index({ 'members.userId': 1 });
 
 export const Course = mongoose.model<CourseDocument>('Course', courseSchema);
