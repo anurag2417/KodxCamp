@@ -108,6 +108,18 @@ interface JavaExecution {
  * that holds the entry point and emits output markers.
  */
 export async function runJava(code: string): Promise<JavaExecution> {
+  const [result] = await runJavaBatch(code, ['KodxEntry']);
+  return result;
+}
+
+/**
+ * Compile one source file and run several already-compiled entry classes.
+ * Problem test cases use this to avoid starting javac once per test.
+ */
+export async function runJavaBatch(
+  code: string,
+  entryClasses: string[]
+): Promise<JavaExecution[]> {
   const start = performance.now();
 
   try {
@@ -135,9 +147,9 @@ export async function runJava(code: string): Promise<JavaExecution> {
     console.warn = intercept;
     console.error = intercept;
 
-    let exitCode = 0;
+    let compileExit = 0;
     try {
-      const compileExit = await window.cheerpjRunMain!(
+      compileExit = await window.cheerpjRunMain!(
         'com.sun.tools.javac.Main',
         `${COMPILER_JAR_PATH}:/app/`,
         '/str/Main.java',
@@ -148,19 +160,47 @@ export async function runJava(code: string): Promise<JavaExecution> {
 
       if (compileExit !== 0) {
         const diagnostics = extractProgramOutput(captured) || captured.join('\n').trim();
-        return {
+        return entryClasses.map(() => ({
           ok: false,
           stdout: '',
           stderr: diagnostics || 'Compilation failed',
-          kind: 'syntax',
+          kind: 'syntax' as const,
           runtimeMs: Math.round(performance.now() - start),
-        };
+        }));
       }
 
-      exitCode = await window.cheerpjRunMain!(
-        'KodxEntry',
-        '/files/:/app/'
-      );
+      const results: JavaExecution[] = [];
+      for (const entryClass of entryClasses) {
+        const outputStart = captured.length;
+        const runStart = performance.now();
+        const exitCode = await window.cheerpjRunMain!(
+          entryClass,
+          '/files/:/app/'
+        );
+        const runOutput = extractProgramOutput(captured.slice(outputStart));
+
+        results.push(
+          exitCode === 0
+            ? {
+                ok: true,
+                stdout: runOutput,
+                stderr: '',
+                runtimeMs: Math.round(performance.now() - runStart),
+              }
+            : {
+                ok: false,
+                stdout: '',
+                stderr:
+                  runOutput ||
+                  captured.slice(outputStart).join('\n').trim() ||
+                  'Java runtime error',
+                kind: 'runtime',
+                runtimeMs: Math.round(performance.now() - runStart),
+              }
+        );
+      }
+
+      return results;
     } finally {
       console.log = originalLog;
       console.info = originalInfo;
@@ -168,38 +208,25 @@ export async function runJava(code: string): Promise<JavaExecution> {
       console.error = originalError;
     }
 
-    // 3. Extract the marker-delimited program output.
-    const programOutput = extractProgramOutput(captured);
-
-    if (exitCode !== 0) {
-      return {
-        ok: false,
-        stdout: '',
-        stderr: programOutput || captured.join('\n').trim() || 'Java runtime error',
-        kind: 'runtime',
-        runtimeMs: Math.round(performance.now() - start),
-      };
-    }
-
-    return {
-      ok: true,
-      stdout: programOutput,
-      stderr: '',
+    return entryClasses.map(() => ({
+      ok: false,
+      stdout: '',
+      stderr: 'Java runtime error',
+      kind: 'runtime' as const,
       runtimeMs: Math.round(performance.now() - start),
-    };
+    }));
   } catch (err) {
     const msg =
       err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    return {
+    return entryClasses.map(() => ({
       ok: false,
       stdout: '',
       stderr: msg,
-      kind:
-        msg.includes('SyntaxError') || msg.includes('compilation')
-          ? 'syntax'
-          : 'runtime',
+      kind: (msg.includes('SyntaxError') || msg.includes('compilation')
+        ? 'syntax'
+        : 'runtime') as 'syntax' | 'runtime',
       runtimeMs: Math.round(performance.now() - start),
-    };
+    }));
   }
 }
 

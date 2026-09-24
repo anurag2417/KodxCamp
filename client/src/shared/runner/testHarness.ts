@@ -1,4 +1,5 @@
 import { runCode, type RunResult } from '@/shared/runner/index';
+import { runJavaBatch } from '@/shared/runner/javaRuntime';
 
 export type OutputMode = 'return' | 'print';
 
@@ -44,6 +45,44 @@ export async function runTests(
   testCases: VisibleTestCase[],
   options: TestHarnessOptions
 ): Promise<TestRunSummary> {
+  if (language === 'java' && testCases.length > 0) {
+    const wrappedCases = testCases.map((tc, index) => {
+      const wrapped = wrapForExecution(language, code, tc.input, options);
+      const driver = wrapped.slice(code.length).replace(
+        'class KodxEntry {',
+        `class KodxEntry${index} {`
+      );
+      return `${driver}\n`;
+    });
+    const results = await runJavaBatch(
+      `${code}\n${wrappedCases.join('')}`,
+      testCases.map((_, index) => `KodxEntry${index}`)
+    );
+
+    const visibleResults = testCases.map((tc, index) => {
+      const result = results[index];
+      const actual = result.stdout;
+      return {
+        index: tc.index,
+        passed:
+          result.ok && outputsMatch(actual, tc.expectedOutput, options.outputMode),
+        actualOutput: actual,
+        expectedOutput: tc.expectedOutput,
+        stderr: result.stderr,
+        runtimeMs: result.runtimeMs,
+        isHidden: tc.isHidden,
+      };
+    });
+
+    return {
+      results: visibleResults,
+      passedTests: visibleResults.filter((r) => r.passed).length,
+      totalTests: visibleResults.length,
+      allPassed: visibleResults.every((r) => r.passed),
+      totalRuntimeMs: visibleResults.reduce((sum, r) => sum + r.runtimeMs, 0),
+    };
+  }
+
   const results: VisibleTestResult[] = [];
   let totalRuntimeMs = 0;
 
