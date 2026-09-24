@@ -17,6 +17,7 @@ export const importSchema = z.object({
 export const adminBulkController = {
   import: asyncHandler(async (req: AuthRequest, res: Response) => {
     const { kind, mode, dryRun, items } = req.body;
+    const importerId = req.user!._id.toString();
 
     let report;
     if (kind === 'problems') {
@@ -24,7 +25,7 @@ export const adminBulkController = {
     } else if (kind === 'projects') {
       report = await bulkService.importProjects(items, mode, dryRun);
     } else {
-      report = await bulkService.importCourses(items, mode, dryRun);
+      report = await bulkService.importCourses(items, mode, dryRun, importerId);
     }
 
     const message = dryRun

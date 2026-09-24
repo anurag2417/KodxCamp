@@ -25,7 +25,11 @@ import {
   rosterQuerySchema,
   rosterStudentSchema,
 } from '../controllers/instructor.student.controller.js';
-import { quizController, quizQuestionSchema, quizParamsSchema } from '../controllers/quiz.controller.js';
+import {
+  quizController,
+  createQuizQuestionSchema,
+  quizParamsSchema,
+} from '../controllers/quiz.controller.js';
 
 const router = Router();
 
@@ -59,10 +63,15 @@ router.delete(
   instructorCourseController.remove
 );
 
+// ─── Quiz questions ───────────────────────────────
+//
+// `createQuizQuestionSchema` declares both `params` and `body` so a
+// single `validate()` call covers the request. Calling `validate()`
+// twice (once for params, once for body) caused the second call to
+// reject because the first call wiped `req.body`.
 router.post(
   '/courses/:slug/quiz',
-  validate(quizParamsSchema),
-  validate(quizQuestionSchema),
+  validate(createQuizQuestionSchema),
   quizController.create
 );
 router.get(

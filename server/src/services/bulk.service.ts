@@ -166,9 +166,6 @@ export const bulkService = {
     const { valid, errors } = zipValidationErrors(items, problemSchema);
     report.failed = errors;
 
-    // Extra structural validation for SQL setup - Zod can only check
-    // shape, not SQL structure. Any problem whose sqlSetup is malformed
-    // gets pushed into `failed` here, before we hit the DB.
     const structurallyValid: unknown[] = [];
     valid.forEach((item, i) => {
       const candidate = item as { slug: string; sqlSetup?: string };
@@ -312,10 +309,18 @@ export const bulkService = {
     return report;
   },
 
+  /**
+   * Import courses and their lessons.
+   *
+   * `importerId` is required: `Course.createdBy` is a required field
+   * in the schema, and previously this function passed nothing, so
+   * every bulk course import failed with a Mongoose validation error.
+   */
   async importCourses(
     items: unknown,
     mode: ImportMode,
-    dryRun: boolean
+    dryRun: boolean,
+    importerId: string
   ): Promise<ImportReport> {
     if (!Array.isArray(items)) {
       throw new ApiError(400, 'Payload must be a JSON array');
@@ -363,6 +368,9 @@ export const bulkService = {
           description: courseData.description,
           language: courseData.language,
           totalLessons: courseData.lessons.length,
+          createdBy: importerId,
+          members: [],
+          published: false,
         });
         for (const l of courseData.lessons) {
           await Lesson.create({

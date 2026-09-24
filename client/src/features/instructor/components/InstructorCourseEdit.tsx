@@ -15,6 +15,7 @@ import {
   instructorApi,
   type ApiInstructorCourseFull,
   type ApiInstructorLesson,
+  type ApiCoursePermissions,
 } from '@/features/instructor/api';
 import { queryKeys } from '@/shared/lib/queryKeys';
 import { Spinner } from '@/shared/components/ui/Spinner';
@@ -32,7 +33,6 @@ import {
   WebLessonStepsEditor,
   type EditableWebLessonStep,
 } from '@/features/instructor/components/WebLessonStepsEditor';
-import { cn } from '@/shared/lib/utils';
 
 interface LessonEditorState {
   title: string;
@@ -72,6 +72,19 @@ const emptyLesson = (order: number): LessonEditorState => ({
   steps: [],
 });
 
+/**
+ * Defensive default for the permission block. A malformed or partial
+ * server response used to crash the whole page because we destructured
+ * `course.permissions` directly and then accessed properties on it.
+ */
+const DENY_ALL_PERMISSIONS: ApiCoursePermissions = {
+  canEditContent: false,
+  canManageCourse: false,
+  canManageTeam: false,
+  canViewStudents: false,
+  canManageClasses: false,
+};
+
 function extractError(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const body = err.response?.data as
@@ -106,7 +119,7 @@ export const InstructorCourseEdit: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const course = query.data;
+  const course: ApiInstructorCourseFull | undefined = query.data;
 
   useEffect(() => {
     if (!course) return;
@@ -333,7 +346,7 @@ export const InstructorCourseEdit: React.FC = () => {
     );
   }
 
-  const { permissions: perms } = course;
+  const perms: ApiCoursePermissions = course.permissions ?? DENY_ALL_PERMISSIONS;
 
   return (
     <div className="w-full p-6 lg:p-8">

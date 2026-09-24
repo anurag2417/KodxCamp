@@ -9,31 +9,71 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { permissions } from '../services/permissions.service.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
-const optionSchema = z.object({
-  id: z.string().min(1).max(20),
-  text: z.string().min(1).max(500),
-}).strict();
+const optionSchema = z
+  .object({
+    id: z.string().min(1).max(20),
+    text: z.string().min(1).max(500),
+  })
+  .strict();
 
+/**
+ * Body-only schema. Kept exported for callers that already know the
+ * route params are correct (there are none right now, but the name is
+ * stable).
+ */
 export const quizQuestionSchema = z.object({
-  body: z.object({
-    lessonId: z.string().min(1),
-    prompt: z.string().min(1).max(2000),
-    options: z.array(optionSchema).min(2).max(6),
-    mode: z.enum(['single', 'multiple']).default('single'),
-    correctOptionIds: z.array(z.string().min(1)).min(1),
-    explanation: z.string().max(2000).optional(),
-    order: z.number().int().min(1).default(1),
-  }).strict(),
+  body: z
+    .object({
+      lessonId: z.string().min(1),
+      prompt: z.string().min(1).max(2000),
+      options: z.array(optionSchema).min(2).max(6),
+      mode: z.enum(['single', 'multiple']).default('single'),
+      correctOptionIds: z.array(z.string().min(1)).min(1),
+      explanation: z.string().max(2000).optional(),
+      order: z.number().int().min(1).default(1),
+    })
+    .strict(),
+});
+
+/**
+ * Combined schema used by the create route. Both `params` and `body`
+ * are declared so the single `validate()` call doesn't wipe `req.body`.
+ *
+ * History: this route previously called `validate()` twice, once with
+ * a params-only schema and once with a body-only schema. The first
+ * call replaced `req.body` with `undefined`, so the second one always
+ * failed with "Validation failed". Merging into one schema fixes that.
+ */
+export const createQuizQuestionSchema = z.object({
+  params: z.object({
+    slug: z.string().min(1),
+  }),
+  body: z
+    .object({
+      lessonId: z.string().min(1),
+      prompt: z.string().min(1).max(2000),
+      options: z.array(optionSchema).min(2).max(6),
+      mode: z.enum(['single', 'multiple']).default('single'),
+      correctOptionIds: z.array(z.string().min(1)).min(1),
+      explanation: z.string().max(2000).optional(),
+      order: z.number().int().min(1).default(1),
+    })
+    .strict(),
 });
 
 export const quizParamsSchema = z.object({
-  params: z.object({ slug: z.string().min(1), lessonSlug: z.string().min(1).optional() }),
+  params: z.object({
+    slug: z.string().min(1),
+    lessonSlug: z.string().min(1).optional(),
+  }),
 });
 
 export const quizAnswerSchema = z.object({
-  body: z.object({
-    answers: z.record(z.union([z.string(), z.array(z.string())])),
-  }).strict(),
+  body: z
+    .object({
+      answers: z.record(z.union([z.string(), z.array(z.string())])),
+    })
+    .strict(),
 });
 
 async function getCourse(slug: string) {

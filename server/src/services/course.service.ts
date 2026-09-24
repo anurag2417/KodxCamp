@@ -193,8 +193,6 @@ export const courseService = {
       steps: lesson.steps ?? [],
     };
 
-    // Sidebar needs the sibling lesson list. Fetch summaries here so
-    // the client doesn't have to make a second request.
     const siblingLessons = await Lesson.find({
       courseId: course._id.toString(),
     })
