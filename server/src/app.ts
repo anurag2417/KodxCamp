@@ -25,6 +25,8 @@ export function createApp() {
   // Security headers
   app.use(
     helmet({
+      // Firebase signInWithPopup needs the auth window to communicate with its opener.
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       contentSecurityPolicy: false,
     })
