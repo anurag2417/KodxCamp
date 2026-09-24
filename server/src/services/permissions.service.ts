@@ -1,4 +1,9 @@
-export type CourseTeamRole = 'lead' | 'author' | 'ta';
+export type CourseTeamRole =
+  | 'lead'
+  | 'author'
+  | 'reviewer'
+  | 'ta'
+  | 'viewer';
 
 export type EffectiveCourseRole = 'admin' | CourseTeamRole;
 

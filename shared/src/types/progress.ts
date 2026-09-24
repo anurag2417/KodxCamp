@@ -1,5 +1,5 @@
 export interface IProgress {
-  _id: string;
+  _id: string | null;
   userId: string;
   courseId: string;
   completedLessons: string[];

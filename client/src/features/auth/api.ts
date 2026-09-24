@@ -1,7 +1,7 @@
 import { api } from '@/shared/lib/api';
 import type { IUser } from '@kodxcamp/shared';
 
-export type AuthUser = Omit<IUser, 'password'>;
+export type AuthUser = IUser;
 
 export interface AuthSuccess {
   user: AuthUser;

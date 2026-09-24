@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { IUser } from '@kodxcamp/shared';
 import { authApi } from '@/features/auth/api';
 
-type AuthUser = Omit<IUser, 'password'>;
+type AuthUser = IUser;
 
 interface AuthState {
   user: AuthUser | null;
