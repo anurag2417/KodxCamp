@@ -38,6 +38,16 @@ export interface ApiLessonTestCase {
   isHidden: boolean;
 }
 
+export interface ApiInstructorQuizQuestion {
+  _id: string;
+  prompt: string;
+  options: { id: string; text: string }[];
+  correctOptionId: string;
+  explanation?: string;
+  order: number;
+  lessonId?: string;
+}
+
 export interface ApiInstructorLesson {
   _id: string;
   courseId: string;
@@ -351,6 +361,23 @@ export const instructorApi = {
       `/instructor/courses/${slug}/students/${userId}`
     );
     return data.data;
+  },
+
+  listQuiz: async (courseSlug: string): Promise<ApiInstructorQuizQuestion[]> => {
+    const { data } = await api.get(`/instructor/courses/${courseSlug}/quiz`);
+    return data.data;
+  },
+
+  createQuizQuestion: async (
+    courseSlug: string,
+    input: Omit<ApiInstructorQuizQuestion, '_id'>
+  ): Promise<ApiInstructorQuizQuestion> => {
+    const { data } = await api.post(`/instructor/courses/${courseSlug}/quiz`, input);
+    return data.data;
+  },
+
+  deleteQuizQuestion: async (courseSlug: string, questionId: string) => {
+    await api.delete(`/instructor/courses/${courseSlug}/quiz/${questionId}`);
   },
 };
 

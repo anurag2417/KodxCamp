@@ -25,6 +25,7 @@ import {
   rosterQuerySchema,
   rosterStudentSchema,
 } from '../controllers/instructor.student.controller.js';
+import { quizController, quizQuestionSchema, quizParamsSchema } from '../controllers/quiz.controller.js';
 
 const router = Router();
 
@@ -56,6 +57,23 @@ router.delete(
   '/courses/:slug',
   validate(courseSlugSchema),
   instructorCourseController.remove
+);
+
+router.post(
+  '/courses/:slug/quiz',
+  validate(quizParamsSchema),
+  validate(quizQuestionSchema),
+  quizController.create
+);
+router.get(
+  '/courses/:slug/quiz',
+  validate(quizParamsSchema),
+  quizController.manageList
+);
+router.delete(
+  '/courses/:slug/quiz/:questionId',
+  validate(quizParamsSchema),
+  quizController.remove
 );
 
 // ─── Lessons ──────────────────────────────────────

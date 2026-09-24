@@ -43,6 +43,21 @@ export interface ApiLessonFull {
   testCases: ApiLessonTestCase[];
 }
 
+export interface ApiQuizQuestion {
+  _id: string;
+  prompt: string;
+  options: { id: string; text: string }[];
+  order: number;
+  lessonId?: string;
+}
+
+export interface ApiQuizResult {
+  score: number;
+  total: number;
+  percentage: number;
+  results: { questionId: string; correct: boolean; explanation?: string }[];
+}
+
 export const coursesApi = {
   list: async (): Promise<ApiCourse[]> => {
     const { data } = await api.get('/courses');
@@ -63,6 +78,19 @@ export const coursesApi = {
     const { data } = await api.get(
       `/courses/${courseSlug}/lessons/${lessonSlug}`
     );
+    return data.data;
+  },
+
+  getQuiz: async (courseSlug: string): Promise<ApiQuizQuestion[]> => {
+    const { data } = await api.get(`/courses/${courseSlug}/quiz`);
+    return data.data;
+  },
+
+  submitQuiz: async (
+    courseSlug: string,
+    answers: Record<string, string>
+  ): Promise<ApiQuizResult> => {
+    const { data } = await api.post(`/courses/${courseSlug}/quiz/submit`, { answers });
     return data.data;
   },
 };

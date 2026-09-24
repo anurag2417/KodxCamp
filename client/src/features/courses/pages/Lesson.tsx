@@ -37,6 +37,8 @@ export const Lesson: React.FC = () => {
   const [progress, setProgress] = useState<ApiProgress | null>(null);
   const [completing, setCompleting] = useState(false);
   const [running, setRunning] = useState(false);
+  const [webPreview, setWebPreview] = useState('');
+  const [webMessage, setWebMessage] = useState('');
 
   useEffect(() => {
     if (data?.lesson) {
@@ -96,6 +98,15 @@ export const Lesson: React.FC = () => {
     setSummary(undefined);
     setAccepted(false);
 
+    if (isWebLesson) {
+      const result = validateWebFiles(files);
+      setWebMessage(result.message);
+      setAccepted(result.ok);
+      if (result.ok) setWebPreview(buildWebPreview(files));
+      setRunning(false);
+      return;
+    }
+
     const visibleCases: VisibleTestCase[] = testCases.map((tc) => ({
       index: tc.index,
       input: tc.input,
@@ -112,6 +123,13 @@ export const Lesson: React.FC = () => {
     setAccepted(result.allPassed);
     setTotalRuntimeMs(result.totalRuntimeMs);
     setRunning(false);
+  };
+
+  const handleSubmitWeb = () => {
+    const result = validateWebFiles(files);
+    setWebMessage(result.message);
+    setAccepted(result.ok);
+    if (result.ok) setWebPreview(buildWebPreview(files));
   };
 
   const markComplete = async () => {
@@ -327,6 +345,13 @@ export const Lesson: React.FC = () => {
                   }
                   onRun={handleRunCode}
                   running={running}
+                  right={
+                    isWebLesson ? (
+                      <Button size="sm" variant="secondary" onClick={handleSubmitWeb} disabled={running}>
+                        <CheckCircle2 size={14} /> Submit
+                      </Button>
+                    ) : undefined
+                  }
                 />
                 <div className="flex-1">
                   <CodeEditor
@@ -347,13 +372,40 @@ export const Lesson: React.FC = () => {
             <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-brand-500" />
 
             <Panel defaultSize={35}>
-              <TestPanel
-                testCases={testCases}
-                results={summary?.results}
-                running={running}
-                accepted={accepted}
-                totalRuntimeMs={totalRuntimeMs}
-              />
+              {isWebLesson ? (
+                <div className="flex h-full flex-col bg-surface-secondary">
+                  <div className="border-b border-border px-4 py-2 text-xs font-semibold uppercase tracking-widest text-text-muted">
+                    Live preview
+                  </div>
+                  <div className="flex-1 bg-white">
+                    {webPreview ? (
+                      <iframe
+                        title="Web lesson preview"
+                        srcDoc={webPreview}
+                        className="h-full w-full border-0"
+                        sandbox="allow-scripts"
+                      />
+                    ) : (
+                      <div className="grid h-full place-items-center p-6 text-center text-sm text-text-muted">
+                        Run your files to see the preview.
+                      </div>
+                    )}
+                  </div>
+                  {webMessage && (
+                    <p className={`border-t border-border px-4 py-2 text-xs ${accepted ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
+                      {webMessage}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <TestPanel
+                  testCases={testCases}
+                  results={summary?.results}
+                  running={running}
+                  accepted={accepted}
+                  totalRuntimeMs={totalRuntimeMs}
+                />
+              )}
             </Panel>
           </PanelGroup>
         </Panel>
@@ -422,4 +474,33 @@ function isWebLessonLanguage(lang: string): boolean {
 
 function lessonLanguage(lang: string | undefined): string {
   return lang ?? '';
+}
+
+function validateWebFiles(files: Record<string, string>): { ok: boolean; message: string } {
+  const html = files['index.html']?.trim() ?? '';
+  const css = files['styles.css']?.trim() ?? '';
+  const javascript = files['script.js']?.trim() ?? '';
+  if (!html) return { ok: false, message: 'index.html is empty.' };
+  if ((css.match(/{/g) ?? []).length !== (css.match(/}/g) ?? []).length) {
+    return { ok: false, message: 'styles.css has an unmatched brace.' };
+  }
+  try {
+    new Function(javascript);
+  } catch (error) {
+    return { ok: false, message: `script.js has a syntax error: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  if (parsed.querySelector('parsererror')) {
+    return { ok: false, message: 'index.html could not be parsed.' };
+  }
+  return { ok: true, message: 'Submitted successfully. All three files passed basic checks.' };
+}
+
+function buildWebPreview(files: Record<string, string>): string {
+  const html = files['index.html'] ?? '';
+  const css = files['styles.css'] ?? '';
+  const javascript = files['script.js'] ?? '';
+  return html
+    .replace('</head>', `<style>${css}</style></head>`)
+    .replace('</body>', `<script>${javascript}</script></body>`);
 }

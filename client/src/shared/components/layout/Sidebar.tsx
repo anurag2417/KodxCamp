@@ -12,11 +12,13 @@ import {
   Video,
   PlayCircle,
   Shield,
-  Users,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuthStore } from '@/shared/store/auth.store';
+import { useState } from 'react';
 
 interface NavItem {
   to: string;
@@ -69,6 +71,7 @@ const adminSection: NavSection = {
 };
 
 export const Sidebar: React.FC = () => {
+  const [collapsed, setCollapsed] = useState(false);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
   const isInstructor = user?.role === 'instructor' || isAdmin;
@@ -80,13 +83,32 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-border bg-surface-secondary lg:block">
-      <div className="flex h-full flex-col gap-8 overflow-y-auto p-5">
+    <aside
+      className={cn(
+        'hidden shrink-0 border-r border-border bg-surface-secondary transition-[width] duration-200 lg:block',
+        collapsed ? 'w-16' : 'w-64'
+      )}
+    >
+      <div className={cn('flex h-full flex-col overflow-y-auto', collapsed ? 'p-2' : 'p-5')}>
+        <div className={cn('mb-6 flex items-center', collapsed ? 'justify-center' : 'justify-end')}>
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-tertiary hover:text-text-primary"
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        </div>
+        <div className="flex flex-col gap-8">
         {allSections.map((section) => (
           <div key={section.title}>
-            <p className="mb-3 text-xs font-semibold tracking-widest text-text-muted">
-              {section.title}
-            </p>
+            {!collapsed && (
+              <p className="mb-3 text-xs font-semibold tracking-widest text-text-muted">
+                {section.title}
+              </p>
+            )}
             <nav className="flex flex-col gap-1">
               {section.items.map(({ to, label, icon: Icon, end }) => (
                 <NavLink
@@ -95,7 +117,8 @@ export const Sidebar: React.FC = () => {
                   end={end}
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      'flex items-center rounded-lg py-2 text-sm font-medium transition-colors',
+                      collapsed ? 'justify-center px-2' : 'gap-3 px-3',
                       isActive
                         ? 'bg-surface-tertiary text-brand-700 dark:bg-surface-tertiary dark:text-white'
                         : 'text-text-secondary hover:bg-surface-tertiary dark:hover:bg-surface-secondary'
@@ -110,7 +133,7 @@ export const Sidebar: React.FC = () => {
                           isActive ? 'text-brand-500' : 'text-text-muted'
                         )}
                       />
-                      <span>{label}</span>
+                      {!collapsed && <span>{label}</span>}
                     </>
                   )}
                 </NavLink>
@@ -118,6 +141,7 @@ export const Sidebar: React.FC = () => {
             </nav>
           </div>
         ))}
+        </div>
       </div>
     </aside>
   );

@@ -26,6 +26,7 @@ import {
     TestCaseEditor,
     type EditableTestCase,
 } from '@/features/admin/components/TestCaseEditor';
+import { CourseQuizEditor } from '@/features/instructor/components/CourseQuizEditor';
 
 interface LessonEditorState {
     title: string;
@@ -538,6 +539,8 @@ export const InstructorCourseEdit: React.FC = () => {
                     </Card>
                 )}
             </div>
+
+            {perms.canEditContent && <CourseQuizEditor courseSlug={course.slug} />}
 
             {perms.canManageCourse && (
                 <div className="mt-8 border-t border-border pt-6">
