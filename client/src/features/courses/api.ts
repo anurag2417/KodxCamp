@@ -9,6 +9,8 @@ export interface ApiCourse {
   courseType?: string;
   totalLessons: number;
   thumbnail?: string;
+  price?: number;
+  isFree: boolean;
 }
 
 export interface ApiLessonSummary {
@@ -24,7 +26,6 @@ export interface ApiLessonTestCase {
   index: number;
   input: string;
   expectedOutput: string;
-  /** Display flag. Hide input/output from the student's test panel. */
   isHidden: boolean;
 }
 
@@ -64,14 +65,9 @@ export interface ApiLessonFull {
   outputMode: 'return' | 'print';
   language: string;
   testCases: ApiLessonTestCase[];
-  /** Step-by-step mode. Empty array means classic single-shot. */
   steps: ApiWebLessonStep[];
 }
 
-/**
- * The course payload returned alongside a lesson includes the sibling
- * lesson summaries so the sidebar can render without a second request.
- */
 export interface ApiCourseWithLessons extends ApiCourse {
   lessons: ApiLessonSummary[];
 }
@@ -131,6 +127,48 @@ export const coursesApi = {
     answers: Record<string, string | string[]>
   ): Promise<ApiQuizResult> => {
     const { data } = await api.post(`/courses/${courseSlug}/lessons/${lessonSlug}/quiz/submit`, { answers });
+    return data.data;
+  },
+};
+
+// ─── Payments ─────────────────────────────────────────────────────
+
+export interface PaymentConfig {
+  configured: boolean;
+  mode: 'test' | 'live';
+  keyId?: string;
+}
+
+export interface CreateOrderResponse {
+  orderId: string;
+  amount: number;
+  currency: string;
+  keyId: string;
+  courseTitle: string;
+}
+
+export const paymentsApi = {
+  config: async (): Promise<PaymentConfig> => {
+    const { data } = await api.get('/payments/config');
+    return data.data;
+  },
+
+  createOrder: async (courseId: string): Promise<CreateOrderResponse> => {
+    const { data } = await api.post('/payments/create-order', { courseId });
+    return data.data;
+  },
+
+  verify: async (input: {
+    orderId: string;
+    paymentId: string;
+    signature: string;
+  }): Promise<{ ok: boolean }> => {
+    const { data } = await api.post('/payments/verify', input);
+    return data.data;
+  },
+
+  enrollFree: async (courseId: string): Promise<{ ok: boolean; alreadyEnrolled: boolean }> => {
+    const { data } = await api.post('/payments/enroll-free', { courseId });
     return data.data;
   },
 };

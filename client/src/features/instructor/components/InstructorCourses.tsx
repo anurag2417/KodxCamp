@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Plus, Eye, EyeOff } from 'lucide-react';
 import { instructorApi } from '@/features/instructor/api';
-import { queryKeys } from '@/shared/lib/queryKeys';
 import { useAuthStore } from '@/shared/store/auth.store';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
@@ -12,7 +11,10 @@ import { Badge } from '@/shared/components/ui/Badge';
 
 export const InstructorCourses: React.FC = () => {
   const user = useAuthStore((s) => s.user);
+
   const isAdmin = user?.role === 'admin';
+  const hasCourseAuthor = user?.permissions?.includes('course_author') ?? false;
+  const canCreate = isAdmin || hasCourseAuthor;
 
   const query = useQuery({
     queryKey: ['instructor', 'courses'],
@@ -52,7 +54,7 @@ export const InstructorCourses: React.FC = () => {
               : 'Courses you help build and teach'}
           </p>
         </div>
-        {isAdmin && (
+        {canCreate && (
           <Link to="/instructor/courses/new">
             <Button>
               <Plus size={16} /> New Course
@@ -63,7 +65,7 @@ export const InstructorCourses: React.FC = () => {
 
       {courses.length === 0 ? (
         <Card className="p-8 text-center text-sm text-text-muted">
-          {isAdmin
+          {canCreate
             ? 'No courses yet. Create the first one.'
             : 'You are not on any course team yet. Ask an admin to add you.'}
         </Card>
@@ -98,9 +100,6 @@ export const InstructorCourses: React.FC = () => {
                 </p>
                 <div className="mt-4 flex items-center justify-between text-xs text-text-muted">
                   <span>{c.totalLessons} lessons</span>
-                  {c.members.length > 0 && (
-                    <span>{c.members.length + 1} on team</span>
-                  )}
                 </div>
               </Card>
             </Link>

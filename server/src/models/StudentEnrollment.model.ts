@@ -1,30 +1,18 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 
-/**
- * A student's enrollment in a course.
- *
- * One row per (userId, courseId). Created the first time a student
- * interacts with a course - completing a lesson, starting one, or
- * any other course-scoped activity.
- *
- * `joinedAt` is set once, on insert. It never changes. That makes it
- * cheap to sort the roster by "who joined when" without recomputing
- * from Activity and Progress every time.
- *
- * Naming note: the `Enrollment` model already exists for live
- * classes. This is course-scoped and unrelated - do not confuse them.
- */
+export type EnrollmentSource = 'manual' | 'paid' | 'invited';
+
 export interface IStudentEnrollment {
   _id: string;
   userId: string;
   courseId: string;
   joinedAt: Date;
+  source: EnrollmentSource;
   /**
-   * How the enrollment was first established. Useful for debugging
-   * and for future logic that wants to know whether the student
-   * arrived via a lesson, a problem, or an explicit enrollment.
+   * If the enrollment was created by a Razorpay payment, this is the
+   * `Payment._id`. Null for manual and invited enrollments.
    */
-  source: 'activity' | 'progress' | 'explicit';
+  paymentId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,17 +28,15 @@ const studentEnrollmentSchema = new Schema<StudentEnrollmentDocument>(
     joinedAt: { type: Date, required: true },
     source: {
       type: String,
-      enum: ['activity', 'progress', 'explicit'],
+      enum: ['manual', 'paid', 'invited'],
       required: true,
     },
+    paymentId: { type: String, default: undefined, index: true },
   },
   { timestamps: true }
 );
 
-// One enrollment per student per course.
 studentEnrollmentSchema.index({ userId: 1, courseId: 1 }, { unique: true });
-
-// Fast roster queries: "students in this course, sorted by joinedAt".
 studentEnrollmentSchema.index({ courseId: 1, joinedAt: -1 });
 
 export const StudentEnrollment = mongoose.model<StudentEnrollmentDocument>(

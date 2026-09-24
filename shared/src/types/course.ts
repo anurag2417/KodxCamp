@@ -7,19 +7,12 @@ export const COURSE_LANGUAGES = [
 
 export type CourseLanguage = (typeof COURSE_LANGUAGES)[number];
 
-/**
- * Lesson test case. Same semantics as `IProblemTestCase`:
- * `expectedOutput` is plaintext, `isHidden` is a display flag only.
- */
 export interface ITestCase {
   input: string;
   expectedOutput: string;
   isHidden: boolean;
 }
 
-/**
- * A single step inside a step-by-step web lesson.
- */
 export interface IWebLessonStep {
   title: string;
   instructions: string;
@@ -60,11 +53,6 @@ export interface ILesson {
   updatedAt: Date;
 }
 
-/**
- * A course. Team members are no longer embedded here — see
- * `CourseMembership` in `permissions.ts` (or in the server's
- * `CourseMembership.model.ts`).
- */
 export interface ICourse {
   _id: string;
   title: string;
@@ -75,15 +63,17 @@ export interface ICourse {
   totalLessons: number;
   createdBy: string;
   published: boolean;
+  /**
+   * Price in INR paise. 49900 = ₹499. Only meaningful when `isFree` is
+   * false. Cleared when `isFree` becomes true.
+   */
+  price?: number;
+  /** Free vs paid switch. */
+  isFree: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/**
- * A staff membership in a course. One row per (userId, courseId)
- * pair. Written by the team management flows and read by every
- * permission check.
- */
 export interface ICourseMembership {
   _id: string;
   userId: string;

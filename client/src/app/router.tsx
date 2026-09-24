@@ -6,6 +6,7 @@ import { AdminGuard } from '@/features/admin/components/AdminGuard';
 import { AdminLayout } from '@/features/admin/components/AdminLayout';
 import { AdminBulkImport } from '@/features/admin/pages/AdminBulkImport';
 import { AdminClasses } from '@/features/admin/pages/AdminClasses';
+import { AdminCourses } from '@/features/admin/pages/AdminCourses';
 import { AdminDashboard } from '@/features/admin/pages/AdminDashboard';
 import { AdminProblems } from '@/features/admin/pages/AdminProblems';
 import { AdminProjects } from '@/features/admin/pages/AdminProjects';
@@ -71,21 +72,15 @@ export function AppRouter() {
         <Route path="/signup/verify" element={<VerifyOtp />} />
         <Route path="/signup/setup" element={<SetupAccount />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route
-          path="/reset-password/:token"
-          element={<ResetPassword />}
-        />
-        <Route
-          path="/invitations/:token"
-          element={<AcceptInvitation />}
-        />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/invitations/:token" element={<AcceptInvitation />} />
 
         <Route path="/register" element={<Navigate to="/signup" replace />} />
 
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Home />} />
 
-          {/* ─── Courses ───────────────────────────────────── */}
+          {/* ─── Courses (public catalog) ──────────────────── */}
           <Route path="courses" element={<Courses />} />
           <Route path="courses/:slug" element={<CourseDetail />} />
           <Route
@@ -201,19 +196,12 @@ export function AppRouter() {
             }
           >
             <Route index element={<AdminDashboard />} />
+            <Route path="courses" element={<AdminCourses />} />
             <Route path="problems" element={<AdminProblems />} />
             <Route path="projects" element={<AdminProjects />} />
             <Route path="classes" element={<AdminClasses />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="bulk-import" element={<AdminBulkImport />} />
-            <Route
-              path="courses"
-              element={<Navigate to="/instructor" replace />}
-            />
-            <Route
-              path="courses/:slug"
-              element={<Navigate to="/instructor" replace />}
-            />
           </Route>
 
           <Route path="*" element={<NotFound />} />

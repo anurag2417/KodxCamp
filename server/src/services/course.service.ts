@@ -226,6 +226,8 @@ export const courseService = {
       description: course.description,
       language: course.language,
       thumbnail: course.thumbnail,
+      price: course.price,
+      isFree: course.isFree,
       totalLessons: siblingLessons.length,
       lessons: siblingLessons,
     };
@@ -320,6 +322,7 @@ export const courseService = {
       totalLessons: 0,
       createdBy: user._id,
       published: false,
+      isFree: true,
     });
 
     await courseMembershipService.upsert({

@@ -1,10 +1,6 @@
 import { api } from '@/shared/lib/api';
 
 // ─── Shared test case type ────────────────────────────────────────
-//
-// Admin and instructor editors send `isHidden` + `expectedOutput`.
-// The server hashes plaintext for hidden tests before saving. The
-// client never has to compute hashes itself.
 
 export interface EditableTestCase {
   input: string;
@@ -12,8 +8,15 @@ export interface EditableTestCase {
   isHidden: boolean;
 }
 
+// ─── Stats ────────────────────────────────────────────────────────
+
 export interface AdminStats {
-  users: { total: number; instructors: number; admins: number; newLast7d: number };
+  users: {
+    total: number;
+    instructors: number;
+    admins: number;
+    newLast7d: number;
+  };
   content: {
     courses: number;
     lessons: number;
@@ -33,6 +36,8 @@ export interface AdminStats {
   dailyActivity: { day: string; count: number }[];
 }
 
+// ─── Users ────────────────────────────────────────────────────────
+
 export interface AdminUser {
   _id: string;
   name: string;
@@ -51,15 +56,32 @@ export interface AdminUsersResponse {
   pages: number;
 }
 
+export interface AdminInstructor {
+  _id: string;
+  name: string;
+  email: string;
+  role: 'instructor' | 'admin';
+  avatar?: string;
+}
+
+// ─── Courses ──────────────────────────────────────────────────────
+
 export interface AdminCourse {
   _id: string;
   title: string;
   slug: string;
   description: string;
   language: string;
+  courseType?: string;
   thumbnail?: string;
   totalLessons: number;
+  createdBy: string;
+  published: boolean;
+  /** INR paise. Undefined for free courses. */
+  price?: number;
+  isFree: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface AdminLesson {
@@ -70,16 +92,50 @@ export interface AdminLesson {
   order: number;
   content: string;
   starterCode: string;
+  starterFiles?: Record<string, string>;
+  webChecks?: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
   solution: string;
+  problemSlug?: string;
   functionName: string;
   outputMode: 'return' | 'print';
   language: string;
   testCases: EditableTestCase[];
+  steps: {
+    title: string;
+    instructions: string;
+    hint?: string;
+    starterFiles: {
+      'index.html': string;
+      'styles.css': string;
+      'script.js': string;
+    };
+    webChecks: {
+      requiredHtml: string[];
+      requiredCss: string[];
+      requiredJs: string[];
+    };
+  }[];
 }
+
+export interface AdminEnrollment {
+  _id: string;
+  userId: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  joinedAt: string;
+  source: 'manual' | 'paid' | 'invited';
+}
+
+// ─── Problems ─────────────────────────────────────────────────────
 
 export interface AdminProblem {
   _id: string;
-  number: number;
+  problemId: number;
   title: string;
   slug: string;
   difficulty: 'easy' | 'medium' | 'hard';
@@ -89,8 +145,14 @@ export interface AdminProblem {
   outputMode: 'return' | 'print';
   starterCode: Record<string, string>;
   testCases: EditableTestCase[];
+  sqlSetup?: string;
+  scope: 'global' | 'course';
+  courseId?: string;
+  tier: 'starter' | 'interview';
   createdAt: string;
 }
+
+// ─── Projects ─────────────────────────────────────────────────────
 
 export interface AdminProject {
   _id: string;
@@ -101,7 +163,12 @@ export interface AdminProject {
   category: string;
   difficulty: string;
   topics: string[];
-  files: { name: string; language: string; content: string; isEntry?: boolean }[];
+  files: {
+    name: string;
+    language: string;
+    content: string;
+    isEntry?: boolean;
+  }[];
   previewMode: 'html' | 'react' | 'sql' | 'none';
   instructions: string;
   estimatedMinutes: number;
@@ -109,11 +176,14 @@ export interface AdminProject {
   createdAt: string;
 }
 
+// ─── Classes ──────────────────────────────────────────────────────
+
 export interface AdminClass {
   _id: string;
   title: string;
   slug: string;
   description: string;
+  instructorId: string;
   instructorName: string;
   scheduledAt: string;
   durationMinutes: number;
@@ -121,7 +191,7 @@ export interface AdminClass {
   meetLink: string;
 }
 
-// ─── Bulk import ────────────────────────────────────────────────
+// ─── Bulk import ──────────────────────────────────────────────────
 
 export type BulkKind = 'problems' | 'projects' | 'courses';
 export type BulkMode = 'merge' | 'replace';
@@ -134,10 +204,10 @@ export interface BulkImportReport {
   totalProcessed: number;
 }
 
-// ─── API ─────────────────────────────────────────────────────────
+// ─── API ──────────────────────────────────────────────────────────
 
 export const adminApi = {
-  // ... (unchanged - same as before)
+  // ─── Stats + users ────────────────────────────────────────
   getStats: async (): Promise<AdminStats> => {
     const { data } = await api.get('/admin/stats');
     return data.data;
@@ -155,6 +225,11 @@ export const adminApi = {
     return data.data;
   },
 
+  listInstructors: async (): Promise<AdminInstructor[]> => {
+    const { data } = await api.get('/admin/instructors');
+    return data.data;
+  },
+
   setUserRole: async (
     userId: string,
     role: 'student' | 'instructor' | 'admin'
@@ -168,18 +243,28 @@ export const adminApi = {
     return data.data;
   },
 
+  // ─── Courses ──────────────────────────────────────────────
+  listCourses: async (): Promise<AdminCourse[]> => {
+    const { data } = await api.get('/admin/courses');
+    return data.data;
+  },
+
   createCourse: async (input: {
     title: string;
     slug: string;
     description: string;
     language: string;
+    courseType?: string;
     thumbnail?: string;
+    published?: boolean;
   }): Promise<AdminCourse> => {
     const { data } = await api.post('/admin/courses', input);
     return data.data;
   },
 
-  getCourseFull: async (slug: string): Promise<AdminCourse & { lessons: AdminLesson[] }> => {
+  getCourseFull: async (
+    slug: string
+  ): Promise<AdminCourse & { lessons: AdminLesson[] }> => {
     const { data } = await api.get(`/admin/courses/${slug}`);
     return data.data;
   },
@@ -197,37 +282,44 @@ export const adminApi = {
     return data.data;
   },
 
-  createLesson: async (
-    courseSlug: string,
-    input: Partial<AdminLesson>
-  ): Promise<AdminLesson> => {
-    const { data } = await api.post(`/admin/courses/${courseSlug}/lessons`, input);
+  // ─── Course pricing + enrollment ──────────────────────────
+  setCoursePricing: async (
+    slug: string,
+    input: { isFree: boolean; price?: number }
+  ): Promise<AdminCourse> => {
+    const { data } = await api.patch(`/admin/courses/${slug}/pricing`, input);
     return data.data;
   },
 
-  updateLesson: async (
-    courseSlug: string,
-    lessonSlug: string,
-    patch: Partial<AdminLesson>
-  ): Promise<AdminLesson> => {
-    const { data } = await api.patch(
-      `/admin/courses/${courseSlug}/lessons/${lessonSlug}`,
-      patch
-    );
+  listCourseEnrollments: async (slug: string): Promise<AdminEnrollment[]> => {
+    const { data } = await api.get(`/admin/courses/${slug}/enrollments`);
     return data.data;
   },
 
-  deleteLesson: async (
-    courseSlug: string,
-    lessonSlug: string
+  enrollUser: async (
+    slug: string,
+    userId: string
+  ): Promise<{ ok: boolean; alreadyEnrolled: boolean }> => {
+    const { data } = await api.post(`/admin/courses/${slug}/enroll`, {
+      userId,
+    });
+    return data.data;
+  },
+
+  revokeEnrollment: async (
+    slug: string,
+    userId: string
   ): Promise<{ ok: boolean }> => {
     const { data } = await api.delete(
-      `/admin/courses/${courseSlug}/lessons/${lessonSlug}`
+      `/admin/courses/${slug}/enrollments/${userId}`
     );
     return data.data;
   },
 
-  createProblem: async (input: Partial<AdminProblem>): Promise<AdminProblem> => {
+  // ─── Problems ─────────────────────────────────────────────
+  createProblem: async (
+    input: Partial<AdminProblem>
+  ): Promise<AdminProblem> => {
     const { data } = await api.post('/admin/problems', input);
     return data.data;
   },
@@ -250,7 +342,10 @@ export const adminApi = {
     return data.data;
   },
 
-  createProject: async (input: Partial<AdminProject>): Promise<AdminProject> => {
+  // ─── Projects ─────────────────────────────────────────────
+  createProject: async (
+    input: Partial<AdminProject>
+  ): Promise<AdminProject> => {
     const { data } = await api.post('/admin/projects', input);
     return data.data;
   },
@@ -273,8 +368,21 @@ export const adminApi = {
     return data.data;
   },
 
+  // ─── Classes ──────────────────────────────────────────────
   listClasses: async (): Promise<AdminClass[]> => {
     const { data } = await api.get('/admin/classes');
+    return data.data;
+  },
+
+  createClass: async (input: {
+    title: string;
+    description: string;
+    scheduledAt: string;
+    durationMinutes: number;
+    meetLink: string;
+    courseId?: string;
+  }): Promise<AdminClass> => {
+    const { data } = await api.post('/classes', input);
     return data.data;
   },
 
@@ -291,6 +399,7 @@ export const adminApi = {
     return data.data;
   },
 
+  // ─── Bulk import ──────────────────────────────────────────
   bulkImport: async (input: {
     kind: BulkKind;
     mode: BulkMode;

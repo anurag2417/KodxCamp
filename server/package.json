@@ -14,6 +14,7 @@
     "migrate:auth": "tsx src/scripts/migrate-auth-fields.ts",
     "migrate:memberships": "tsx src/scripts/migrate-memberships.ts",
     "migrate:problems": "tsx src/scripts/migrate-problems.ts",
+    "migrate:enrollments": "tsx src/scripts/migrate-enrollments.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -33,6 +34,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.4.0",
     "nodemailer": "^10.0.10",
+    "razorpay": "^2.9.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {

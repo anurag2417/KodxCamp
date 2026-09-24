@@ -1,5 +1,6 @@
 import type { Response } from 'express';
 import { adminService } from '../services/admin.service.js';
+import { User } from '../models/User.model.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
@@ -18,6 +19,23 @@ export const adminStatsController = {
 
     const result = await adminService.listUsers({ search, role, page, limit });
     return ApiResponse.success(res, result);
+  }),
+
+  /**
+   * Minimal instructor list for pickers. Returns only the fields a
+   * dropdown needs, sorted by name. Includes both `instructor` and
+   * `admin` because an admin can also teach a class.
+   */
+  listInstructors: asyncHandler(async (_req: AuthRequest, res: Response) => {
+    const instructors = await User.find({
+      role: { $in: ['instructor', 'admin'] },
+      accountStatus: 'active',
+    })
+      .select('_id name email role avatar')
+      .sort({ name: 1 })
+      .lean();
+
+    return ApiResponse.success(res, instructors);
   }),
 
   setUserRole: asyncHandler(async (req: AuthRequest, res: Response) => {
