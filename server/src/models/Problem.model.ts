@@ -19,7 +19,24 @@ export interface ProblemDocument extends Document {
   statement: string;
   functionName: string;
   outputMode: ProblemOutputMode;
-  starterCode: Map<string, string>;
+  /**
+   * Map of language id (or web filename) -> starter code.
+   *
+   * Stored as Mixed rather than Schema.Map because Mongoose Map
+   * rejects keys containing a dot, and web problems use
+   * `index.html` / `styles.css` / `script.js` as keys.
+   *
+   * Expected shape:
+   *   {
+   *     javascript: '...',
+   *     python: '...',
+   *     'html-css': '...',        // full merged page
+   *     'index.html': '...',      // per-file starter for the editor
+   *     'styles.css': '...',
+   *     'script.js': '...',
+   *   }
+   */
+  starterCode: Record<string, string>;
   testCases: ProblemTestCase[];
   /**
    * SQL-only. Executed once before any test case runs. See
@@ -60,7 +77,7 @@ const problemSchema = new Schema<ProblemDocument>(
       enum: ['return', 'print'] as ProblemOutputMode[],
       default: 'return',
     },
-    starterCode: { type: Map, of: String, default: {} },
+    starterCode: { type: Schema.Types.Mixed, default: {} },
     testCases: { type: [testCaseSchema], default: [] },
     sqlSetup: { type: String, default: undefined },
   },

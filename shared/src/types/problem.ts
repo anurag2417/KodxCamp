@@ -37,6 +37,18 @@ export interface IProblem {
   statement: string;
   functionName: string;
   outputMode: ProblemOutputMode;
+  /**
+   * Map of language id (or web filename) -> starter code.
+   *
+   * For classic single-language problems, keys are the language id
+   * (`javascript`, `python`, `sql`, ...).
+   *
+   * For web problems (HTML/CSS/JS), the map also carries per-file
+   * starters under keys `index.html`, `styles.css`, `script.js`, plus
+   * the language key `html-css` pointing at a full merged page.
+   * The client uses the per-file keys for the tabbed editor and the
+   * language key as a legacy fallback for the single-code editor.
+   */
   starterCode: Record<string, string>;
   testCases: IProblemTestCase[];
   /**
