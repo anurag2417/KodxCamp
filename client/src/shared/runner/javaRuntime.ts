@@ -141,6 +141,7 @@ export async function runJava(code: string): Promise<JavaExecution> {
         'com.sun.tools.javac.Main',
         `${COMPILER_JAR_PATH}:/app/`,
         '/str/Main.java',
+        '-proc:none',
         '-d',
         '/files/'
       );
