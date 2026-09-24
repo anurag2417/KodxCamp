@@ -66,6 +66,18 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['@kodxcamp/shared'],
+    // Monaco's ESM entry points must be pre-bundled so Vite can resolve
+    // the internal module graph before the worker imports kick in.
+    // Without this, the browser sometimes requests monaco chunks that
+    // Vite hasn't finished transforming yet.
+    include: ['monaco-editor'],
+  },
+  worker: {
+    // Monaco editor 0.52 ships ESM workers. Loading them as ES modules
+    // is what Vite's `?worker` query expects when the source module is
+    // ESM. The py/ruby/js runner workers use `self.onmessage` and
+    // `postMessage`, which behave identically in module workers.
+    format: 'es',
   },
   server: {
     port: 5173,

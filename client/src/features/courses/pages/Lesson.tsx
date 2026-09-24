@@ -17,12 +17,48 @@ import {
 } from '@/shared/runner/testHarness';
 import { TestPanel } from '@/features/problems/components/TestPanel';
 import { readStoredValue, writeStoredValue } from '@/shared/lib/storage';
+import { buildPreviewHtml } from '@/shared/lib/preview';
 import { CourseQuiz } from '@/features/courses/components/CourseQuiz';
 import { cn } from '@/shared/lib/utils';
 import type { ApiWebLessonStep } from '@/features/courses/api';
 
 const WEB_FILES = ['index.html', 'styles.css', 'script.js'] as const;
 type WebFile = (typeof WEB_FILES)[number];
+
+const AUTO_PREVIEW_DEBOUNCE_MS = 400;
+
+function toMonacoLanguage(langOrFile: string): string {
+  switch (langOrFile) {
+    case 'index.html':
+      return 'html';
+    case 'styles.css':
+      return 'css';
+    case 'script.js':
+      return 'javascript';
+
+    case 'html-css':
+    case 'tailwind':
+      return 'html';
+    case 'react':
+      return 'javascript';
+    case 'javascript':
+    case 'dsa-javascript':
+      return 'javascript';
+    case 'typescript':
+      return 'typescript';
+    case 'python':
+    case 'dsa-python':
+      return 'python';
+    case 'ruby':
+      return 'ruby';
+    case 'java':
+      return 'java';
+    case 'sql':
+      return 'sql';
+    default:
+      return 'plaintext';
+  }
+}
 
 export const Lesson: React.FC = () => {
   const { courseSlug, lessonSlug } = useParams<{
@@ -47,6 +83,7 @@ export const Lesson: React.FC = () => {
   const [savingStep, setSavingStep] = useState(false);
 
   const initializedForRef = useRef<string | null>(null);
+  const hasEditedRef = useRef(false);
 
   const isWebLesson = isWebLessonLanguage(lessonLanguage(data?.lesson?.language));
   const steps: ApiWebLessonStep[] = data?.lesson.steps ?? [];
@@ -64,18 +101,6 @@ export const Lesson: React.FC = () => {
     [progress?.completedSteps]
   );
 
-  // ─── Web lesson file initialization ────────────────────────────
-  //
-  // Runs whenever the active (lesson, step) pair changes, or when a
-  // classic web lesson first loads. Handles three cases:
-  //
-  //  1. First load of a step-less web lesson -> use starterFiles, or
-  //     starterCode as a fallback.
-  //  2. First load of a step lesson -> use the current step's
-  //     starterFiles.
-  //  3. Advancing to a new step -> carry the student's current files
-  //     forward, only adopting a file from the target step's starters
-  //     if the author provided a different non-empty value for it.
   useEffect(() => {
     if (!data?.lesson) return;
     if (!isWebLesson) return;
@@ -99,8 +124,6 @@ export const Lesson: React.FC = () => {
     const isFirstLoadForLesson =
       stored === null || stored.stepIndex === undefined;
 
-    // Full-document fallback. If the lesson has no starterFiles at all
-    // (old data), fall back to starterCode as the index.html body.
     const lessonStarterFiles = data.lesson.starterFiles ?? {
       'index.html': data.lesson.starterCode || '',
       'styles.css': '',
@@ -108,7 +131,6 @@ export const Lesson: React.FC = () => {
     };
 
     if (!hasSteps) {
-      // Classic web lesson. Prefer starterFiles, ignore step machinery.
       if (stored?.files) {
         setFiles(stored.files);
       } else {
@@ -119,7 +141,6 @@ export const Lesson: React.FC = () => {
         });
       }
     } else if (isFirstLoadForLesson) {
-      // Step lesson, first visit.
       if (stepStarter) {
         setFiles({
           'index.html': stepStarter['index.html'] ?? '',
@@ -138,7 +159,6 @@ export const Lesson: React.FC = () => {
         setFiles(stored.files);
       }
     } else {
-      // Advancing (or going back) to a different step. Carry forward.
       const currentFiles = files;
       const merged: Record<string, string> = { ...currentFiles };
 
@@ -167,12 +187,12 @@ export const Lesson: React.FC = () => {
     setAccepted(false);
     setWebMessage('');
     setWebPreview('');
+    hasEditedRef.current = false;
 
     initializedForRef.current = key;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.lesson?._id, currentStepIndex, isWebLesson, hasSteps]);
 
-  // Non-web lessons: single code blob, load once per lesson.
   useEffect(() => {
     if (!data?.lesson || isWebLesson) return;
 
@@ -224,6 +244,18 @@ export const Lesson: React.FC = () => {
     currentStepIndex,
   ]);
 
+  useEffect(() => {
+    if (!isWebLesson) return;
+    if (Object.keys(files).length === 0) return;
+    if (!hasEditedRef.current) return;
+
+    const id = window.setTimeout(() => {
+      setWebPreview(buildPreviewHtml(files));
+    }, AUTO_PREVIEW_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(id);
+  }, [files, isWebLesson]);
+
   const validateCurrentWebFiles = (): { ok: boolean; message: string } => {
     const checks = currentStep?.webChecks ?? data?.lesson?.webChecks;
     return validateWebFiles(files, checks);
@@ -235,7 +267,7 @@ export const Lesson: React.FC = () => {
 
     if (isWebLesson) {
       setWebMessage('');
-      setWebPreview(buildWebPreview(files));
+      setWebPreview(buildPreviewHtml(files));
       setRunning(false);
       return;
     }
@@ -265,7 +297,7 @@ export const Lesson: React.FC = () => {
     if (!data) return;
     setSubmitting(true);
     try {
-      setWebPreview(buildWebPreview(files));
+      setWebPreview(buildPreviewHtml(files));
       const result = validateCurrentWebFiles();
       setWebMessage(result.message);
       setAccepted(result.ok);
@@ -279,6 +311,7 @@ export const Lesson: React.FC = () => {
     if (!accepted) return;
 
     initializedForRef.current = null;
+    hasEditedRef.current = false;
 
     if (!user) {
       const next = Math.min(currentStepIndex + 1, steps.length - 1);
@@ -333,6 +366,11 @@ export const Lesson: React.FC = () => {
     }
   };
 
+  const handleFileChange = (fileName: WebFile, value: string) => {
+    hasEditedRef.current = true;
+    setFiles((current) => ({ ...current, [fileName]: value }));
+  };
+
   if (loading) {
     return (
       <div className="flex w-full justify-center py-32">
@@ -361,13 +399,11 @@ export const Lesson: React.FC = () => {
   const isLastStep = hasSteps && currentStepIndex === steps.length - 1;
   const allStepsDone =
     hasSteps && steps.every((_, i) => completedSteps.has(i));
-
-  // Is the "Mark as Complete" button visible in the RunBar?
-  // Rules:
-  //   - Step lessons: no, the "Finish lesson" button covers it.
-  //   - Non-web lessons: yes.
-  //   - Web lessons with no steps: yes.
   const showMarkCompleteInBar = !hasSteps;
+
+  const editorLanguage = isWebLesson
+    ? toMonacoLanguage(activeFile)
+    : toMonacoLanguage(lesson.language);
 
   return (
     <div className="flex h-[calc(100vh-64px)] w-full">
@@ -639,15 +675,16 @@ export const Lesson: React.FC = () => {
                 />
                 <div className="flex-1">
                   <CodeEditor
-                    language={toMonacoLanguage(lesson.language)}
+                    language={editorLanguage}
                     value={activeCode}
                     onChange={(value) => {
                       if (isWebLesson) {
-                        setFiles((current) => ({ ...current, [activeFile]: value }));
+                        handleFileChange(activeFile, value);
                       } else {
                         setCode(value);
                       }
                     }}
+                    projectFiles={isWebLesson ? files : undefined}
                   />
                 </div>
               </div>
@@ -671,7 +708,8 @@ export const Lesson: React.FC = () => {
                       />
                     ) : (
                       <div className="grid h-full place-items-center p-6 text-center text-sm text-text-muted">
-                        Click Run to preview, Submit to check your work.
+                        Start typing to see a live preview. Submit to check your
+                        work.
                       </div>
                     )}
                   </div>
@@ -703,33 +741,6 @@ export const Lesson: React.FC = () => {
     </div>
   );
 };
-
-function toMonacoLanguage(lang: string): string {
-  switch (lang) {
-    case 'html-css':
-      return 'html';
-    case 'javascript':
-    case 'dsa-javascript':
-      return 'javascript';
-    case 'typescript':
-      return 'typescript';
-    case 'python':
-    case 'dsa-python':
-      return 'python';
-    case 'ruby':
-      return 'ruby';
-    case 'java':
-      return 'java';
-    case 'sql':
-      return 'sql';
-    case 'react':
-      return 'javascript';
-    case 'tailwind':
-      return 'html';
-    default:
-      return 'plaintext';
-  }
-}
 
 function getFileName(lang: string): string {
   switch (lang) {
@@ -798,13 +809,4 @@ function validateWebFiles(
   const missingJs = (checks?.requiredJs ?? []).find((token) => !javascript.includes(token));
   if (missingJs) return { ok: false, message: `JavaScript check failed: missing "${missingJs}".` };
   return { ok: true, message: 'All checks passed.' };
-}
-
-function buildWebPreview(files: Record<string, string>): string {
-  const html = files['index.html'] ?? '';
-  const css = files['styles.css'] ?? '';
-  const javascript = files['script.js'] ?? '';
-  return html
-    .replace('</head>', `<style>${css}</style></head>`)
-    .replace('</body>', `<script>${javascript}</script></body>`);
 }
