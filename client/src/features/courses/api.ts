@@ -85,16 +85,17 @@ export const coursesApi = {
     return data.data;
   },
 
-  getQuiz: async (courseSlug: string): Promise<ApiQuizQuestion[]> => {
-    const { data } = await api.get(`/courses/${courseSlug}/quiz`);
+  getQuiz: async (courseSlug: string, lessonSlug: string): Promise<ApiQuizQuestion[]> => {
+    const { data } = await api.get(`/courses/${courseSlug}/lessons/${lessonSlug}/quiz`);
     return data.data;
   },
 
   submitQuiz: async (
     courseSlug: string,
+    lessonSlug: string,
     answers: Record<string, string | string[]>
   ): Promise<ApiQuizResult> => {
-    const { data } = await api.post(`/courses/${courseSlug}/quiz/submit`, { answers });
+    const { data } = await api.post(`/courses/${courseSlug}/lessons/${lessonSlug}/quiz/submit`, { answers });
     return data.data;
   },
 };

@@ -598,7 +598,7 @@ export const InstructorCourseEdit: React.FC = () => {
                 )}
             </div>
 
-            {perms.canEditContent && <CourseQuizEditor courseSlug={course.slug} />}
+            {perms.canEditContent && <CourseQuizEditor courseSlug={course.slug} lessons={course.lessons} />}
 
             {perms.canManageCourse && (
                 <div className="mt-8 border-t border-border pt-6">

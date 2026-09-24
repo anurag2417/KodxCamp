@@ -7,6 +7,7 @@ import { Card } from '@/shared/components/ui/Card';
 
 interface Props {
   courseSlug: string;
+  lessons: { _id: string; title: string; order: number }[];
 }
 
 const emptyOptions = [
@@ -16,9 +17,10 @@ const emptyOptions = [
   { id: 'd', text: '' },
 ];
 
-export const CourseQuizEditor: React.FC<Props> = ({ courseSlug }) => {
+export const CourseQuizEditor: React.FC<Props> = ({ courseSlug, lessons }) => {
   const [questions, setQuestions] = useState<ApiInstructorQuizQuestion[]>([]);
   const [prompt, setPrompt] = useState('');
+  const [lessonId, setLessonId] = useState(lessons[0]?._id ?? '');
   const [options, setOptions] = useState(emptyOptions);
   const [mode, setMode] = useState<'single' | 'multiple'>('single');
   const [correctOptionIds, setCorrectOptionIds] = useState(['a']);
@@ -36,6 +38,7 @@ export const CourseQuizEditor: React.FC<Props> = ({ courseSlug }) => {
     try {
       await instructorApi.createQuizQuestion(courseSlug, {
         prompt,
+        lessonId,
         options,
         mode,
         correctOptionIds,
@@ -63,6 +66,18 @@ export const CourseQuizEditor: React.FC<Props> = ({ courseSlug }) => {
       <h2 className="text-lg font-semibold text-text-primary">Course quiz</h2>
       <p className="mt-1 text-sm text-text-muted">Add multiple-choice questions for enrolled learners.</p>
       <div className="mt-4 flex flex-col gap-3">
+        <select
+          value={lessonId}
+          onChange={(event) => setLessonId(event.target.value)}
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+        >
+          <option value="">Select lesson</option>
+          {lessons.map((lesson) => (
+            <option key={lesson._id} value={lesson._id}>
+              Lesson {lesson.order}: {lesson.title}
+            </option>
+          ))}
+        </select>
         <textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
@@ -122,7 +137,7 @@ export const CourseQuizEditor: React.FC<Props> = ({ courseSlug }) => {
           </label>
         </div>
         <Input value={explanation} onChange={(event) => setExplanation(event.target.value)} placeholder="Explanation shown after submission (optional)" />
-        <Button className="self-start" onClick={create} disabled={busy || !prompt.trim() || !correctOptionIds.length || options.some((option) => !option.text.trim())}>
+        <Button className="self-start" onClick={create} disabled={busy || !lessonId || !prompt.trim() || !correctOptionIds.length || options.some((option) => !option.text.trim())}>
           <Plus size={14} /> {busy ? 'Adding...' : 'Add question'}
         </Button>
       </div>

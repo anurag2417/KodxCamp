@@ -7,8 +7,8 @@ import { quizAnswerSchema, quizController, quizParamsSchema } from '../controlle
 const router = Router();
 
 router.get('/', courseController.list);
-router.get('/:slug/quiz', validate(quizParamsSchema), requireAuth, quizController.list);
-router.post('/:slug/quiz/submit', validate(quizParamsSchema), requireAuth, validate(quizAnswerSchema), quizController.submit);
+router.get('/:slug/lessons/:lessonSlug/quiz', validate(quizParamsSchema), requireAuth, quizController.list);
+router.post('/:slug/lessons/:lessonSlug/quiz/submit', validate(quizParamsSchema), requireAuth, validate(quizAnswerSchema), quizController.submit);
 router.get('/:slug', validate(courseSlugSchema), courseController.getBySlug);
 router.get(
   '/:courseSlug/lessons/:lessonSlug',

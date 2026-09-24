@@ -52,7 +52,7 @@ const lessonSchema = new Schema<LessonDocument>(
     content: { type: String, required: true },
     contentType: { type: String, default: 'lesson', trim: true },
     starterCode: { type: String, default: '' },
-    starterFiles: { type: Map, of: String, default: undefined },
+    starterFiles: { type: Schema.Types.Mixed, default: undefined },
     webChecks: {
       requiredHtml: { type: [String], default: [] },
       requiredCss: { type: [String], default: [] },

@@ -1,7 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, PlayCircle } from 'lucide-react';
 import { useCourse } from '@/features/courses/hooks/useCourse';
-import { CourseQuiz } from '@/features/courses/components/CourseQuiz';
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { ErrorState } from '@/shared/components/ui/ErrorState';
 import { Button } from '@/shared/components/ui/Button';
@@ -104,7 +103,6 @@ export const CourseDetail: React.FC = () => {
         </div>
       </div>
 
-      <CourseQuiz courseSlug={course.slug} />
     </div>
   );
 };

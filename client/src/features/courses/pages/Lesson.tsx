@@ -17,6 +17,7 @@ import {
 } from '@/shared/runner/testHarness';
 import { TestPanel } from '@/features/problems/components/TestPanel';
 import { readStoredValue, writeStoredValue } from '@/shared/lib/storage';
+import { CourseQuiz } from '@/features/courses/components/CourseQuiz';
 
 const WEB_FILES = ['index.html', 'styles.css', 'script.js'] as const;
 
@@ -306,6 +307,8 @@ export const Lesson: React.FC = () => {
                 Practice the related coding problem
               </Link>
             )}
+
+            <CourseQuiz courseSlug={course.slug} lessonSlug={lesson.slug} />
 
             {progress && (
               <div className="mt-4 rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">

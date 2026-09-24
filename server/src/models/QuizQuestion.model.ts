@@ -7,7 +7,7 @@ export interface QuizOption {
 
 export interface QuizQuestionDocument extends Document {
   courseId: string;
-  lessonId?: string;
+  lessonId: string;
   prompt: string;
   options: QuizOption[];
   mode: 'single' | 'multiple';
@@ -28,7 +28,7 @@ const optionSchema = new Schema<QuizOption>(
 const quizQuestionSchema = new Schema<QuizQuestionDocument>(
   {
     courseId: { type: String, required: true, index: true },
-    lessonId: { type: String, index: true },
+    lessonId: { type: String, required: true, index: true },
     prompt: { type: String, required: true, trim: true },
     options: { type: [optionSchema], required: true },
     mode: { type: String, enum: ['single', 'multiple'], default: 'single' },

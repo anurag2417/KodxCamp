@@ -6,9 +6,10 @@ import { useAuthStore } from '@/shared/store/auth.store';
 
 interface Props {
   courseSlug: string;
+  lessonSlug: string;
 }
 
-export const CourseQuiz: React.FC<Props> = ({ courseSlug }) => {
+export const CourseQuiz: React.FC<Props> = ({ courseSlug, lessonSlug }) => {
   const user = useAuthStore((state) => state.user);
   const [questions, setQuestions] = useState<ApiQuizQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
@@ -20,18 +21,18 @@ export const CourseQuiz: React.FC<Props> = ({ courseSlug }) => {
     if (!user) return;
     setLoading(true);
     coursesApi
-      .getQuiz(courseSlug)
+      .getQuiz(courseSlug, lessonSlug)
       .then(setQuestions)
       .catch(() => setQuestions([]))
       .finally(() => setLoading(false));
-  }, [courseSlug, user]);
+  }, [courseSlug, lessonSlug, user]);
 
   if (!user || loading || questions.length === 0) return null;
 
   const submit = async () => {
     setSubmitting(true);
     try {
-      setResult(await coursesApi.submitQuiz(courseSlug, answers));
+      setResult(await coursesApi.submitQuiz(courseSlug, lessonSlug, answers));
     } finally {
       setSubmitting(false);
     }
