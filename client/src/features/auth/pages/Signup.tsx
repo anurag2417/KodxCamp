@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, ArrowRight, Loader2 } from 'lucide-react';
 import axios from 'axios';
@@ -10,6 +10,7 @@ import { useAuthStore } from '../../../shared/store/auth.store';
 import { isFirebaseConfigured } from '../lib/firebase';
 import { getGoogleIdToken } from '../lib/googleSignIn';
 import { resolveNext, withNext } from '../lib/redirect';
+import { track } from '@/shared/lib/analytics';
 
 export const Signup: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -22,6 +23,11 @@ export const Signup: React.FC = () => {
 
   const next = resolveNext(searchParams.toString());
   const googleEnabled = isFirebaseConfigured();
+
+  // CHANGED (Batch 3.4): fire the funnel entry event on mount.
+  useEffect(() => {
+    track('signup_view');
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -62,6 +68,8 @@ export const Signup: React.FC = () => {
     try {
       const idToken = await getGoogleIdToken();
       await loginWithGoogle(idToken);
+      // Google sign-up skips OTP — the account is immediately usable.
+      track('signup_complete', { method: 'google' });
       navigate(next, { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
@@ -123,8 +131,8 @@ export const Signup: React.FC = () => {
               </div>
             </>
           ) : (
-            // CHANGED: muted note instead of silently omitting the
-            // Google button, matching the Login page.
+            // CHANGED (Batch 3.3): muted note instead of silently
+            // omitting the Google button, matching the Login page.
             <p className="rounded-xl border border-dashed border-border bg-surface-secondary/50 px-4 py-3 text-center text-xs text-text-muted">
               Google sign-up is not available on this deployment. Sign up with
               your email below.

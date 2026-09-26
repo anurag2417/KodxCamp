@@ -6,6 +6,7 @@ interface MagneticButtonProps {
   href?: string;
   variant?: 'primary' | 'secondary';
   className?: string;
+  onClick?: () => void;
 }
 
 export default function MagneticButton({
@@ -13,6 +14,7 @@ export default function MagneticButton({
   href = '#',
   variant = 'primary',
   className = '',
+  onClick,
 }: MagneticButtonProps) {
   const ref = useRef<HTMLAnchorElement>(null);
   const x = useMotionValue(0);
@@ -37,6 +39,7 @@ export default function MagneticButton({
     <motion.a
       ref={ref}
       href={href}
+      onClick={onClick}
       style={{ x: springX, y: springY }}
       onMouseMove={handleMove}
       onMouseLeave={reset}

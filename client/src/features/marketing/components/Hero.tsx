@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import AnimatedText from './AnimatedText';
 import MagneticButton from './MagneticButton';
+import { track } from '@/shared/lib/analytics';
 
 const CodePreview = lazy(() => import('./CodePreview'));
 
@@ -15,6 +16,10 @@ const CodePreview = lazy(() => import('./CodePreview'));
  * The languages line under the CTAs is deliberately muted — it's
  * scannable, not shouty. A visitor who cares about a specific language
  * finds it in one glance.
+ *
+ * Analytics (Batch 3.4): the primary CTA fires `compiler_click` with
+ * a `source: 'hero'` property so we can distinguish it from the same
+ * click in the final CTA section.
  */
 export default function Hero() {
   return (
@@ -38,7 +43,10 @@ export default function Hero() {
         </p>
 
         <div className="kc-hero-actions">
-          <MagneticButton href="/playground">
+          <MagneticButton
+            href="/playground"
+            onClick={() => track('compiler_click', { source: 'hero' })}
+          >
             Try the compiler →
           </MagneticButton>
           <a href="/signup" className="kc-text-link">

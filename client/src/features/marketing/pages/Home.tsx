@@ -1,4 +1,6 @@
 import { motion } from 'framer-motion';
+import { useEffect } from 'react';
+import { track } from '@/shared/lib/analytics';
 import MarketingShell from '../components/MarketingShell';
 import Hero from '../components/Hero';
 import FeatureGrid from '../components/FeatureGrid';
@@ -30,6 +32,9 @@ import Faq from '../components/Faq';
  * renders them as cards, with a placeholder for the empty case.
  */
 export default function Home() {
+  useEffect(() => {
+    track('landing_view');
+  }, []);
   return (
     <MarketingShell>
       <ScrollProgress />

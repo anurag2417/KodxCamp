@@ -1,56 +1,82 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1E3A8A" />
 
-    <title>KodxCamp - Learn by Doing</title>
-    <meta
-      name="description"
-      content="Browser-first, learn-by-doing programming platform - interactive lessons, DSA practice, personal playgrounds, projects, and live classes."
-    />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
 
-    <!-- OpenGraph -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="KodxCamp - Learn by Doing" />
-    <meta
-      property="og:description"
-      content="Interactive lessons, DSA practice, projects, and live classes - all in one calm, browser-first learning environment."
-    />
-    <meta property="og:image" content="/og-image.png" />
-    <meta property="og:site_name" content="KodxCamp" />
+  <!-- Primary Meta Tags -->
+  <title>KodxCamp — Learn by Building</title>
+  <meta name="title" content="KodxCamp — Learn by Building" />
+  <meta name="description"
+    content="Write real code, run it in your browser, and get feedback from automated tests and AI — no installs, no setup." />
 
-    <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="KodxCamp - Learn by Doing" />
-    <meta
-      name="twitter:description"
-      content="Interactive lessons, DSA practice, projects, and live classes."
-    />
-    <meta name="twitter:image" content="/og-image.png" />
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="KodxCamp — Learn by Building" />
+  <meta property="og:description"
+    content="Write real code, run it in your browser, and get feedback from automated tests and AI — no installs, no setup." />
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="KodxCamp — Learn by Building" />
+  <meta name="twitter:description"
+    content="Write real code, run it in your browser, and get feedback from automated tests and AI — no installs, no setup." />
 
-    <!--
-      CheerpJ runtime (Java in the browser). This MUST be loaded as a
-      classic script before any Java execution attempt. Loading is lazy -
-      the runtime only initializes when the student first runs Java code.
-      Community Edition license: free for personal / FOSS / commercial use
-      by one-person companies. See:
-      https://cheerpj.com/docs/license.html
-    -->
-    <script src="https://cjrtnc.leaningtech.com/4.3/loader.js"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+
+  <!-- ═══════════════════════════════════════════════════════════
+         Analytics (Batch 3.4)
+         ═══════════════════════════════════════════════════════════
+
+         Umami — event tracking and the conversion funnel.
+         Cloudflare — page-level analytics (page views, performance).
+
+         Both are loaded with `defer` so they don't block rendering.
+         Both are privacy-friendly: no cookies, no PII. Neither needs
+         a cookie banner.
+
+         The IDs are public (they're visible in the page source), so
+         hardcoding them here is fine. If you'd rather keep them in
+         env vars, use Vite's `%VITE_UMAMI_WEBSITE_ID%` syntax — but
+         the tradeoff is that a build without the env var silently
+         disables analytics with no visible error.
+         ═══════════════════════════════════════════════════════════ -->
+
+  <!-- Umami -->
+  <script 
+    defer 
+    src="https://cloud.umami.is/script.js" 
+    data-website-id="915b7593-c846-45af-b93e-08110b6f01a4">
+  </script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script 
+    type='module' 
+    src='https://static.cloudflareinsights.com/beacon.min.js'
+    data-cf-beacon='{"token": "ea6b0a73c97142b0b4e796e4af073f58"}'>
+  </script>
+  <!-- End Cloudflare Web Analytics -->
+
+  <!-- CheerpJ loader (Java runtime for the browser judge).
+         This is a blocking, synchronous script — see Batch 1.1 notes
+         for the reasoning. It is loaded here because CheerpJ needs
+         to patch the global scope before any user code runs. -->
+  <script src="https://cjrtnc.leaningtech.com/4.0/loader.js"></script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

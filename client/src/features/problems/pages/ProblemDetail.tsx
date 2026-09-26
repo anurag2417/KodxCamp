@@ -22,6 +22,7 @@ import { useToast } from '@/shared/hooks/useToast';
 import { readStoredValue, writeStoredValue } from '@/shared/lib/storage';
 import { buildPreviewHtml } from '@/shared/lib/preview';
 import { withNext } from '@/features/auth/lib/redirect';
+import { track } from '@/shared/lib/analytics';
 
 const LANGUAGE_LABELS: Record<string, string> = {
   javascript: 'JavaScript',
@@ -137,6 +138,13 @@ export const ProblemDetail: React.FC = () => {
    */
   const [edited, setEdited] = useState(false);
 
+  /**
+   * Analytics guard (Batch 3.4). `problem_solved` fires at most once
+   * per mount. The user can submit a second time from the same
+   * session — the ref makes sure we don't double-count.
+   */
+  const solvedTrackedRef = useRef(false);
+
   const languageIds = useMemo(() => languages.map((l) => l.id), [languages]);
   const { status: preloadStatus } = useLanguagePreload(languageIds, language);
 
@@ -149,7 +157,10 @@ export const ProblemDetail: React.FC = () => {
   useEffect(() => {
     if (languages.length === 0) return;
 
-    if (languageFromQuery && languages.some((l) => l.id === languageFromQuery)) {
+    if (
+      languageFromQuery &&
+      languages.some((l) => l.id === languageFromQuery)
+    ) {
       if (language !== languageFromQuery) setLanguage(languageFromQuery);
       return;
     }
@@ -298,6 +309,15 @@ export const ProblemDetail: React.FC = () => {
         setSubmissions(fresh);
 
         if (result.allPassed) {
+          // CHANGED (Batch 3.4): fire problem_solved at most once
+          // per mount, only on the Submit path (not on a bare Run).
+          if (!solvedTrackedRef.current) {
+            solvedTrackedRef.current = true;
+            track('problem_solved', {
+              problem: problem.slug,
+              language,
+            });
+          }
           setShowAcceptance(true);
         }
       } catch (err) {

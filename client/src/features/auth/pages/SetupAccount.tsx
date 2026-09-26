@@ -8,6 +8,7 @@ import { Seo } from '../../../shared/components/seo/Seo';
 import { authApi } from '../api';
 import { useAuthStore } from '../../../shared/store/auth.store';
 import { resolveNext, withNext } from '../lib/redirect';
+import { track } from '@/shared/lib/analytics';
 
 function strengthColor(level: number, slot: number): string {
   if (slot >= level) return 'var(--color-border)';
@@ -61,6 +62,16 @@ export const SetupAccount: React.FC = () => {
         password,
       });
       setSession(user);
+
+      // CHANGED (Batch 3.4): this is where the email-based signup
+      // actually completes. The verify-otp step only produces a
+      // setupToken; the account isn't usable until setPassword
+      // returns a user and we establish the session.
+      //
+      // Google sign-up fires signup_complete in Signup.tsx instead,
+      // because Google provides the identity in one step.
+      track('signup_complete', { method: 'email' });
+
       navigate(next, { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {

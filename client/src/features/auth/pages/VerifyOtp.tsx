@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Loader2, RotateCw } from 'lucide-react';
+import { Loader2, ArrowRight, Mail } from 'lucide-react';
 import axios from 'axios';
 import { AuthLayout } from '../components/AuthLayout';
 import { OtpInput } from '../components/OtpInput';
@@ -12,7 +12,7 @@ export const VerifyOtp: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const email = searchParams.get('email') ?? '';
+  const email = (searchParams.get('email') ?? '').trim().toLowerCase();
   const next = resolveNext(searchParams.toString());
 
   const [code, setCode] = useState('');
@@ -21,40 +21,43 @@ export const VerifyOtp: React.FC = () => {
   const [resending, setResending] = useState(false);
   const [resentAt, setResentAt] = useState<number | null>(null);
 
+  // Guards against re-submitting the same code while the request is
+  // in flight. Cleared on any failure so the user can retry.
+  const submittedRef = useRef<string | null>(null);
+
+  // Auto-submit when all six digits are filled.
   useEffect(() => {
-    if (!email) {
-      navigate(withNext('/signup', next), { replace: true });
-    }
-  }, [email, navigate, next]);
+    if (code.length !== 6 || busy) return;
+    if (submittedRef.current === code) return;
+    submittedRef.current = code;
+    void handleVerify(code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
 
   const handleVerify = async (value: string) => {
-    if (busy) return;
-    setBusy(true);
     setError('');
+    setBusy(true);
     try {
+      // The verify endpoint always returns a setupToken; it never
+      // establishes a session. The account becomes usable only after
+      // /auth/set-password runs on /signup/setup. That is where
+      // signup_complete fires — not here.
       const { setupToken } = await authApi.verifyOtp(email, value);
+
       const setupPath = `/signup/setup?setupToken=${encodeURIComponent(
         setupToken
       )}`;
-      navigate(withNext(setupPath, next), { replace: true });
+      navigate(withNext(setupPath, next));
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
-        setError('Verification failed. Please try again.');
+        setError('The code is incorrect or has expired.');
       }
-      setCode('');
       setBusy(false);
+      submittedRef.current = null;
+      setCode('');
     }
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (code.length !== 6) {
-      setError('Enter all six digits.');
-      return;
-    }
-    await handleVerify(code);
   };
 
   const handleResend = async () => {
@@ -68,21 +71,59 @@ export const VerifyOtp: React.FC = () => {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
-        setError('Could not resend the code. Try again shortly.');
+        setError('Could not resend the code. Try again.');
       }
     } finally {
       setResending(false);
     }
   };
 
-  const canResend = !resentAt || Date.now() - resentAt > 30_000;
+  const resendDisabled = useMemo(() => {
+    if (!resentAt) return false;
+    return Date.now() - resentAt < 30_000;
+  }, [resentAt]);
+
+  if (!email) {
+    return (
+      <>
+        <Seo
+          title="Verify email"
+          description="Enter your verification code."
+        />
+        <AuthLayout
+          title="Missing email"
+          subtitle="This page needs an email address to verify. Start over from signup."
+          footer={
+            <Link
+              to="/signup"
+              className="font-medium text-brand-500 hover:underline"
+            >
+              Back to signup
+            </Link>
+          }
+        >
+          <div className="flex justify-center py-4">
+            <Mail size={40} className="text-text-muted" />
+          </div>
+        </AuthLayout>
+      </>
+    );
+  }
 
   return (
     <>
-      <Seo title="Verify your email" description="Enter the code we sent you." />
+      <Seo
+        title="Verify your email"
+        description="Enter the six-digit code we sent to your email."
+      />
       <AuthLayout
         title="Check your email"
-        subtitle={`We sent a 6-digit code to ${email}. It expires in 10 minutes.`}
+        subtitle={
+          <>
+            We sent a six-digit code to{' '}
+            <strong className="text-text-primary">{email}</strong>.
+          </>
+        }
         footer={
           <>
             Wrong email?{' '}
@@ -95,7 +136,13 @@ export const VerifyOtp: React.FC = () => {
           </>
         }
       >
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <form
+          onSubmit={(e: FormEvent) => {
+            e.preventDefault();
+            void handleVerify(code);
+          }}
+          className="flex flex-col gap-6"
+        >
           <OtpInput
             value={code}
             onChange={setCode}
@@ -131,19 +178,18 @@ export const VerifyOtp: React.FC = () => {
           </button>
 
           <div className="text-center text-xs text-text-muted">
-            Didn't get the code?{' '}
+            Didn&rsquo;t get the code?{' '}
             <button
               type="button"
-              onClick={handleResend}
-              disabled={!canResend || resending}
-              className="inline-flex items-center gap-1 font-medium text-brand-500 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => void handleResend()}
+              disabled={resending || resendDisabled}
+              className="font-medium text-brand-500 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {resending ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <RotateCw size={12} />
-              )}
-              {canResend ? 'Resend' : 'Resend in 30s'}
+              {resending
+                ? 'Sending…'
+                : resendDisabled
+                  ? 'Resend in 30s'
+                  : 'Resend code'}
             </button>
           </div>
         </form>

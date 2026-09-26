@@ -17,6 +17,7 @@ import { runProjectTests } from '@/shared/runner/projectTestEngine';
 import { captureProjectScreenshots } from '@/shared/runner/screenshotRunner';
 import { useAuthStore } from '@/shared/store/auth.store';
 import { useToast } from '@/shared/hooks/useToast';
+import { track } from '@/shared/lib/analytics';
 
 interface Props {
   projectSlug: string;
@@ -135,6 +136,10 @@ export const ProjectWorkspace: React.FC<Props> = ({
    * the screenshot capture throws, the submission still goes
    * through. The artifacts are optional on the server; a submission
    * without them is a valid submission.
+   *
+   * Analytics (Batch 3.4): `project_submitted` fires after the POST
+   * resolves, using the server-assigned attemptNumber — the same
+   * value shown to the user in the success toast.
    */
   const submit = async () => {
     if (!user) {
@@ -161,7 +166,6 @@ export const ProjectWorkspace: React.FC<Props> = ({
       > =
         tests.length > 0
           ? runProjectTests(files, tests, previewMode).catch((err) => {
-              // runProjectTests never throws, but be defensive.
               console.warn('[submit] test runner failed', err);
               return undefined;
             })
@@ -169,7 +173,6 @@ export const ProjectWorkspace: React.FC<Props> = ({
 
       const shotPromise = captureProjectScreenshots(files, previewMode).catch(
         (err) => {
-          // captureProjectScreenshots never throws, but be defensive.
           console.warn('[submit] screenshot runner failed', err);
           return undefined;
         }
@@ -186,6 +189,13 @@ export const ProjectWorkspace: React.FC<Props> = ({
         files,
         testRun,
         screenshots,
+      });
+
+      // CHANGED (Batch 3.4): fire the funnel event after a successful
+      // submission. Uses the server-assigned attemptNumber.
+      track('project_submitted', {
+        project: projectSlug,
+        attempt: submission.attemptNumber,
       });
 
       const summary =

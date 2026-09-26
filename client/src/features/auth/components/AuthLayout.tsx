@@ -3,7 +3,7 @@ import { AuthWorkspacePreview } from './AuthWorkspacePreview';
 
 interface Props {
   title: string;
-  subtitle: string;
+  subtitle: React.ReactNode;
   children: React.ReactNode;
   footer: React.ReactNode;
 }
@@ -21,6 +21,9 @@ interface Props {
  * column is intentional. The blues inside it are the brand blues
  * (--color-blue-primary / --color-blue-deep), not the semantic
  * theme-aware blue, because the panel is always dark.
+ *
+ * `subtitle` accepts ReactNode (Batch 3.4) so callers can bold parts
+ * of the subtitle, e.g. the recipient email on VerifyOtp.
  */
 export const AuthLayout: React.FC<Props> = ({
   title,
