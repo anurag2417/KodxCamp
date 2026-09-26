@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 import { z } from 'zod';
 import { mediaService } from '../services/media.service.js';
-import { MEDIA_PUBLIC_PATH } from '../middleware/upload.middleware.js';
+import { storageService } from '../services/storage/index.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -32,16 +32,14 @@ export const mediaController = {
 
     const userId = req.user!._id.toString();
 
-    // NOTE: This controller currently bypasses the storage façade
-    // — it constructs the public URL from the multer-assigned
-    // filename directly. Batch 2.4 will route media uploads
-    // through `storageService.saveMedia()` so this file works with
-    // both disk and Cloudinary storage without further changes.
+    // Route the bytes through the storage façade. In production this
+    // uploads to Cloudinary; in dev it writes to local disk. Either
+    // way, the URL we get back is the canonical one — the controller
+    // does not need to know which provider is active.
     //
-    // Until then, media uploads still go to local disk even when
-    // Cloudinary is configured. Recordings (uploadRecording above)
-    // already go through the façade.
-    const publicUrl = `${MEDIA_PUBLIC_PATH}/${req.file.filename}`;
+    // As of Batch 2.4, multer uses memory storage for media uploads,
+    // so `req.file.buffer` is always present.
+    const stored = await storageService.saveMedia(req.file);
 
     const asset = await mediaService.recordUpload({
       ownerId: userId,
@@ -51,9 +49,8 @@ export const mediaController = {
         size: req.file.size,
       },
       stored: {
-        url: publicUrl,
-        filename: req.file.filename,
-        sizeBytes: req.file.size,
+        url: stored.url,
+        size: stored.size,
       },
     });
 

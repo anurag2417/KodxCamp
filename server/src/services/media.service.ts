@@ -1,20 +1,25 @@
 import { MediaAsset, type MediaKind } from '../models/MediaAsset.model.js';
 import { ApiError } from '../utils/ApiError.js';
-import { storageService } from './storage.service.js';
+import { storageService } from './storage/index.js';
 import { logger } from '../utils/logger.js';
 
 /**
  * Media library service.
  *
- * Thin orchestration on top of `storage.service.ts`. The storage
- * layer owns the bytes — it decides where files land and returns a
- * public URL. This service owns the *record*: what was uploaded, by
- * whom, with what name, at what size, of what kind.
+ * Thin orchestration on top of the storage façade. The storage layer
+ * owns the bytes — it decides where files land and returns a public
+ * URL. This service owns the *record*: what was uploaded, by whom,
+ * with what name, at what size, of what kind.
  *
  * The split is deliberate. If the storage backing changes (local
- * disk → S3, single bucket → CDN), only `storage.service.ts`
- * changes. This file and everything above it stays the same, because
- * they only ever talk about URLs and metadata.
+ * disk → S3 → Cloudinary), only the storage provider changes. This
+ * file and everything above it stays the same, because they only ever
+ * talk about URLs and metadata.
+ *
+ * As of Batch 2.4, the media controller uploads through the storage
+ * façade first and passes the resulting `stored` record here. This
+ * service no longer knows or cares whether the bytes are on disk or
+ * on Cloudinary — it just persists the metadata.
  */
 
 function inferKind(mimeType: string): MediaKind {
@@ -25,13 +30,26 @@ function inferKind(mimeType: string): MediaKind {
   return 'other';
 }
 
-interface StoredFile {
+/**
+ * The shape this service expects for a stored file.
+ *
+ * Matches the `StoredFile` returned by the storage façade
+ * (`{ url, size }`). Named locally so the service has a single
+ * authoritative shape and a single place to change if the façade's
+ * return type ever evolves.
+ */
+interface StoredFileRef {
   url: string;
-  filename: string;
-  sizeBytes: number;
+  size: number;
 }
 
 export const mediaService = {
+  /**
+   * Record an uploaded asset.
+   *
+   * The caller uploads through the storage façade first and passes
+   * the resulting `stored` record here.
+   */
   async recordUpload(input: {
     ownerId: string;
     file: {
@@ -39,7 +57,7 @@ export const mediaService = {
       mimetype: string;
       size: number;
     };
-    stored: StoredFile;
+    stored: StoredFileRef;
     thumbUrl?: string;
     width?: number;
     height?: number;
@@ -52,7 +70,7 @@ export const mediaService = {
       kind,
       originalName: input.file.originalname,
       mimeType: input.file.mimetype,
-      sizeBytes: input.stored.sizeBytes,
+      sizeBytes: input.stored.size,
       url: input.stored.url,
       thumbUrl: input.thumbUrl,
       width: input.width,
@@ -127,24 +145,19 @@ export const mediaService = {
   },
 
   /**
-   * Delete an asset. Removes the record and asks the storage layer
-   * to delete the file. If the storage delete fails, the record is
-   * still removed — a dangling file on disk is a smaller problem
-   * than a dangling record that 404s.
+   * Delete an asset. Removes the record and asks the storage façade
+   * to delete the file.
    *
-   * NAMING DEBT: `storageService.deleteRecording` is the only
-   * delete method the storage layer exposes today. It was built for
-   * class recordings, but it does what we need — delete a file by
-   * its public URL. When the storage service is next touched, add a
-   * general-purpose `deleteByUrl` alias and call that instead. The
-   * recording-specific name is misleading here.
+   * Best-effort on the storage delete: never throws on a failed
+   * underlying delete. A dangling file in Cloudinary is a smaller
+   * problem than a dangling record that 404s.
    */
   async delete(assetId: string) {
     const asset = await MediaAsset.findById(assetId);
     if (!asset) throw new ApiError(404, 'Asset not found');
 
     try {
-      await storageService.deleteRecording(asset.url);
+      await storageService.deleteByUrl(asset.url);
     } catch (err) {
       logger.warn('Media file delete failed; record will still be removed', {
         assetId,
