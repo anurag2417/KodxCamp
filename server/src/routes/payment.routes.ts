@@ -5,6 +5,10 @@ import {
   verifyCheckoutSchema,
   enrollFreeSchema,
 } from '../controllers/payment.controller.js';
+import {
+  enrollmentStatusController,
+  enrollmentStatusQuerySchema,
+} from '../controllers/enrollmentStatus.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 
@@ -33,6 +37,16 @@ router.post(
   requireAuth,
   validate(enrollFreeSchema),
   paymentController.enrollFree
+);
+
+// CHANGED: new endpoint. Reports whether the caller is enrolled in a
+// given course or roadmap. Used by CourseDetail / RoadmapDetail to
+// choose between "Enroll" and "Continue" CTAs.
+router.get(
+  '/enrollment-status',
+  requireAuth,
+  validate(enrollmentStatusQuerySchema),
+  enrollmentStatusController.get
 );
 
 // NOTE: /webhook is not mounted here. It's mounted separately in

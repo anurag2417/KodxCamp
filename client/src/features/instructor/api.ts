@@ -98,11 +98,6 @@ export interface ApiInstructorLesson {
   language: string;
   testCases: ApiLessonTestCase[];
   steps: ApiInstructorWebLessonStep[];
-  /**
-   * Tutorial challenges, using the shared shape. Typed as the real
-   * type rather than `unknown[]` so the editor can read fields
-   * without casts.
-   */
   tutorialChallenges: ITutorialChallenge[];
 }
 
@@ -369,11 +364,6 @@ export interface InstructorSubmissionSummary {
     email: string;
     avatar?: string;
   };
-  /**
-   * The project this submission belongs to. Populated by the
-   * pending-reviews endpoint, which needs it for the dashboard card.
-   * Absent from the per-project listing, where it's redundant.
-   */
   project?: {
     _id: string;
     title: string;
@@ -427,14 +417,6 @@ export interface CreateReviewInput {
   status: InstructorReviewStatus;
 }
 
-/**
- * The AI evaluation shape, as returned by
- * `GET /instructor/submissions/:submissionId/evaluations`.
- *
- * This is the same payload the admin route returns. Declared locally
- * here so the instructor feature has no compile-time dependency on
- * the admin feature module.
- */
 export interface InstructorAIEvaluation {
   _id: string;
   submissionId: string;
@@ -751,6 +733,10 @@ export const instructorApi = {
     return data.data;
   },
 
+  // CHANGED: new method. Reads AI evaluations for a submission via the
+  // instructor route (which is not behind `requireAdmin`). Previously
+  // the review page called the admin route and got 403 for non-admin
+  // instructors.
   listEvaluations: async (
     submissionId: string
   ): Promise<InstructorAIEvaluation[]> => {

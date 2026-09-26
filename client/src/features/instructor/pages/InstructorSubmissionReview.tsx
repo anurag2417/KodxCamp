@@ -18,6 +18,7 @@ import {
   type InstructorEvaluation,
   type InstructorReviewStatus,
   type InstructorCategoryOverride,
+  type InstructorAIEvaluation,
 } from '@/features/instructor/api';
 import type { AIEvaluationShape } from '@/features/projects/components/AIEvaluationCard';
 import { AIEvaluationCard } from '@/features/projects/components/AIEvaluationCard';
@@ -75,23 +76,17 @@ export const InstructorSubmissionReview: React.FC = () => {
     if (!submissionId) return;
     setLoading(true);
     try {
-      const [sub, revs] = await Promise.all([
+      const [sub, revs, evals] = await Promise.all([
         instructorApi.getSubmission(submissionId),
         instructorApi.listReviews(submissionId),
+        // CHANGED: was `adminApi.listEvaluations`, which requires the
+        // admin role and therefore returned 403 for non-admin
+        // instructors. Now hits the instructor route.
+        instructorApi.listEvaluations(submissionId),
       ]);
       setSubmission(sub);
       setReviews(revs);
-
-      // Load AI evaluations from the admin route — instructors can
-      // read them via the shared `adminApi.listEvaluations`. Using
-      // the admin route directly keeps the read path one call.
-      //
-      // Alternatively, this could be exposed on the instructor
-      // routes; either is fine, and the admin route is already
-      // guarded by role.
-      const { adminApi } = await import('@/features/admin/api');
-      const evals = await adminApi.listEvaluations(submissionId);
-      setAiEvaluations(evals as AIEvaluationShape[]);
+      setAiEvaluations(evals as unknown as AIEvaluationShape[]);
     } catch {
       toast.error('Could not load submission');
     } finally {
@@ -136,7 +131,6 @@ export const InstructorSubmissionReview: React.FC = () => {
     score: number,
     max: number,
   ) => {
-    // Clamp to the category's max.
     const clamped = Math.max(0, Math.min(score, max));
     setCategoryOverrides((prev) => {
       const existing = prev.find((o) => o.category === category);

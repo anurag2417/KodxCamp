@@ -9,7 +9,6 @@ import {
   Video,
   FileText,
   Clock,
-  Loader2,
 } from 'lucide-react';
 import {
   instructorApi,
@@ -20,7 +19,6 @@ import {
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { ErrorState } from '@/shared/components/ui/ErrorState';
 import { Card } from '@/shared/components/ui/Card';
-import { Button } from '@/shared/components/ui/Button';
 import { useAuthStore } from '@/shared/store/auth.store';
 
 function greetingForNow(): string {
@@ -377,7 +375,10 @@ export const InstructorDashboard: React.FC = () => {
               </div>
             </Card>
           </Link>
-          <Link to="/admin/classes">
+          {/* CHANGED: was /admin/classes, which requires admin role.
+              Instructors schedule their own classes from /classes —
+              the "New Class" button there is visible to instructors. */}
+          <Link to="/classes">
             <Card className="flex items-center gap-3 p-5 transition-all hover:border-brand-500/60">
               <Video size={20} className="text-brand-500" />
               <div>

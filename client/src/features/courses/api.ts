@@ -260,6 +260,19 @@ export const paymentsApi = {
     return data.data;
   },
 
+  // CHANGED: new method — ask the server whether the caller is
+  // enrolled in the given entity. Replaces the
+  // `progressApi.getForCourse` heuristic, which always succeeded and
+  // therefore always reported "enrolled".
+  enrollmentStatus: async (
+    ref: PaymentEntityRef
+  ): Promise<{ enrolled: boolean }> => {
+    const { data } = await api.get('/payments/enrollment-status', {
+      params: ref,
+    });
+    return data.data;
+  },
+
   createOrder: async (courseId: string): Promise<CreateOrderResponse> =>
     paymentsApi.createOrderFor({ kind: 'course', id: courseId }),
 

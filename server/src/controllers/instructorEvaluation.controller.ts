@@ -98,12 +98,26 @@ export const instructorEvaluationController = {
 
   /**
    * GET /instructor/submissions/:submissionId/evaluations
+   *
+   * CHANGED: new handler. Mirrors `aiEvaluationController.listForSubmission`
+   * but lives under the instructor router so non-admin instructors can
+   * read AI evaluations for a submission they're reviewing. Before this
+   * endpoint existed, `InstructorSubmissionReview.tsx` called the admin
+   * route and got a 403 for instructors without the admin role.
+   *
+   * Optional `kind` query filters to one pass (`code` or `vision`).
    */
   listEvaluations: asyncHandler(async (req: AuthRequest, res: Response) => {
     const submissionId = String(req.params.submissionId);
-    const rows = await AIEvaluation.find({ submissionId })
+    const kindFilter = req.query.kind as 'code' | 'vision' | undefined;
+
+    const query: Record<string, unknown> = { submissionId };
+    if (kindFilter) query.kind = kindFilter;
+
+    const rows = await AIEvaluation.find(query)
       .sort({ evaluationDate: -1 })
       .lean();
+
     return ApiResponse.success(res, rows);
   }),
 
@@ -167,36 +181,8 @@ export const instructorEvaluationController = {
    * GET /instructor/reviews/pending
    *
    * Submissions that need review — the instructor's to-do list.
-   *
-   * "Needs review" means: the submission exists, and no instructor
-   * has yet left a review on it. The check does not filter by which
-   * instructor — if *anyone* has reviewed it, it's no longer
-   * pending, because the student has feedback they can act on.
-   *
-   * Ordered oldest-first: the submissions that have been waiting
-   * longest appear at the top. That's the right priority for a
-   * teaching queue.
-   *
-   * The set is bounded at 100. An instructor with a bigger backlog
-   * than that has a structural problem the dashboard cannot solve by
-   * listing more rows; they need to open a project and filter by
-   * `needs_review` there, where the list is paginated.
-   *
-   * SCOPING TODO: today this returns every pending submission in the
-   * system, because `projectReviewAccessService` is permissive
-   * (any instructor can review any project) until projects gain an
-   * `owningCourseId` field. When that field exists, filter the
-   * projects list by the instructor's course memberships first, and
-   * the pending set will narrow to "my projects" automatically. No
-   * change to this function's shape — just a different `projects`
-   * query.
    */
   listPendingReviews: asyncHandler(async (_req: AuthRequest, res: Response) => {
-    // Every project this instructor can review. Today, Rule 2a is
-    // permissive — every instructor can review every project — so
-    // this is simply "every project with submissions". See the
-    // module header in `projectReviewAccess.service.ts` for the plan
-    // to scope this once projects attach to courses.
     const projects = await Project.find()
       .select('_id title slug')
       .lean();
@@ -207,8 +193,6 @@ export const instructorEvaluationController = {
 
     const projectIds = projects.map((p) => String(p._id));
 
-    // All submissions across those projects. Oldest first so the
-    // waitlist shows longest-waiting at the top.
     const submissions = await ProjectSubmission.find({
       projectId: { $in: projectIds },
     })
@@ -219,8 +203,6 @@ export const instructorEvaluationController = {
       return ApiResponse.success(res, []);
     }
 
-    // Which have a review already? A set of submissionIds that have
-    // at least one InstructorEvaluation row.
     const submissionIds = submissions.map((s) => String(s._id));
     const reviewedIds = new Set(
       (
@@ -240,7 +222,6 @@ export const instructorEvaluationController = {
       return ApiResponse.success(res, []);
     }
 
-    // Attach student + project display fields.
     const studentIds = Array.from(new Set(pending.map((s) => s.userId)));
     const [students, projectById] = await Promise.all([
       User.find({ _id: { $in: studentIds } })

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useRoadmap } from '@/features/roadmaps/hooks/useRoadmap';
 import { roadmapsApi } from '@/features/roadmaps/api';
+import { paymentsApi } from '@/features/courses/api';
 import { useAuthStore } from '@/shared/store/auth.store';
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { ErrorState } from '@/shared/components/ui/ErrorState';
@@ -67,6 +68,7 @@ export const RoadmapDetail: React.FC = () => {
   const [paymentConfigured, setPaymentConfigured] = useState<boolean | null>(
     null
   );
+  const [enrolled, setEnrolled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -75,6 +77,26 @@ export const RoadmapDetail: React.FC = () => {
       .then((c) => setPaymentConfigured(c.configured))
       .catch(() => setPaymentConfigured(false));
   }, []);
+
+  // CHANGED: use the correct enrollment-status endpoint. Previously
+  // this page (like CourseDetail) inferred enrollment from
+  // progressApi.getForCourse, which always succeeded for any signed-in
+  // user and therefore always reported "enrolled".
+  useEffect(() => {
+    if (!user || !roadmap) return;
+    let cancelled = false;
+    paymentsApi
+      .enrollmentStatus({ kind: 'roadmap', id: roadmap._id })
+      .then(({ enrolled }) => {
+        if (!cancelled) setEnrolled(enrolled);
+      })
+      .catch(() => {
+        if (!cancelled) setEnrolled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, roadmap]);
 
   if (loading) {
     return (
@@ -109,6 +131,8 @@ export const RoadmapDetail: React.FC = () => {
     (sum, c) => sum + c.totalLessons,
     0
   );
+  const enrollmentRequired = enrolled === false;
+  const canEnterCourse = enrolled === true;
   const showPrice = !roadmap.isFree && roadmap.price && roadmap.price > 0;
   const discount =
     roadmap.price &&
@@ -131,6 +155,7 @@ export const RoadmapDetail: React.FC = () => {
     setBusy(true);
     try {
       await roadmapsApi.enrollFree(roadmap._id);
+      setEnrolled(true);
       toast.success(`Enrolled in "${roadmap.title}"`);
       navigate(`/roadmaps/${roadmap.slug}/overview`);
     } catch (err) {
@@ -182,6 +207,7 @@ export const RoadmapDetail: React.FC = () => {
               paymentId: response.razorpay_payment_id,
               signature: response.razorpay_signature,
             });
+            setEnrolled(true);
             toast.success(`Enrolled in "${roadmap.title}"`);
             navigate(`/roadmaps/${roadmap.slug}/overview`);
           } catch {
@@ -217,7 +243,19 @@ export const RoadmapDetail: React.FC = () => {
         </Button>
       );
     }
-    if (roadmap.isFree) {
+    if (canEnterCourse) {
+      return (
+        <Link
+          to={`/roadmaps/${roadmap.slug}/overview`}
+          className="block w-full"
+        >
+          <Button size="lg" className="w-full">
+            <Play size={16} /> Continue roadmap
+          </Button>
+        </Link>
+      );
+    }
+    if (enrollmentRequired && roadmap.isFree) {
       return (
         <Button
           size="lg"
@@ -229,7 +267,7 @@ export const RoadmapDetail: React.FC = () => {
         </Button>
       );
     }
-    if (showPrice) {
+    if (enrollmentRequired && showPrice) {
       return (
         <Button
           size="lg"
@@ -244,9 +282,16 @@ export const RoadmapDetail: React.FC = () => {
         </Button>
       );
     }
+    if (enrollmentRequired && !roadmap.isFree && !roadmap.price) {
+      return (
+        <Button size="lg" className="w-full" disabled>
+          Price coming soon
+        </Button>
+      );
+    }
     return (
       <Button size="lg" className="w-full" disabled>
-        Price coming soon
+        Loading…
       </Button>
     );
   })();
@@ -440,6 +485,15 @@ export const RoadmapDetail: React.FC = () => {
                   </a>
                 )}
               </div>
+
+              {user &&
+                !roadmap.isFree &&
+                !paymentConfigured &&
+                enrollmentRequired && (
+                  <p className="mt-3 text-center text-[11px] text-text-muted">
+                    Payment is not configured. Contact an admin to enroll.
+                  </p>
+                )}
             </div>
           </div>
         </div>

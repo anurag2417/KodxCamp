@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw, Upload, Trash2, Loader2 } from 'lucide-react';
 import { mediaApi, type ApiMediaAsset, type MediaKind } from '@/features/media/api';
 import { Spinner } from '@/shared/components/ui/Spinner';
@@ -23,6 +23,15 @@ export const AdminMedia: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [filter, setFilter] = useState<MediaKind | 'all'>('all');
   const [scope, setScope] = useState<'mine' | 'all'>('all');
+
+  /**
+   * A hidden `<input type="file">` is the only reliable way to open
+   * the file picker. The visible button calls `.click()` on this
+   * ref. Earlier versions used `<Button as-child>` wrapped in a
+   * `<label>`, but our `Button` component doesn't support `asChild`
+   * and the label-wraps-button pattern doesn't trigger the input.
+   */
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -54,6 +63,9 @@ export const AdminMedia: React.FC = () => {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
+      // Reset the input so selecting the same file twice still fires
+      // an onChange event.
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -83,28 +95,31 @@ export const AdminMedia: React.FC = () => {
           <Button variant="secondary" onClick={reload} disabled={loading}>
             <RefreshCw size={14} /> Refresh
           </Button>
-          <label>
-            <input
-              type="file"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleUpload(file);
-                e.target.value = '';
-              }}
-            />
-            <Button as-child disabled={uploading}>
-              {uploading ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" /> Uploading…
-                </>
-              ) : (
-                <>
-                  <Upload size={14} /> Upload
-                </>
-              )}
-            </Button>
-          </label>
+          {/* CHANGED: hidden input + ref, replacing the broken
+              `<Button as-child>` inside a `<label>` pattern. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleUpload(file);
+            }}
+          />
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Uploading…
+              </>
+            ) : (
+              <>
+                <Upload size={14} /> Upload
+              </>
+            )}
+          </Button>
         </div>
       </div>
 

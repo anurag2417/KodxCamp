@@ -21,6 +21,13 @@ interface Props {
  *
  * The center pill wraps only the nav links. The theme toggle lives
  * inside the pill on the right, next to Login.
+ *
+ * Nav link behavior:
+ *   - `#top`, `#practice`, `#roadmap` scroll to sections on this page.
+ *   - "Compiler" navigates to `/playground`, the public compiler.
+ *     It is deliberately NOT an on-page anchor — a visitor who clicks
+ *     it should experience the product, not scroll to a card. See
+ *     Batch 1.1 fix for context.
  */
 export default function MarketingShell({ children }: Props) {
   const theme = useThemeStore((s) => s.theme);
@@ -45,7 +52,9 @@ export default function MarketingShell({ children }: Props) {
               Home
             </a>
             <a href="#practice">Practice</a>
-            <a href="#compiler">Compiler</a>
+            {/* CHANGED: was <a href="#compiler">, which scrolled to the
+                Pricing card. Now a route to the public compiler. */}
+            <Link to="/playground">Compiler</Link>
             <a href="#roadmap">Roadmap</a>
           </nav>
           <button
@@ -81,7 +90,9 @@ export default function MarketingShell({ children }: Props) {
         </div>
         <div className="kc-footer-links">
           <a href="#practice">Practice</a>
-          <a href="#compiler">Compiler</a>
+          {/* CHANGED: was <a href="#compiler">. Now a route, matching
+              the header nav link. */}
+          <Link to="/playground">Compiler</Link>
           <a href="#roadmap">Roadmap</a>
         </div>
         <span className="kc-footer-copy">

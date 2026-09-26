@@ -44,6 +44,7 @@ import { InstructorProjectSubmissions } from '@/features/instructor/pages/Instru
 import { InstructorSubmissionReview } from '@/features/instructor/pages/InstructorSubmissionReview';
 import { InstructorAnnouncements } from '@/features/announcements/pages/InstructorAnnouncements';
 import { Notifications } from '@/features/notifications/pages/Notifications';
+import { NotificationPreferences } from '@/features/notifications/pages/NotificationPreferences';
 import Home from '@/features/marketing/pages/Home';
 import { Playground } from '@/features/playground/pages/Playground';
 import { Practice } from '@/features/problems/pages/Practice';
@@ -186,6 +187,15 @@ export function AppRouter() {
             element={
               <RequireAuth>
                 <Notifications />
+              </RequireAuth>
+            }
+          />
+          {/* CHANGED: new route — the notifications page links here. */}
+          <Route
+            path="/settings/notifications"
+            element={
+              <RequireAuth>
+                <NotificationPreferences />
               </RequireAuth>
             }
           />

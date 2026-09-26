@@ -203,13 +203,6 @@ router.delete(
 );
 
 // ─── Project submissions + reviews ────────────────
-//
-// Ordered: the pending-reviews aggregate first (most specific
-// path), then the per-project listing, then the submission
-// detail, then the evaluations reader, then the review reader,
-// then the review writer. Order here is by specificity, not by
-// HTTP verb — nothing in this block collides today, but keeping
-// the pattern consistent with admin.routes.ts avoids surprise.
 router.get(
   '/reviews/pending',
   instructorEvaluationController.listPendingReviews
@@ -224,6 +217,9 @@ router.get(
   validate(submissionParamsSchema),
   instructorEvaluationController.getSubmission
 );
+// CHANGED: new route. Instructors can now read AI evaluations without
+// the admin role. Previously `InstructorSubmissionReview.tsx` hit the
+// admin route and got a 403.
 router.get(
   '/submissions/:submissionId/evaluations',
   validate(submissionParamsSchema),

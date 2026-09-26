@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { useCourse } from '@/features/courses/hooks/useCourse';
 import { paymentsApi, type PaymentConfig } from '@/features/courses/api';
-import { progressApi } from '@/features/progress/api';
 import { useAuthStore } from '@/shared/store/auth.store';
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { ErrorState } from '@/shared/components/ui/ErrorState';
@@ -30,12 +29,6 @@ declare global {
   }
 }
 
-/**
- * Razorpay checkout brand color.
- * Hardcoded to the brand navy because Razorpay's widget renders in its
- * own iframe and cannot read our CSS variables. Must match the favicon
- * and the deep-blue brand anchor in the design spec (#1E3A8A).
- */
 const RAZORPAY_THEME_COLOR = '#1E3A8A';
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -82,13 +75,17 @@ export const CourseDetail: React.FC = () => {
       .catch(() => setPaymentConfig({ configured: false, mode: 'test' }));
   }, []);
 
+  // CHANGED: was calling `progressApi.getForCourse(course._id)`, which
+  // always succeeded (returns an empty Progress object for non-enrolled
+  // users) and therefore always set `enrolled: true`. Now we ask the
+  // payments service directly.
   useEffect(() => {
     if (!user || !course) return;
     let cancelled = false;
-    progressApi
-      .getForCourse(course._id)
-      .then(() => {
-        if (!cancelled) setEnrolled(true);
+    paymentsApi
+      .enrollmentStatus({ kind: 'course', id: course._id })
+      .then(({ enrolled }) => {
+        if (!cancelled) setEnrolled(enrolled);
       })
       .catch(() => {
         if (!cancelled) setEnrolled(false);
@@ -279,7 +276,13 @@ export const CourseDetail: React.FC = () => {
         </Button>
       );
     }
-    return null;
+    // Still loading enrollment status — disable the CTA to prevent
+    // a flash of the wrong button.
+    return (
+      <Button size="lg" className="w-full" disabled>
+        Loading…
+      </Button>
+    );
   })();
 
   return (
@@ -311,11 +314,6 @@ export const CourseDetail: React.FC = () => {
                   alt={course.title}
                   className="h-full w-full object-cover"
                 />
-                {/*
-                  Overlay sits on top of an image, so it needs contrast
-                  against the photo, not against the page. This is the
-                  one deliberate hard-coded dark/white pair in the file.
-                */}
                 <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/30">
                   <span className="grid h-20 w-20 place-items-center rounded-full border border-white/20 bg-black/40 backdrop-blur-md">
                     <Play size={28} className="ml-1 text-white" fill="white" />
