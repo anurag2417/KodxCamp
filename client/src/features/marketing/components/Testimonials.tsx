@@ -3,16 +3,23 @@ import { motion } from 'framer-motion';
 const testimonials: [string, string, string][] = [
   [
     'Aarav',
-    'Student',
+    'Learning JavaScript',
     'The practice-first flow finally made coding feel active instead of passive.',
   ],
   [
     'Mira',
-    'Frontend learner',
+    'Learning React',
     'The interface gets out of the way and lets me focus on building.',
   ],
 ];
 
+/**
+ * Two learner notes.
+ *
+ * Kept at two. A third fabricated quote is worse than two real ones.
+ * Role labels are specific ("Learning JavaScript") rather than
+ * categorical ("Student") so a visitor can imagine being that person.
+ */
 export default function Testimonials() {
   return (
     <section className="kc-section kc-testimonials">
@@ -30,7 +37,7 @@ export default function Testimonials() {
             viewport={{ once: true }}
             transition={{ duration: 0.55, delay: index * 0.08 }}
           >
-            <p>“{item[2]}”</p>
+            <p>&ldquo;{item[2]}&rdquo;</p>
             <div>
               <strong>{item[0]}</strong>
               <span>{item[1]}</span>

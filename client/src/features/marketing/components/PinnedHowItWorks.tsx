@@ -1,6 +1,12 @@
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useRef } from 'react';
 
+/**
+ * Scroll-driven "momentum" section.
+ *
+ * The heading is a thesis statement, not a feature list. The sub is
+ * the concrete version of that thesis.
+ */
 export default function PinnedHowItWorks() {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -22,7 +28,7 @@ export default function PinnedHowItWorks() {
         <div>
           <span className="kc-eyebrow">Momentum</span>
           <h2>Every lesson should leave you with something working.</h2>
-          <p>Progress becomes visible when every concept turns into an action.</p>
+          <p>You&rsquo;ll know it&rsquo;s working when something you built actually runs.</p>
         </div>
       </div>
     </section>

@@ -1488,3 +1488,95 @@ html:not(.dark) .landing-root .kc-nav {
     justify-self: start;
   }
 }
+
+/* ════════════════════════════════════════════════════════════
+   Batch 3.2 additions — nav Sign up button, multi-column footer
+   ════════════════════════════════════════════════════════════ */
+
+/* Sign up button in the nav — solid brand blue, distinct from the
+   outlined Login button beside it. */
+.landing-root .kc-login-primary {
+  background: var(--kc-orange);
+  border-color: var(--kc-orange);
+  color: #ffffff;
+  font-weight: 700;
+}
+.landing-root .kc-login-primary:hover {
+  background: var(--kc-orange-hover);
+  border-color: var(--kc-orange-hover);
+  transform: translateY(-2px);
+}
+
+/* Multi-column footer. Overrides the three-column desktop grid in
+   `.kc-footer` when the `.kc-footer-multi` modifier is present. */
+.landing-root .kc-footer-multi {
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 40px;
+  padding: 60px max(32px, 4vw) 30px;
+}
+
+.landing-root .kc-footer-columns {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 40px;
+  width: 100%;
+}
+
+.landing-root .kc-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.landing-root .kc-footer-col-brand p {
+  margin-top: 12px;
+}
+
+.landing-root .kc-footer-col a {
+  color: #94a3b8;
+  font-size: 13px;
+  transition: color 0.2s ease;
+}
+
+.landing-root .kc-footer-col a:hover {
+  color: #f8fafc;
+}
+
+.landing-root .kc-footer-heading {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.landing-root .kc-footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding-top: 24px;
+  border-top: 1px solid rgba(203, 213, 225, 0.12);
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* Mobile: collapse the footer to two columns, then one. */
+@media (max-width: 900px) {
+  .landing-root .kc-footer-columns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-root .kc-footer-columns {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .landing-root .kc-footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

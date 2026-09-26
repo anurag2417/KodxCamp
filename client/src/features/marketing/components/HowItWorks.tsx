@@ -1,34 +1,48 @@
 import { motion } from 'framer-motion';
 
-const steps: [string, string, string][] = [
-  ['01', 'Choose a path', 'Pick a roadmap that matches what you want to build.'],
-  ['02', 'Write code', 'Practice concepts inside focused coding sessions.'],
-  ['03', 'Ship projects', 'Turn your progress into real, working software.'],
+const testimonials: [string, string, string][] = [
+  [
+    'Aarav',
+    'Learning JavaScript',
+    'The practice-first flow finally made coding feel active instead of passive.',
+  ],
+  [
+    'Mira',
+    'Learning React',
+    'The interface gets out of the way and lets me focus on building.',
+  ],
 ];
 
-export default function HowItWorks() {
+/**
+ * Two learner notes.
+ *
+ * Kept at two. A third fabricated quote is worse than two real ones.
+ * Role labels are specific ("Learning JavaScript") rather than
+ * categorical ("Student") so a visitor can imagine being that person.
+ */
+export default function Testimonials() {
   return (
-    <section className="kc-section kc-how" id="roadmap">
+    <section className="kc-section kc-testimonials">
       <div className="kc-section-heading">
-        <span className="kc-eyebrow">How it works</span>
-        <h2>A simple path from idea to code.</h2>
+        <span className="kc-eyebrow">Learner notes</span>
+        <h2>Built around the way people actually learn.</h2>
       </div>
-      <div className="kc-steps">
-        {steps.map((step, index) => (
-          <motion.div
-            key={step[0]}
-            className="kc-step"
-            initial={{ opacity: 0, x: index % 2 ? 20 : -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
+      <div className="kc-testimonial-grid">
+        {testimonials.map((item, index) => (
+          <motion.article
+            key={item[0]}
+            className="kc-testimonial"
+            initial={{ opacity: 0, y: 22 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
             transition={{ duration: 0.55, delay: index * 0.08 }}
           >
-            <span className="kc-step-number">{step[0]}</span>
+            <p>&ldquo;{item[2]}&rdquo;</p>
             <div>
-              <h3>{step[1]}</h3>
-              <p>{step[2]}</p>
+              <strong>{item[0]}</strong>
+              <span>{item[1]}</span>
             </div>
-          </motion.div>
+          </motion.article>
         ))}
       </div>
     </section>

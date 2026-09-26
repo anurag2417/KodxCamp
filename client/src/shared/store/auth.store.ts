@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import axios from 'axios';
 import type { IUser } from '@kodxcamp/shared';
 import { authApi } from '@/features/auth/api';
 import { migrateGuestDrafts } from '@/shared/lib/draftMigration';
@@ -75,17 +76,47 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  /**
+   * Fetch the current user.
+   *
+   * Called once on app bootstrap, and again by callers who want a
+   * fresh snapshot (e.g. after a role change).
+   *
+   * Error policy (CHANGED in Batch 3.3):
+   *   - 401 or 403 → the session is genuinely gone. Sign out.
+   *   - Anything else (5xx, network failure, timeout) → keep the
+   *     current user state. A transient backend problem is not a
+   *     reason to sign the user out; the next user action will
+   *     retry against a healthy backend, and if the session was
+   *     actually invalid, that action will surface a 401 which
+   *     the axios interceptor handles.
+   *
+   * Previously, any error cleared the user. That meant a 500 on
+   * /auth/me, or a flaky network, would silently log the user out
+   * even though their cookie was still valid.
+   */
   fetchMe: async () => {
     try {
       const user = await authApi.me();
-      // `fetchMe` also establishes a session — on a page reload with
-      // a valid cookie, this is how the store learns who the user
-      // is. Running the migration here too means drafts left over
-      // from a prior guest session on this device are picked up
-      // whenever the user comes back.
       establishSession(set, user);
-    } catch {
-      set({ user: null });
+    } catch (err) {
+      const status = axios.isAxiosError(err)
+        ? err.response?.status
+        : undefined;
+
+      if (status === 401 || status === 403) {
+        // Genuinely not signed in.
+        set({ user: null });
+      } else {
+        // Network blip or server error. Keep whatever user we had
+        // (usually null on first boot, or the cached user on a
+        // refetch). Don't clear it.
+        //
+        // We deliberately do not retry here — the caller can call
+        // fetchMe again if it wants. A retry loop inside the store
+        // would fight the axios interceptor and complicate the
+        // bootstrapped contract.
+      }
     } finally {
       set({ bootstrapped: true });
     }

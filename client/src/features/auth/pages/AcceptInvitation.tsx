@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, Loader2, Mail } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Mail, LogOut } from 'lucide-react';
 import axios from 'axios';
 import { AuthLayout } from '../components/AuthLayout';
 import { Button } from '@/shared/components/ui/Button';
@@ -20,8 +20,10 @@ export const AcceptInvitation: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const bootstrapped = useAuthStore((s) => s.bootstrapped);
+  const logout = useAuthStore((s) => s.logout);
 
   const [state, setState] = useState<State>({ kind: 'loading' });
+  const [switching, setSwitching] = useState(false);
 
   // Resolve the token on mount.
   useEffect(() => {
@@ -60,6 +62,23 @@ export const AcceptInvitation: React.FC = () => {
           ? err.response.data.message
           : 'Could not accept the invitation.';
       setState({ kind: 'error', message });
+    }
+  };
+
+  /**
+   * Sign out and reload the invitation page.
+   *
+   * Used when the signed-in user's email doesn't match the
+   * invitation. Without this, the visitor has to know to use the
+   * user menu to log out — which is invisible from this page.
+   */
+  const handleSwitchAccount = async () => {
+    setSwitching(true);
+    try {
+      await logout();
+    } finally {
+      // Full reload so the invitation re-resolves cleanly.
+      window.location.href = `/invitations/${token}`;
     }
   };
 
@@ -216,6 +235,8 @@ export const AcceptInvitation: React.FC = () => {
 
   // Logged in - show the accept button.
   const accepting = state.kind === 'accepting';
+  const emailMismatch =
+    user.email.toLowerCase() !== data.invitation.email.toLowerCase();
 
   return (
     <>
@@ -233,20 +254,37 @@ export const AcceptInvitation: React.FC = () => {
             </p>
           </div>
 
-          {user.email.toLowerCase() !== data.invitation.email && (
-            <div className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/5 p-3 text-xs text-[var(--color-warning)]">
-              You're signed in as <strong>{user.email}</strong>. This
-              invitation is for <strong>{data.invitation.email}</strong>. Sign
-              in with that account to accept.
+          {emailMismatch && (
+            // CHANGED: the mismatch warning now includes an action.
+            // Previously the user was told to "sign in with that
+            // account" but had no way to do so from this page.
+            <div className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/5 p-4">
+              <p className="text-xs text-[var(--color-warning)]">
+                You&rsquo;re signed in as{' '}
+                <strong>{user.email}</strong>. This invitation is for{' '}
+                <strong>{data.invitation.email}</strong>. Sign in with that
+                account to accept.
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleSwitchAccount()}
+                disabled={switching}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[var(--color-warning)]/40 bg-surface px-3 py-1.5 text-xs font-semibold text-[var(--color-warning)] transition-colors hover:bg-[var(--color-warning)]/10 disabled:opacity-60"
+              >
+                {switching ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <LogOut size={12} />
+                )}
+                {switching ? 'Signing out…' : 'Sign out and switch account'}
+              </button>
             </div>
           )}
 
           <Button
             size="lg"
             onClick={handleAccept}
-            disabled={
-              accepting || user.email.toLowerCase() !== data.invitation.email
-            }
+            disabled={accepting || emailMismatch}
           >
             {accepting ? (
               <>

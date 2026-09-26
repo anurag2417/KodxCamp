@@ -22,12 +22,8 @@ export const Login: React.FC = () => {
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
   const navigate = useNavigate();
 
-  /**
-   * The destination the user was trying to reach before being sent to
-   * login. Validated by `resolveNext`, which rejects anything that
-   * isn't an in-app absolute path.
-   */
   const next = resolveNext(searchParams.toString());
+  const googleEnabled = isFirebaseConfigured();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -46,8 +42,6 @@ export const Login: React.FC = () => {
             }
           | undefined;
 
-        // Both intermediate hops carry `next` forward so the user
-        // lands where they were heading after completing them.
         if (body?.reason === 'email_unverified') {
           const verifyPath = `/signup/verify?email=${encodeURIComponent(
             body.data?.email ?? email
@@ -89,8 +83,6 @@ export const Login: React.FC = () => {
     }
   };
 
-  const googleEnabled = isFirebaseConfigured();
-
   return (
     <>
       <Seo
@@ -113,7 +105,7 @@ export const Login: React.FC = () => {
         }
       >
         <div className="flex flex-col gap-5">
-          {googleEnabled && (
+          {googleEnabled ? (
             <>
               <button
                 type="button"
@@ -138,6 +130,14 @@ export const Login: React.FC = () => {
                 </div>
               </div>
             </>
+          ) : (
+            // CHANGED: previously the block was omitted silently, which
+            // made it look like a bug. Now a muted line tells the
+            // visitor why there's no Google button on this deployment.
+            <p className="rounded-xl border border-dashed border-border bg-surface-secondary/50 px-4 py-3 text-center text-xs text-text-muted">
+              Google sign-in is not available on this deployment. Sign in with
+              your email below.
+            </p>
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -150,7 +150,7 @@ export const Login: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              autoFocus={!googleEnabled}
+              autoFocus
             />
 
             <AuthField

@@ -4,25 +4,31 @@ const features = [
   {
     number: '01',
     title: 'Learn by doing',
-    text: 'Short lessons lead directly into code, challenges, and projects.',
+    text: 'Every lesson ends with code you run in the browser. Interactive challenges guide you through one concept at a time.',
   },
   {
     number: '02',
-    title: 'Practice in context',
-    text: 'Write, run, test, and improve without leaving the platform.',
+    title: 'Practice with feedback',
+    text: 'Submit a solution and see exactly which tests passed, which failed, and why. AI evaluates project submissions against the specification your instructor wrote.',
   },
   {
     number: '03',
-    title: 'Build real things',
-    text: 'Turn concepts into portfolio-ready projects with clear milestones.',
+    title: 'Build real projects',
+    text: 'Multi-file projects with live preview, automated tests, and instructor review. Everything you build becomes part of your portfolio.',
   },
 ];
 
+/**
+ * The learning loop.
+ *
+ * Three cards. Each answers one question: what you do, what you get
+ * back, what you end up with.
+ */
 export default function FeatureGrid() {
   return (
     <section className="kc-section kc-features" id="practice">
       <div className="kc-section-heading">
-        <span className="kc-eyebrow">The learning loop</span>
+        <span className="kc-eyebrow">How it works</span>
         <h2>Less watching. More building.</h2>
       </div>
       <div className="kc-feature-grid">

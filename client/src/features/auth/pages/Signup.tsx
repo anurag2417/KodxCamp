@@ -97,7 +97,7 @@ export const Signup: React.FC = () => {
         }
       >
         <div className="flex flex-col gap-5">
-          {googleEnabled && (
+          {googleEnabled ? (
             <>
               <button
                 type="button"
@@ -122,6 +122,13 @@ export const Signup: React.FC = () => {
                 </div>
               </div>
             </>
+          ) : (
+            // CHANGED: muted note instead of silently omitting the
+            // Google button, matching the Login page.
+            <p className="rounded-xl border border-dashed border-border bg-surface-secondary/50 px-4 py-3 text-center text-xs text-text-muted">
+              Google sign-up is not available on this deployment. Sign up with
+              your email below.
+            </p>
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -134,7 +141,7 @@ export const Signup: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              autoFocus={!googleEnabled}
+              autoFocus
             />
 
             {error && (

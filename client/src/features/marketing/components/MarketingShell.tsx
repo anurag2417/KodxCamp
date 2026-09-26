@@ -7,32 +7,25 @@ interface Props {
 }
 
 /**
- * Full-bleed marketing shell.
+ * Marketing shell.
  *
- * The shell is the whole page: floating pill navbar on top, the
- * routed page in the middle, a navy footer at the bottom. Every
- * wrapper is `w-full`; the landing page itself owns any inner
- * max-width it wants per-section (see `.kc-section` in index.css,
- * which caps text content at 1600px but lets background sections
- * bleed edge-to-edge).
+ * Floating pill navbar, the routed page in the middle, a navy footer
+ * at the bottom.
  *
- * Three-part navbar per the spec:
- *   [ Logo ]   [ Home | Practice | Compiler | Roadmap ]   [ Login ]
+ * Nav:
+ *   [Logo]   Home · Courses · Practice · Compiler · Roadmaps
+ *            [theme] [Login] [Sign up]
  *
- * The center pill wraps only the nav links. The theme toggle lives
- * inside the pill on the right, next to Login.
+ * Footer: four columns (brand, learn, company, contact).
  *
- * Nav link behavior:
- *   - `#top`, `#practice`, `#roadmap` scroll to sections on this page.
- *   - "Compiler" navigates to `/playground`, the public compiler.
- *     It is deliberately NOT an on-page anchor — a visitor who clicks
- *     it should experience the product, not scroll to a card. See
- *     Batch 1.1 fix for context.
+ * The "Compiler" link is a route to /playground, not an on-page
+ * anchor. The theme toggle sits inside the nav pill.
  */
 export default function MarketingShell({ children }: Props) {
   const theme = useThemeStore((s) => s.theme);
   const toggle = useThemeStore((s) => s.toggle);
   const dark = theme === 'dark';
+  const year = new Date().getFullYear();
 
   return (
     <div className="landing-root">
@@ -51,11 +44,10 @@ export default function MarketingShell({ children }: Props) {
             <a className="active" href="#top">
               Home
             </a>
+            <Link to="/courses">Courses</Link>
             <a href="#practice">Practice</a>
-            {/* CHANGED: was <a href="#compiler">, which scrolled to the
-                Pricing card. Now a route to the public compiler. */}
             <Link to="/playground">Compiler</Link>
-            <a href="#roadmap">Roadmap</a>
+            <a href="#roadmap">Roadmaps</a>
           </nav>
           <button
             type="button"
@@ -71,33 +63,55 @@ export default function MarketingShell({ children }: Props) {
           <Link className="kc-login" to="/login">
             Login
           </Link>
+          <Link className="kc-login kc-login-primary" to="/signup">
+            Sign up
+          </Link>
         </div>
       </header>
 
       {children}
 
-      <footer className="kc-footer">
-        <div>
-          <Link to="/" className="kc-brand">
-            <span className="kc-brand-mark">
-              <span>K</span>
-            </span>
-            <span>
-              Kodx<span>Camp</span>
-            </span>
-          </Link>
-          <p>Learn by building.</p>
+      <footer className="kc-footer kc-footer-multi">
+        <div className="kc-footer-columns">
+          <div className="kc-footer-col kc-footer-col-brand">
+            <Link to="/" className="kc-brand">
+              <span className="kc-brand-mark">
+                <span>K</span>
+              </span>
+              <span>
+                Kodx<span>Camp</span>
+              </span>
+            </Link>
+            <p>Learn by building.</p>
+          </div>
+
+          <div className="kc-footer-col">
+            <p className="kc-footer-heading">Learn</p>
+            <Link to="/courses">Courses</Link>
+            <Link to="/roadmaps">Roadmaps</Link>
+            <Link to="/practice">Practice</Link>
+            <Link to="/playground">Compiler</Link>
+          </div>
+
+          <div className="kc-footer-col">
+            <p className="kc-footer-heading">Company</p>
+            <Link to="/terms">Terms</Link>
+            <Link to="/privacy">Privacy</Link>
+            <a href="mailto:hello@kodxcamp.dev">Contact</a>
+          </div>
+
+          <div className="kc-footer-col">
+            <p className="kc-footer-heading">Get started</p>
+            <Link to="/signup">Create free account</Link>
+            <Link to="/login">Sign in</Link>
+          </div>
         </div>
-        <div className="kc-footer-links">
-          <a href="#practice">Practice</a>
-          {/* CHANGED: was <a href="#compiler">. Now a route, matching
-              the header nav link. */}
-          <Link to="/playground">Compiler</Link>
-          <a href="#roadmap">Roadmap</a>
+
+        <div className="kc-footer-bottom">
+          <span className="kc-footer-copy">
+            © {year} KodxCamp · hello@kodxcamp.dev
+          </span>
         </div>
-        <span className="kc-footer-copy">
-          © {new Date().getFullYear()} KodxCamp
-        </span>
       </footer>
     </div>
   );

@@ -5,10 +5,26 @@ import MagneticButton from './MagneticButton';
 
 const CodePreview = lazy(() => import('./CodePreview'));
 
+/**
+ * Marketing hero.
+ *
+ * Two CTAs:
+ *   - "Try the compiler" → /playground (public, no account needed)
+ *   - "Create free account" → /signup
+ *
+ * The languages line under the CTAs is deliberately muted — it's
+ * scannable, not shouty. A visitor who cares about a specific language
+ * finds it in one glance.
+ */
 export default function Hero() {
   return (
     <section className="kc-hero" id="top">
       <div className="kc-hero-copy">
+        <span className="kc-eyebrow">
+          <i />
+          Browser-first coding education
+        </span>
+
         <h1>
           <AnimatedText>Learn by</AnimatedText>
           <AnimatedText delay={0.08} className="kc-gradient-text">
@@ -17,13 +33,31 @@ export default function Hero() {
         </h1>
 
         <p>
-          Practice, join live classes, solve challenges, and turn what you
-          learn into real projects.
+          Write real code, run it in your browser, and get feedback from
+          automated tests and AI — no installs, no setup.
         </p>
 
         <div className="kc-hero-actions">
-          <MagneticButton href="#practice">Get Started →</MagneticButton>
+          <MagneticButton href="/playground">
+            Try the compiler →
+          </MagneticButton>
+          <a href="/signup" className="kc-text-link">
+            Create free account <span>→</span>
+          </a>
         </div>
+
+        <p
+          style={{
+            marginTop: 28,
+            fontSize: 12,
+            letterSpacing: '0.08em',
+            color: 'var(--color-text-muted)',
+            textTransform: 'uppercase',
+          }}
+        >
+          JavaScript · TypeScript · Python · Ruby · Java · SQL · HTML/CSS ·
+          React · Tailwind
+        </p>
       </div>
 
       <motion.div
