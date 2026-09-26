@@ -41,6 +41,24 @@ export function createApp() {
     })
   );
 
+  // ─── Keepalive endpoint ────────────────────────────────────────
+  //
+  // Deliberately mounted BEFORE the global rate limiter so external
+  // uptime monitors (UptimeRobot) don't consume the API quota. The
+  // response is a constant payload and does not touch the database —
+  // the whole point is to be cheap, so a monitor can hit it every
+  // 5 minutes indefinitely without triggering anything else.
+  //
+  // This is what keeps the Render free-tier service warm. Without it,
+  // the container spins down after ~15 minutes of inactivity and the
+  // next user-facing request pays a 30–60s cold start.
+  //
+  // The path is nested under /api/health so it sits alongside the
+  // existing /api/health route and is obviously related to health.
+  app.get('/api/health/keepalive', (_req, res) => {
+    res.status(200).json({ ok: true });
+  });
+
   // ─── Razorpay webhook ──────────────────────────────────────────
   //
   // Must be mounted BEFORE express.json(). The webhook signature is
@@ -55,14 +73,13 @@ export function createApp() {
     '/api/payments/webhook',
     express.raw({ type: 'application/json', limit: '1mb' }),
     (req, res, next) => {
-      // express.raw gives us a Buffer in req.body. Save the string
-      // form for signature verification, then re-parse it so the
-      // controller can read the payload.
       const buf = req.body as unknown as Buffer;
       (req as express.Request & { rawBody?: string }).rawBody =
         buf.toString('utf8');
       try {
-        req.body = JSON.parse((req as express.Request & { rawBody?: string }).rawBody ?? '{}');
+        req.body = JSON.parse(
+          (req as express.Request & { rawBody?: string }).rawBody ?? '{}'
+        );
       } catch {
         return res
           .status(400)
@@ -85,7 +102,11 @@ export function createApp() {
   } else {
     app.use(
       morgan('combined', {
-        skip: (req) => req.path === '/api/health',
+        // Skip the keepalive path so its 5-minute pings don't flood
+        // the logs. The route returns a constant and is uninteresting
+        // at the access-log level.
+        skip: (req) =>
+          req.path === '/api/health' || req.path === '/api/health/keepalive',
         stream: {
           write: (msg: string) => logger.info('HTTP', { line: msg.trim() }),
         },
