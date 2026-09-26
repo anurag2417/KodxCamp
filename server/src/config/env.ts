@@ -17,6 +17,20 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   PUBLIC_UPLOAD_BASE_URL: z.string().url().optional(),
 
+  // ─── Cloudinary (optional) ───────────────────────────────────
+  //
+  // When CLOUDINARY_CLOUD_NAME is set, the storage layer uses
+  // Cloudinary instead of the local `uploads/` directory. Leave
+  // blank in development to keep uploads on disk.
+  //
+  // All three must be set together. Batch 2.2 will add a production
+  // sanity check that refuses to boot with a partial Cloudinary
+  // configuration, matching the pattern used for Firebase and
+  // Razorpay.
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+
   // ─── Email ────────────────────────────────────────────────────
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
@@ -39,49 +53,12 @@ const envSchema = z.object({
   FIREBASE_PRIVATE_KEY: z.string().optional(),
 
   // ─── Razorpay (optional) ──────────────────────────────────────
-  //
-  // When any of these is missing, the payment routes return 503
-  // `payment_not_configured` and the course page falls back to a
-  // "Contact admin to enroll" message. The system is designed to be
-  // fully deployable without these values set.
-  //
-  // Get them from https://dashboard.razorpay.com/app/keys and
-  // https://dashboard.razorpay.com/app/webhooks
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
-  /**
-   * `test` or `live`. Purely informational — the key pair determines
-   * the actual mode. Used to display a banner in the admin UI.
-   */
   RAZORPAY_MODE: z.enum(['test', 'live']).optional(),
 
   // ─── AI providers (optional) ──────────────────────────────────
-  //
-  // Two providers run per submission, in separate, versioned passes:
-  //
-  //   - TEXT    — reviews the student's code against the project
-  //               specification, rubric, and automated test results.
-  //               Default target is Groq's `openai/gpt-oss-120b`,
-  //               a text-only model. It cannot see screenshots.
-  //
-  //   - VISION  — reviews the rendered screenshots against the
-  //               specification's design and accessibility
-  //               requirements. Default target is Groq's
-  //               `meta-llama/llama-4-scout-17b-16e-instruct`, which
-  //               accepts image input.
-  //
-  // Both passes are independent. Neither overwrites the other, and
-  // neither overwrites the instructor's score. When a provider is
-  // not configured, its pass is skipped and its slot in the admin
-  // UI shows "not configured" rather than failing.
-  //
-  // `AI_TEXT_PROVIDER` and `AI_VISION_PROVIDER` accept the literal
-  // value `'null'` to force-disable a pass even when `GROQ_API_KEY`
-  // is set. That makes it possible to run code-only evaluation on a
-  // deployment that has a key, without editing the key itself.
-  //
-  // Get a Groq key at https://console.groq.com/keys
   GROQ_API_KEY: z.string().optional(),
 
   AI_TEXT_PROVIDER: z.enum(['groq', 'null']).default('null'),
@@ -92,19 +69,6 @@ const envSchema = z.object({
     .string()
     .default('meta-llama/llama-4-scout-17b-16e-instruct'),
 
-  /**
-   * Shared sampling knobs for both passes.
-   *
-   * `temperature` is deliberately low: evaluation is a classification
-   * task, not a creative one. A deterministic-ish evaluator produces
-   * scores an instructor can reason about; a jittery one produces
-   * scores the instructor has to re-check.
-   *
-   * `maxTokens` caps a single response. The prompt asks the model for
-   * JSON only, so this is a ceiling on the size of that JSON. 4096 is
-   * enough for the largest rubric we anticipate (~20 categories with
-   * per-category notes).
-   */
   AI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   AI_MAX_TOKENS: z.coerce.number().int().positive().max(32768).default(4096),
 });
@@ -120,12 +84,19 @@ if (!parsed.success) {
 export const env = parsed.data;
 
 /**
- * Is Razorpay fully configured?
+ * Is Cloudinary fully configured?
  *
- * True only when key id, key secret, and webhook secret are all
- * present. Missing webhook secret is a hard failure for the payment
- * flow because we can't verify incoming webhooks without it.
+ * True only when all three credentials are present. When false,
+ * the storage layer falls back to local disk (development).
  */
+export function isCloudinaryConfigured(): boolean {
+  return Boolean(
+    env.CLOUDINARY_CLOUD_NAME &&
+      env.CLOUDINARY_API_KEY &&
+      env.CLOUDINARY_API_SECRET
+  );
+}
+
 export function isRazorpayConfigured(): boolean {
   return Boolean(
     env.RAZORPAY_KEY_ID &&
@@ -134,14 +105,6 @@ export function isRazorpayConfigured(): boolean {
   );
 }
 
-/**
- * Is the text (code) evaluator configured?
- *
- * True only when the provider is `groq`, the Groq API key is present,
- * and a model name has been set. Anything else falls through to the
- * `NullProvider`, which returns a fixed "not configured" payload
- * without making a network call.
- */
 export function isAITextConfigured(): boolean {
   return Boolean(
     env.AI_TEXT_PROVIDER === 'groq' &&
@@ -150,15 +113,6 @@ export function isAITextConfigured(): boolean {
   );
 }
 
-/**
- * Is the vision (screenshot) evaluator configured?
- *
- * Same rules as the text side. A deployment may run code-only
- * evaluation by leaving `AI_VISION_PROVIDER` at its `'null'` default.
- * That is a supported configuration, not a degraded one — the code
- * pass runs, the vision pass is skipped, and the admin UI shows the
- * vision slot as "not configured" rather than as an error.
- */
 export function isAIVisionConfigured(): boolean {
   return Boolean(
     env.AI_VISION_PROVIDER === 'groq' &&
@@ -230,7 +184,6 @@ if (env.NODE_ENV === 'production') {
     process.exit(1);
   }
 
-  // Razorpay: partial config is a footgun. All three or none.
   const rzp = [
     env.RAZORPAY_KEY_ID,
     env.RAZORPAY_KEY_SECRET,
@@ -244,12 +197,23 @@ if (env.NODE_ENV === 'production') {
     process.exit(1);
   }
 
-  // Groq: partial config is fine — the provider falls back to Null.
-  // The only hard rule is that a Groq-configured provider must have
-  // a key. If `AI_TEXT_PROVIDER` or `AI_VISION_PROVIDER` is `'groq'`
-  // but no key is present, we log a warning rather than refuse to
-  // start. Refusing to start would mean a deployment that forgot the
-  // key cannot boot at all — the Null fallback is the safer default.
+  // Cloudinary: partial config is a footgun. All three or none.
+  // A deployment that sets the cloud name but forgets the secret
+  // would silently fall back to local disk, which on Render's
+  // ephemeral filesystem means uploads disappear on the next deploy.
+  const cld = [
+    env.CLOUDINARY_CLOUD_NAME,
+    env.CLOUDINARY_API_KEY,
+    env.CLOUDINARY_API_SECRET,
+  ];
+  const cldCount = cld.filter(Boolean).length;
+  if (cldCount > 0 && cldCount < 3) {
+    console.error(
+      '❌ Cloudinary is partially configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET, or none.'
+    );
+    process.exit(1);
+  }
+
   if (
     (env.AI_TEXT_PROVIDER === 'groq' || env.AI_VISION_PROVIDER === 'groq') &&
     !env.GROQ_API_KEY
