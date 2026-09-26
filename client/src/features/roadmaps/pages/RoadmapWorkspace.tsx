@@ -5,9 +5,7 @@ import {
   Rocket,
   Terminal,
   Video,
-  LayoutDashboard,
   CheckCircle2,
-  Clock,
 } from 'lucide-react';
 import { useRoadmap } from '@/features/roadmaps/hooks/useRoadmap';
 import { Spinner } from '@/shared/components/ui/Spinner';
@@ -393,10 +391,3 @@ const LiveClassesTab: React.FC<{ roadmap: ApiRoadmapDetail }> = () => (
     </Link>
   </Card>
 );
-
-/* ─── Unused icon prevention ────────────────────────────────────────
-   `LayoutDashboard`, `Clock` are reserved for the cohort batch's
-   progress + attendance UI on this page. Kept imported so they don't
-   get flagged as "unused" by accident when the file grows. */
-void LayoutDashboard;
-void Clock;

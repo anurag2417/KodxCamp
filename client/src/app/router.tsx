@@ -29,7 +29,6 @@ import { MyRecordings } from '@/features/classes/pages/MyRecordings';
 import { CourseDetail } from '@/features/courses/pages/CourseDetail';
 import { Courses } from '@/features/courses/pages/Courses';
 import { Lesson } from '@/features/courses/pages/Lesson';
-import { Dashboard } from '@/features/dashboard/pages/Dashboard';
 import { MyLearning } from '@/features/dashboard/pages/MyLearning';
 import { InstructorGuard } from '@/features/instructor/components/InstructorGuard';
 import { InstructorStudents } from '@/features/instructor/pages/InstructorStudents';
@@ -45,6 +44,8 @@ import { InstructorSubmissionReview } from '@/features/instructor/pages/Instruct
 import { InstructorAnnouncements } from '@/features/announcements/pages/InstructorAnnouncements';
 import { Notifications } from '@/features/notifications/pages/Notifications';
 import { NotificationPreferences } from '@/features/notifications/pages/NotificationPreferences';
+import { Terms } from '@/features/legal/pages/Terms';
+import { Privacy } from '@/features/legal/pages/Privacy';
 import Home from '@/features/marketing/pages/Home';
 import { Playground } from '@/features/playground/pages/Playground';
 import { Practice } from '@/features/problems/pages/Practice';
@@ -83,6 +84,11 @@ export function AppRouter() {
     >
       <Routes>
         <Route path="/" element={<Home />} />
+
+        {/* Legal — public, no shell */}
+        {/* CHANGED: new routes. Referenced from the signup footer. */}
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
 
         {/* Auth */}
         <Route path="/login" element={<Login />} />
@@ -150,14 +156,18 @@ export function AppRouter() {
           />
           <Route path="/classes/:slug" element={<ClassDetail />} />
 
+          {/* CHANGED: /dashboard is now a permanent redirect to
+              /my-learning. The route remains so old bookmarks and
+              existing links (UserMenu, resetPassword, AcceptInvitation,
+              InstructorGuard) don't 404. The Dashboard page component
+              still exists under features/dashboard/pages/Dashboard.tsx
+              but is no longer routed — it's kept so a future iteration
+              can bring back a differentiated analytics dashboard. */}
           <Route
             path="/dashboard"
-            element={
-              <RequireAuth>
-                <Dashboard />
-              </RequireAuth>
-            }
+            element={<Navigate to="/my-learning" replace />}
           />
+
           <Route
             path="/progress"
             element={
@@ -190,7 +200,6 @@ export function AppRouter() {
               </RequireAuth>
             }
           />
-          {/* CHANGED: new route — the notifications page links here. */}
           <Route
             path="/settings/notifications"
             element={

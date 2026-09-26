@@ -67,7 +67,9 @@ export const ResetPassword: React.FC = () => {
     try {
       const { user } = await authApi.resetPassword(token, password);
       setSession(user);
-      navigate('/dashboard', { replace: true });
+      // CHANGED: was /dashboard, which is now a redirect to /my-learning.
+      // Navigate to the final destination so there's no redirect hop.
+      navigate('/my-learning', { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);

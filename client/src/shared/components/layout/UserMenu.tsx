@@ -20,9 +20,9 @@ interface Props {
 /**
  * User menu dropdown.
  *
- * Menu items mirror the student's primary destinations. "Dashboard"
- * currently links to `/dashboard`; once the real My Learning page
- * lands (Batch 2), this becomes `/my-learning`.
+ * Menu items mirror the student's primary destinations. "My Learning"
+ * is the canonical home for signed-in students; the old `/dashboard`
+ * route now redirects there (see app/router.tsx).
  */
 export const UserMenu: React.FC<Props> = ({ transparent }) => {
   const user = useAuthStore((s) => s.user);
@@ -109,10 +109,12 @@ export const UserMenu: React.FC<Props> = ({ transparent }) => {
           </div>
 
           <div className="p-1">
+            {/* CHANGED: was "Dashboard" → /dashboard. Now "My Learning"
+                → /my-learning, matching the merged home page. */}
             <MenuItem
-              to="/dashboard"
+              to="/my-learning"
               icon={LayoutDashboard}
-              label="Dashboard"
+              label="My Learning"
               onClose={() => setOpen(false)}
             />
             <MenuItem

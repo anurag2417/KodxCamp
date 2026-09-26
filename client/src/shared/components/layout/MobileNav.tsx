@@ -66,9 +66,10 @@ const groups: NavGroup[] = [
   {
     heading: 'My Learning',
     items: [
+      // CHANGED: "Dashboard" → "My Learning", /dashboard → /my-learning.
       {
-        to: '/dashboard',
-        label: 'Dashboard',
+        to: '/my-learning',
+        label: 'My Learning',
         icon: LayoutDashboard,
         requiresAuth: true,
       },

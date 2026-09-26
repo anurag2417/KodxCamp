@@ -2,7 +2,9 @@ import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/shared/store/auth.store';
 import { Spinner } from '@/shared/components/ui/Spinner';
 
-export const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AdminGuard: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const user = useAuthStore((s) => s.user);
   const bootstrapped = useAuthStore((s) => s.bootstrapped);
 
@@ -14,6 +16,9 @@ export const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  if (user.role !== 'admin') {
+    // CHANGED: was /dashboard, which now redirects to /my-learning.
+    return <Navigate to="/my-learning" replace />;
+  }
   return <>{children}</>;
 };

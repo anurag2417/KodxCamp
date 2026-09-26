@@ -17,7 +17,9 @@ export const InstructorGuard: React.FC<{ children: React.ReactNode }> = ({
   }
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'instructor' && user.role !== 'admin') {
-    return <Navigate to="/dashboard" replace />;
+    // CHANGED: was /dashboard, which now redirects to /my-learning.
+    // Pointing directly at the final destination avoids a redirect hop.
+    return <Navigate to="/my-learning" replace />;
   }
   return <>{children}</>;
 };
