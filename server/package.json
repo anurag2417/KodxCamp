@@ -26,13 +26,14 @@
     "migrate:submission-statuses": "tsx src/scripts/migrate-submission-statuses.ts",
     "migrate:announcements-media": "tsx src/scripts/migrate-announcements-media.ts",
     "migrate:notifications": "tsx src/scripts/migrate-notifications.ts",
+    "migrate:recordings": "tsx src/scripts/migrate-recordings-to-cloudinary.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@kodxcamp/shared": "*",
     "bcryptjs": "^2.4.3",
-    "cloudinary": "^2.11.0",
+    "cloudinary": "^2.5.1",
     "compression": "^1.7.5",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

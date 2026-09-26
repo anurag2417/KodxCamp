@@ -29,22 +29,16 @@ export interface StoredFile {
 /**
  * Input for a storage upload.
  *
- * The shape is deliberately identical to multer's
- * `Express.Multer.File`, so controllers can pass `req.file` directly
- * without a mapping step. Field names are lowercased and
- * non-camelCased to match multer exactly:
+ * The shape mirrors multer's `Express.Multer.File` under memory
+ * storage. Controllers pass `req.file` directly; no mapping step is
+ * needed.
  *
- *   - `originalname` (not `originalName`)
- *   - `mimetype`     (not `mimeType`)
- *   - `buffer`, `size`, `filename`, `path`
- *
- * The `filename` and `path` fields are bridges for the current
- * multer disk-storage configuration. They are removed in Batch 2.3
- * when the middleware switches to memory storage, and the type will
- * shrink to just the four memory-storage fields.
+ * Batch 2.3 removed the disk-storage bridge (`filename`, `path`).
+ * Both multer storages are now memory-based for the paths that feed
+ * this interface.
  */
 export interface RecordingUploadInput {
-  /** The file bytes. Undefined when multer used disk storage. */
+  /** The file bytes. Always present under memory storage. */
   buffer?: Buffer;
 
   /** Original filename as uploaded by the client. */
@@ -55,18 +49,6 @@ export interface RecordingUploadInput {
 
   /** File size in bytes. */
   size: number;
-
-  /**
-   * @deprecated Set only by multer's disk storage. Removed in
-   * Batch 2.3 when the upload middleware switches to memory storage.
-   */
-  filename?: string;
-
-  /**
-   * @deprecated Set only by multer's disk storage. Removed in
-   * Batch 2.3.
-   */
-  path?: string;
 }
 
 export interface StorageProvider {
