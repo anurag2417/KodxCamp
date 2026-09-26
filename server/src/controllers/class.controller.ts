@@ -154,6 +154,11 @@ export const classController = {
     const { slug } = req.params;
     const durationSec = Number(req.body.durationSec ?? 0);
 
+    // `req.file` is structurally compatible with RecordingUploadInput,
+    // so no mapping step is needed. The local provider reads
+    // `filename` + `path` when multer used disk storage; the
+    // Cloudinary provider reads `buffer` when multer used memory
+    // storage (Batch 2.3).
     const stored = await storageService.saveRecording(req.file);
 
     const updated = await classService.attachRecording(

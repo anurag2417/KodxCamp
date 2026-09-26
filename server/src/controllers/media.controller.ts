@@ -32,9 +32,15 @@ export const mediaController = {
 
     const userId = req.user!._id.toString();
 
-    // The public URL is the static path plus the multer-assigned
-    // filename. `MEDIA_PUBLIC_PATH` is `/uploads/media` — the same
-    // directory the file landed in via the multer destination.
+    // NOTE: This controller currently bypasses the storage façade
+    // — it constructs the public URL from the multer-assigned
+    // filename directly. Batch 2.4 will route media uploads
+    // through `storageService.saveMedia()` so this file works with
+    // both disk and Cloudinary storage without further changes.
+    //
+    // Until then, media uploads still go to local disk even when
+    // Cloudinary is configured. Recordings (uploadRecording above)
+    // already go through the façade.
     const publicUrl = `${MEDIA_PUBLIC_PATH}/${req.file.filename}`;
 
     const asset = await mediaService.recordUpload({
