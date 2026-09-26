@@ -1,48 +1,91 @@
 /**
- * Assemble the three web files into a single HTML document ready for a
- * sandboxed iframe.
+ * Shared HTML-preview assembly.
  *
- * The student's `index.html` usually contains a `<link rel="stylesheet"
- * href="styles.css">` and a `<script src="script.js"></script>`. Those
- * point at files that don't exist in the iframe's scope - the preview
- * is a `srcDoc` blob whose origin is `about:srcdoc`, so the browser
- * tries to resolve the relative URLs against the host page path and
- * gets a 404 (or is blocked by OpaqueResponseBlocking).
+ * This module owns the one true implementation of "merge a web
+ * project's three files into a single HTML document." Everything
+ * else that needs the same transformation — the live preview pane,
+ * the project test engine, the screenshot runner — goes through
+ * `mergeWebFilesIntoHtml` here.
  *
- * We already inline the CSS and JS ourselves, so the honest thing to
- * do is strip those external references before injection. Anything
- * left in the HTML that references a non-existent file is a bug, not
- * a feature.
+ * There are TWO public entry points, deliberately:
+ *
+ *   - `buildPreviewHtml(files: Record<string,string>)` — keyed by
+ *     file name. Used by lesson pages, whose files are stored as
+ *     `{ 'index.html': ..., 'styles.css': ..., 'script.js': ... }`.
+ *
+ *   - `mergeWebFilesIntoHtml(html, css, js, opts?)` — the primitive
+ *     underneath. Callers who already have the three strings in
+ *     hand (the test engine, the screenshot runner) use this
+ *     directly, avoiding a pointless Record wrapping step.
+ *
+ * The project preview (`features/projects/previewBuilder.ts`) has
+ * its own `buildPreviewHtml(files: ApiProjectFile[], previewMode)`
+ * because it dispatches across preview modes (html/react/sql/none).
+ * Its HTML branch delegates here.
+ */
+
+export interface MergeWebFilesOptions {
+  /**
+   * When true, `<script>` tags remaining in the merged document are
+   * stripped. Used by the screenshot runner, which renders the
+   * merged HTML into the parent document where scripts would leak
+   * into the host context.
+   *
+   * The external `<script src>` stripping happens unconditionally —
+   * that's about avoiding 404s in an `about:srcdoc` iframe, not
+   * about isolation.
+   */
+  stripScripts?: boolean;
+}
+
+/**
+ * Merge a web project's three files into a single HTML document
+ * ready for a sandboxed iframe.
  *
  * Rules:
  *   - Remove `<link rel="stylesheet" ...>` tags (any href).
  *   - Remove `<script src="..." ...></script>` tags.
- *   - Inject CSS into `</head>` as a `<style>` block.
- *   - Inject JS into `</body>` as an inline `<script>` block.
- *   - If the HTML has no `</head>` / `</body>`, prepend/append so the
- *     injected code still runs.
+ *   - Inject `css` into `</head>` as a `<style>` block.
+ *   - Inject `js` into `</body>` as an inline `<script>` block.
+ *   - If the HTML has no `</head>` / `</body>`, prepend/append so
+ *     the injected code still runs.
+ *   - If `stripScripts` is set, remove every `<script>` tag from
+ *     the final document.
+ *
+ * The student's `index.html` usually contains a `<link>` and a
+ * `<script src>` pointing at files that don't exist in the iframe's
+ * scope (`about:srcdoc` resolves relative URLs against the host
+ * path, producing 404s or OpaqueResponseBlocking). We inline those
+ * files ourselves, so stripping the external references is correct,
+ * not lossy.
  */
-export function buildPreviewHtml(files: Record<string, string>): string {
-  const html = files['index.html'] ?? '';
-  const css = files['styles.css'] ?? '';
-  const javascript = files['script.js'] ?? '';
-
+export function mergeWebFilesIntoHtml(
+  html: string,
+  css: string,
+  javascript: string,
+  options: MergeWebFilesOptions = {}
+): string {
   let doc = html;
 
-  // 1. Strip external stylesheet links. We're inlining the CSS below.
+  // 1. Strip external stylesheet links. We inline the CSS below.
   doc = doc.replace(
     /<link\b[^>]*rel\s*=\s*["']?stylesheet["']?[^>]*>/gi,
     ''
   );
 
   // 2. Strip external script references. The inline script below is
-  //    the real thing; a leftover `<script src>` would try to load a
-  //    file that doesn't exist.
-  doc = doc.replace(/<script\b[^>]*\bsrc\s*=\s*["'][^"']*["'][^>]*>\s*<\/script>/gi, '');
-  // Some students omit the closing tag; catch that form too.
-  doc = doc.replace(/<script\b[^>]*\bsrc\s*=\s*["'][^"']*["'][^>]*\/>/gi, '');
+  //    the real thing; a leftover `<script src>` would 404.
+  doc = doc.replace(
+    /<script\b[^>]*\bsrc\s*=\s*["'][^"']*["'][^>]*>\s*<\/script>/gi,
+    ''
+  );
+  // Some authors omit the closing tag; catch that form too.
+  doc = doc.replace(
+    /<script\b[^>]*\bsrc\s*=\s*["'][^"']*["'][^>]*\/>/gi,
+    ''
+  );
 
-  // 3. Inject CSS inside <head>, or prepend if there's no <head>.
+  // 3. Inject CSS inside <head>, or prepend if there's no </head>.
   if (css) {
     const styleTag = `<style>${css}</style>`;
     if (/<\/head>/i.test(doc)) {
@@ -62,5 +105,26 @@ export function buildPreviewHtml(files: Record<string, string>): string {
     }
   }
 
+  // 5. Optional script strip. The capture path uses this so the
+  //    student's JS cannot run in the parent document context.
+  if (options.stripScripts) {
+    doc = doc.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+  }
+
   return doc;
+}
+
+/**
+ * Convenience wrapper for callers whose files are stored as a
+ * `Record<string,string>` keyed by file name.
+ *
+ * Lesson pages use this shape. Project pages do not — they have
+ * `ApiProjectFile[]` and go through `previewBuilder.ts` instead.
+ */
+export function buildPreviewHtml(files: Record<string, string>): string {
+  return mergeWebFilesIntoHtml(
+    files['index.html'] ?? '',
+    files['styles.css'] ?? '',
+    files['script.js'] ?? ''
+  );
 }

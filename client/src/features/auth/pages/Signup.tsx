@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, ArrowRight, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { AuthLayout } from '../components/AuthLayout';
@@ -9,8 +9,10 @@ import { authApi } from '../api';
 import { useAuthStore } from '../../../shared/store/auth.store';
 import { isFirebaseConfigured } from '../lib/firebase';
 import { getGoogleIdToken } from '../lib/googleSignIn';
+import { resolveNext, withNext } from '../lib/redirect';
 
 export const Signup: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -18,6 +20,7 @@ export const Signup: React.FC = () => {
   const navigate = useNavigate();
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
 
+  const next = resolveNext(searchParams.toString());
   const googleEnabled = isFirebaseConfigured();
 
   const handleSubmit = async (e: FormEvent) => {
@@ -26,9 +29,10 @@ export const Signup: React.FC = () => {
     setBusy(true);
     try {
       await authApi.register(email.trim().toLowerCase());
-      navigate(
-        `/signup/verify?email=${encodeURIComponent(email.trim().toLowerCase())}`
-      );
+      const verifyPath = `/signup/verify?email=${encodeURIComponent(
+        email.trim().toLowerCase()
+      )}`;
+      navigate(withNext(verifyPath, next));
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const body = err.response?.data as
@@ -58,7 +62,7 @@ export const Signup: React.FC = () => {
     try {
       const idToken = await getGoogleIdToken();
       await loginWithGoogle(idToken);
-      navigate('/dashboard');
+      navigate(next, { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
@@ -84,7 +88,7 @@ export const Signup: React.FC = () => {
           <>
             Already have an account?{' '}
             <Link
-              to="/login"
+              to={withNext('/login', next)}
               className="font-medium text-brand-500 hover:underline"
             >
               Sign in

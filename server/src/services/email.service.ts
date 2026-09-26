@@ -16,6 +16,10 @@ import {
   type AnnouncementData,
 } from '../email/templates/announcement.js';
 import { renderDigest, type DigestData } from '../email/templates/digest.js';
+import {
+  renderNotification,
+  type NotificationEmailData,
+} from '../email/templates/notification.js';
 
 // ─── Public types ────────────────────────────────────────────────
 
@@ -40,17 +44,9 @@ export interface EnqueueInput {
 // ─── Public API ──────────────────────────────────────────────────
 
 export const emailService = {
-  /**
-   * Send a transactional email immediately.
-   *
-   * Used for OTP, invitations, password reset - anything the user is
-   * waiting on. Returns after the send attempt completes, success or
-   * failure. Logs every attempt.
-   */
   async send(input: SendInput): Promise<{ ok: boolean; logId: string }> {
     const { subject, html } = renderTemplate(input.template, input.data);
 
-    // Dev / no-SMTP mode: log the send without touching SMTP.
     if (!EMAIL_ENABLED || !mailTransport) {
       logger.info('Email skipped (SMTP disabled)', {
         to: input.to,
@@ -90,16 +86,6 @@ export const emailService = {
     });
   },
 
-  /**
-   * Queue a bulk email for background delivery.
-   *
-   * Used for announcements and digests. Returns immediately; the queue
-   * worker picks the jobs up and sends them one at a time with a
-   * delay to respect provider rate limits.
-   *
-   * The rendered HTML is stored on each log row so retries don't need
-   * the original template data.
-   */
   async enqueue(input: EnqueueInput): Promise<{ queued: number }> {
     const { subject, html } = renderTemplate(input.template, input.data);
 
@@ -135,14 +121,6 @@ export const emailService = {
     return { queued: docs.length };
   },
 
-  /**
-   * Worker entry point. Called by the cron job every minute.
-   *
-   * Processes up to `batchSize` queued emails, respecting Gmail rate
-   * limits by inserting `delayMs` between sends. Retries failed sends
-   * up to 3 attempts with exponential backoff, then marks them as
-   * `failed` for manual inspection.
-   */
   async processQueue(
     batchSize = 20,
     delayMs = 1500
@@ -163,9 +141,6 @@ export const emailService = {
     let failed = 0;
 
     for (const job of jobs) {
-      // The status may have changed between the query and the loop
-      // iteration (e.g. an admin retried it manually). Skip in that
-      // case.
       if (job.status !== 'queued') continue;
 
       const html = job.renderedHtml ?? '<p>(empty)</p>';
@@ -180,16 +155,12 @@ export const emailService = {
       if (result.ok) sent++;
       else failed++;
 
-      // Throttle to stay under the provider's rate limit.
       await new Promise((r) => setTimeout(r, delayMs));
     }
 
     return { sent, failed };
   },
 
-  /**
-   * Manually retry a failed log entry. Admin-only.
-   */
   async retry(logId: string): Promise<{ ok: boolean }> {
     const log = await EmailLog.findById(logId).select('+renderedHtml');
     if (!log) return { ok: false };
@@ -215,14 +186,6 @@ interface AttemptInput {
   html: string;
 }
 
-/**
- * Attempt a single send. Updates the log row based on the outcome.
- *
- * Retry policy:
- *   attempts 1–2 fail → status stays `queued`, `nextAttemptAt` is set
- *   to a delay growing with attempt count (60s, 120s).
- *   attempt 3 fails  → status becomes `failed`. No further retries.
- */
 async function attemptSend(
   input: AttemptInput
 ): Promise<{ ok: boolean; logId: string }> {
@@ -291,5 +254,7 @@ function renderTemplate(
       return renderAnnouncement(data as AnnouncementData);
     case 'digest':
       return renderDigest(data as DigestData);
+    case 'notification':
+      return renderNotification(data as NotificationEmailData);
   }
 }

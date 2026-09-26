@@ -16,18 +16,18 @@ export function renderPasswordReset(data: PasswordResetData): {
     </p>
     <div style="margin:28px 0;text-align:center;">
       <a href="${data.resetUrl}"
-         style="display:inline-block;padding:12px 24px;background:#2a835f;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;border-radius:8px;">
+         style="display:inline-block;padding:12px 24px;background:#1e3a8a;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;border-radius:8px;">
         Reset password
       </a>
     </div>
-    <p style="margin:16px 0 0;font-size:13px;color:#60736d;">
+    <p style="margin:16px 0 0;font-size:13px;color:#64748b;">
       This link expires in ${data.expiresInMinutes} minutes.
       If you didn't request this, you can ignore this email - your
       password won't change.
     </p>
-    <p style="margin:12px 0 0;font-size:12px;color:#60736d;word-break:break-all;">
+    <p style="margin:12px 0 0;font-size:12px;color:#64748b;word-break:break-all;">
       Or paste this link into your browser:<br />
-      <span style="color:#2a835f;">${escapeHtml(data.resetUrl)}</span>
+      <span style="color:#2563eb;">${escapeHtml(data.resetUrl)}</span>
     </p>
   `;
 

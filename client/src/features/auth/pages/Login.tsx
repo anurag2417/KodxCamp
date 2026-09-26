@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { AuthLayout } from '../components/AuthLayout';
@@ -9,8 +9,10 @@ import { authApi } from '../api';
 import { useAuthStore } from '../../../shared/store/auth.store';
 import { isFirebaseConfigured } from '../lib/firebase';
 import { getGoogleIdToken } from '../lib/googleSignIn';
+import { resolveNext, withNext } from '../lib/redirect';
 
 export const Login: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,13 +22,20 @@ export const Login: React.FC = () => {
   const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
   const navigate = useNavigate();
 
+  /**
+   * The destination the user was trying to reach before being sent to
+   * login. Validated by `resolveNext`, which rejects anything that
+   * isn't an in-app absolute path.
+   */
+  const next = resolveNext(searchParams.toString());
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
       await login(email.trim().toLowerCase(), password);
-      navigate('/dashboard');
+      navigate(next, { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const body = err.response?.data as
@@ -37,20 +46,20 @@ export const Login: React.FC = () => {
             }
           | undefined;
 
+        // Both intermediate hops carry `next` forward so the user
+        // lands where they were heading after completing them.
         if (body?.reason === 'email_unverified') {
-          navigate(
-            `/signup/verify?email=${encodeURIComponent(
-              body.data?.email ?? email
-            )}`
-          );
+          const verifyPath = `/signup/verify?email=${encodeURIComponent(
+            body.data?.email ?? email
+          )}`;
+          navigate(withNext(verifyPath, next));
           return;
         }
         if (body?.reason === 'profile_incomplete' && body.data?.setupToken) {
-          navigate(
-            `/signup/setup?setupToken=${encodeURIComponent(
-              body.data.setupToken
-            )}`
-          );
+          const setupPath = `/signup/setup?setupToken=${encodeURIComponent(
+            body.data.setupToken
+          )}`;
+          navigate(withNext(setupPath, next));
           return;
         }
         setError(body?.message ?? 'Invalid email or password');
@@ -67,7 +76,7 @@ export const Login: React.FC = () => {
     try {
       const idToken = await getGoogleIdToken();
       await loginWithGoogle(idToken);
-      navigate('/dashboard');
+      navigate(next, { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
@@ -95,7 +104,7 @@ export const Login: React.FC = () => {
           <>
             New to KodxCamp?{' '}
             <Link
-              to="/signup"
+              to={withNext('/signup', next)}
               className="font-medium text-brand-500 hover:underline"
             >
               Create a free account

@@ -7,10 +7,22 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { AuthRequest } from '../middleware/auth.middleware.js';
 
+/* ─── Schemas ────────────────────────────────────────────────────── */
+
+/**
+ * Payment payloads identify an entity by kind + id. This lets one set
+ * of endpoints serve courses and roadmaps without duplicating the
+ * controller.
+ */
+const entityRefSchema = z
+  .object({
+    kind: z.enum(['course', 'roadmap']),
+    id: z.string().min(1),
+  })
+  .strict();
+
 export const createOrderSchema = z.object({
-  body: z.object({
-    courseId: z.string().min(1),
-  }),
+  body: entityRefSchema,
 });
 
 export const verifyCheckoutSchema = z.object({
@@ -22,10 +34,10 @@ export const verifyCheckoutSchema = z.object({
 });
 
 export const enrollFreeSchema = z.object({
-  body: z.object({
-    courseId: z.string().min(1),
-  }),
+  body: entityRefSchema,
 });
+
+/* ─── Controllers ────────────────────────────────────────────────── */
 
 export const paymentController = {
   /**
@@ -48,19 +60,13 @@ export const paymentController = {
    */
   createOrder: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();
-    const { courseId } = req.body;
-    const order = await paymentService.createOrderForCourse({
-      userId,
-      courseId,
-    });
+    const { kind, id } = req.body;
+    const order = await paymentService.createOrder({ userId, kind, id });
     return ApiResponse.success(res, order, 'Order created', 201);
   }),
 
   /**
    * POST /payments/verify
-   *
-   * Client calls this after Razorpay Checkout succeeds. Signature is
-   * verified server-side; enrollment is created on success.
    */
   verify: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();
@@ -76,11 +82,6 @@ export const paymentController = {
 
   /**
    * POST /payments/webhook
-   *
-   * Called by Razorpay, not by users. Signature is verified against the
-   * raw request body. Mounted separately in `app.ts` with a raw body
-   * parser, because the standard JSON parser would break signature
-   * verification.
    */
   webhook: asyncHandler(async (req: Request, res: Response) => {
     const signature = req.header('x-razorpay-signature') ?? '';
@@ -107,13 +108,11 @@ export const paymentController = {
 
   /**
    * POST /payments/enroll-free
-   *
-   * Enroll in a free course without any payment.
    */
   enrollFree: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();
-    const { courseId } = req.body;
-    const result = await paymentService.enrollFree({ userId, courseId });
+    const { kind, id } = req.body;
+    const result = await paymentService.enrollFree({ userId, kind, id });
     return ApiResponse.success(
       res,
       result,

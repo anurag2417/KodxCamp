@@ -5,15 +5,16 @@ export interface ProgressDocument extends Document {
   courseId: string;
   completedLessons: string[];
   currentLessonId?: string;
-  /**
-   * Web-lesson step tracking.
-   *
-   * Only meaningful for lessons with a non-empty `steps` array.
-   * Missing values on existing documents MUST be treated as the
-   * defaults by every read path - there is no backfill migration.
-   */
   currentStepIndex?: number;
   completedSteps?: number[];
+  /**
+   * Tutorial challenge completion.
+   *
+   * Keyed by lesson id; value is the sorted list of completed
+   * challenge indexes. Absent key and empty array mean the same
+   * thing.
+   */
+  completedChallenges?: Record<string, number[]>;
   percentage: number;
 }
 
@@ -25,6 +26,10 @@ const progressSchema = new Schema<ProgressDocument>(
     currentLessonId: { type: String },
     currentStepIndex: { type: Number, default: 0 },
     completedSteps: { type: [Number], default: [] },
+    completedChallenges: {
+      type: Schema.Types.Mixed,
+      default: () => ({}),
+    },
     percentage: { type: Number, default: 0 },
   },
   { timestamps: true }

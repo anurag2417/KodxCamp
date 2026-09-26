@@ -47,6 +47,70 @@ const webLessonStepSchema = z
   })
   .strict();
 
+/**
+ * A single tutorial-challenge check.
+ *
+ * The two variants are plain ZodObjects so `discriminatedUnion` can
+ * accept them. The `value`-required-when-expect-is-textEquals-or-
+ * textMatches rule lives in the challenge-level `.superRefine()`
+ * below, because attaching it here would wrap the variant in
+ * `ZodEffects`, which discriminatedUnion does not accept.
+ */
+const includesCheckSchema = z
+  .object({
+    type: z.literal('includes'),
+    value: z.string().min(1),
+    label: z.string().max(200).optional(),
+  })
+  .strict();
+
+const domCheckSchema = z
+  .object({
+    type: z.literal('dom'),
+    selector: z.string().min(1),
+    expect: z.enum(['exists', 'textEquals', 'textMatches']),
+    value: z.string().optional(),
+    label: z.string().max(200).optional(),
+  })
+  .strict();
+
+const challengeCheckSchema = z.discriminatedUnion('type', [
+  includesCheckSchema,
+  domCheckSchema,
+]);
+
+const tutorialChallengeSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    instructions: z.string().min(1).max(2000),
+    hint: z.string().max(500).optional(),
+    starterCode: z.string().default(''),
+    checks: z
+      .array(challengeCheckSchema)
+      .min(1, 'A challenge needs at least one check'),
+    language: z.string().min(1).max(40).default('html'),
+  })
+  .strict()
+  /**
+   * Cross-field validation. `dom` checks with expect `textEquals` or
+   * `textMatches` must carry a `value`.
+   */
+  .superRefine((challenge, ctx) => {
+    challenge.checks.forEach((check, i) => {
+      if (
+        check.type === 'dom' &&
+        check.expect !== 'exists' &&
+        (!check.value || check.value.length === 0)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Check #${i + 1}: "value" is required for dom checks with expect "${check.expect}"`,
+          path: ['checks', i, 'value'],
+        });
+      }
+    });
+  });
+
 const courseTeamRoleSchema = z.enum([
   'lead',
   'course_author',
@@ -101,6 +165,7 @@ export const createLessonSchema = z.object({
     title: z.string().min(2).max(150),
     slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/),
     order: z.number().int().min(1).default(1),
+    moduleId: z.string().min(1).optional(),
     content: z.string().min(1),
     contentType: z.string().min(2).max(40).default('lesson'),
     starterCode: z.string().default(''),
@@ -113,6 +178,7 @@ export const createLessonSchema = z.object({
     language: z.string().min(2),
     testCases: z.array(testCaseSchema).default([]),
     steps: z.array(webLessonStepSchema).default([]),
+    tutorialChallenges: z.array(tutorialChallengeSchema).default([]),
   }),
 });
 
@@ -125,6 +191,7 @@ export const updateLessonSchema = z.object({
     title: z.string().min(2).max(150).optional(),
     slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/).optional(),
     order: z.number().int().min(1).optional(),
+    moduleId: z.string().min(1).nullable().optional(),
     content: z.string().min(1).optional(),
     contentType: z.string().min(2).max(40).optional(),
     starterCode: z.string().optional(),
@@ -137,6 +204,7 @@ export const updateLessonSchema = z.object({
     language: z.string().min(2).optional(),
     testCases: z.array(testCaseSchema).optional(),
     steps: z.array(webLessonStepSchema).optional(),
+    tutorialChallenges: z.array(tutorialChallengeSchema).optional(),
   }),
 });
 

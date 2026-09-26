@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Save, CheckCircle2, RotateCw } from 'lucide-react';
+import { Save, CheckCircle2, RotateCw, Send } from 'lucide-react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Button } from '@/shared/components/ui/Button';
 import { CodeEditor } from '@/shared/components/editor/CodeEditor';
@@ -9,17 +9,32 @@ import {
   projectsApi,
   type ApiProjectFile,
   type ApiUserProject,
+  type ApiProjectSubmission,
   type PreviewMode,
+  type ApiProjectFull,
 } from '@/features/projects/api';
+import { runProjectTests } from '@/shared/runner/projectTestEngine';
+import { captureProjectScreenshots } from '@/shared/runner/screenshotRunner';
 import { useAuthStore } from '@/shared/store/auth.store';
+import { useToast } from '@/shared/hooks/useToast';
 
 interface Props {
   projectSlug: string;
   initialFiles: ApiProjectFile[];
   previewMode: PreviewMode;
+  /**
+   * The automated tests to run on submit. Passed down from
+   * `ProjectDetail`, which has the full `ApiProjectFull` in hand.
+   */
+  tests: ApiProjectFull['tests'];
   userProject: ApiUserProject | null;
   onSaved?: (up: ApiUserProject) => void;
   onCompleted?: () => void;
+  /**
+   * Called after a successful submission with the new submission row.
+   * The parent uses this to refresh the submission history.
+   */
+  onSubmitted?: (submission: ApiProjectSubmission) => void;
 }
 
 const monacoLangByFile: Record<string, string> = {
@@ -36,21 +51,27 @@ export const ProjectWorkspace: React.FC<Props> = ({
   projectSlug,
   initialFiles,
   previewMode,
+  tests,
   userProject,
   onSaved,
   onCompleted,
+  onSubmitted,
 }) => {
   const user = useAuthStore((s) => s.user);
+  const toast = useToast();
   const [files, setFiles] = useState<ApiProjectFile[]>(initialFiles);
   const [activeIndex, setActiveIndex] = useState(
     Math.max(0, initialFiles.findIndex((f) => f.isEntry))
   );
   const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState<
+    'idle' | 'saving' | 'testing' | 'capturing' | 'posting'
+  >('idle');
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [dirty, setDirty] = useState(false);
   const [runKey, setRunKey] = useState(0);
 
-  // Adopt-once per userProject id
   const adoptedIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!userProject) return;
@@ -62,7 +83,6 @@ export const ProjectWorkspace: React.FC<Props> = ({
     adoptedIdRef.current = userProject._id;
   }, [userProject]);
 
-  // Warn on unload with unsaved changes
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -90,8 +110,99 @@ export const ProjectWorkspace: React.FC<Props> = ({
       setSavedAt(new Date());
       setDirty(false);
       onSaved?.(up);
+    } catch {
+      toast.error('Could not save your project');
     } finally {
       setSaving(false);
+    }
+  };
+
+  /**
+   * Submit flow.
+   *
+   *   1. Save the workspace if there are unsaved changes, so the
+   *      server-side record matches what the student sees.
+   *   2. Run the automated tests (client-side, sandboxed iframe).
+   *   3. Capture desktop and mobile screenshots (client-side,
+   *      html2canvas on a script-stripped copy).
+   *   4. POST the submission with both artifacts.
+   *
+   * Steps 2 and 3 run in parallel after the save — they are
+   * independent and both are slow. Serializing them would double the
+   * wall-clock wait on the button.
+   *
+   * Both artifacts are best-effort: if the test runner times out or
+   * the screenshot capture throws, the submission still goes
+   * through. The artifacts are optional on the server; a submission
+   * without them is a valid submission.
+   */
+  const submit = async () => {
+    if (!user) {
+      toast.info('Sign in to submit your project.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Step 1 — save if dirty.
+      if (dirty) {
+        setSubmitStage('saving');
+        const up = await projectsApi.save(projectSlug, files);
+        setSavedAt(new Date());
+        setDirty(false);
+        onSaved?.(up);
+      }
+
+      // Steps 2 and 3 — run tests and capture screenshots in parallel.
+      setSubmitStage(tests.length > 0 ? 'testing' : 'capturing');
+
+      const testPromise: Promise<
+        Awaited<ReturnType<typeof runProjectTests>> | undefined
+      > =
+        tests.length > 0
+          ? runProjectTests(files, tests, previewMode).catch((err) => {
+              // runProjectTests never throws, but be defensive.
+              console.warn('[submit] test runner failed', err);
+              return undefined;
+            })
+          : Promise.resolve(undefined);
+
+      const shotPromise = captureProjectScreenshots(files, previewMode).catch(
+        (err) => {
+          // captureProjectScreenshots never throws, but be defensive.
+          console.warn('[submit] screenshot runner failed', err);
+          return undefined;
+        }
+      );
+
+      const [testRun, screenshots] = await Promise.all([
+        testPromise,
+        shotPromise,
+      ]);
+
+      // Step 4 — post the submission.
+      setSubmitStage('posting');
+      const submission = await projectsApi.submit(projectSlug, {
+        files,
+        testRun,
+        screenshots,
+      });
+
+      const summary =
+        testRun && testRun.totalTests > 0
+          ? ` (${testRun.passedTests}/${testRun.totalTests} tests passed)`
+          : '';
+      toast.success(
+        `Submission #${submission.attemptNumber} recorded${summary}`
+      );
+      onSubmitted?.(submission);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Could not submit your project'
+      );
+    } finally {
+      setSubmitting(false);
+      setSubmitStage('idle');
     }
   };
 
@@ -105,11 +216,10 @@ export const ProjectWorkspace: React.FC<Props> = ({
       await projectsApi.complete(projectSlug);
       onCompleted?.();
     } catch {
-      /* ignore */
+      toast.error('Could not complete the project');
     }
   };
 
-  /** Run the current files immediately - force-refresh the preview iframe. */
   const runNow = () => {
     setRunKey((k) => k + 1);
   };
@@ -121,6 +231,21 @@ export const ProjectWorkspace: React.FC<Props> = ({
         : 'plaintext',
     [activeFile]
   );
+
+  const submitLabel = (() => {
+    switch (submitStage) {
+      case 'saving':
+        return 'Saving…';
+      case 'testing':
+        return 'Running tests…';
+      case 'capturing':
+        return 'Capturing…';
+      case 'posting':
+        return 'Submitting…';
+      default:
+        return 'Submit';
+    }
+  })();
 
   return (
     <div className="flex h-[calc(100vh-64px)] w-full flex-col">
@@ -146,15 +271,39 @@ export const ProjectWorkspace: React.FC<Props> = ({
                   </span>
                 )}
                 {dirty && (
-                  <span className="text-xs text-[var(--color-warning)]">Unsaved</span>
+                  <span className="text-xs text-[var(--color-warning)]">
+                    Unsaved
+                  </span>
                 )}
-                <Button size="sm" variant="secondary" onClick={complete}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={complete}
+                  disabled={!user || submitting}
+                >
                   <CheckCircle2 size={14} /> Complete
                 </Button>
-                <Button size="sm" onClick={save} disabled={!user || saving}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={save}
+                  disabled={!user || saving || submitting}
+                >
                   <Save size={14} /> {saving ? 'Saving...' : 'Save'}
                 </Button>
-                <Button size="sm" variant="secondary" onClick={runNow}>
+                <Button
+                  size="sm"
+                  onClick={submit}
+                  disabled={!user || submitting}
+                >
+                  <Send size={14} /> {submitLabel}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={runNow}
+                  disabled={submitting}
+                >
                   <RotateCw size={14} /> Run
                 </Button>
               </div>

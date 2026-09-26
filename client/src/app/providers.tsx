@@ -3,7 +3,11 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import type { ReactNode } from 'react';
 import { queryClient } from '@/shared/lib/queryClient';
 
-export function AppProviders({ children }: { children: ReactNode }) {
+interface Props {
+  children: ReactNode;
+}
+
+export function AppProviders({ children }: Props) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
@@ -11,4 +15,3 @@ export function AppProviders({ children }: { children: ReactNode }) {
     </QueryClientProvider>
   );
 }
-

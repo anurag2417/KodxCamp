@@ -3,6 +3,8 @@ import {
   projectController,
   projectSlugSchema,
   saveProjectSchema,
+  submitProjectSchema,
+  submissionParamsSchema,
 } from '../controllers/project.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
@@ -36,6 +38,27 @@ router.post(
   requireAuth,
   validate(projectSlugSchema),
   projectController.complete
+);
+
+/* ─── Submissions ──────────────────────────────────────────────── */
+
+router.post(
+  '/:slug/submit',
+  requireAuth,
+  validate(submitProjectSchema),
+  projectController.submit
+);
+router.get(
+  '/:slug/submissions',
+  requireAuth,
+  validate(projectSlugSchema),
+  projectController.submissions
+);
+router.get(
+  '/submissions/:submissionId',
+  requireAuth,
+  validate(submissionParamsSchema),
+  projectController.submission
 );
 
 export default router;

@@ -23,11 +23,18 @@ export interface IClass {
   instructorId: string;
   instructorName: string;
   courseId?: string;
+  cohortId?: string;
   scheduledAt: Date;
   durationMinutes: number;
   status: ClassStatus;
   meetLink: string;
   recording?: IClassRecording;
+  /**
+   * When the 15-minute reminder notification was fired. Set once by
+   * the class lifecycle job so a single class doesn't produce
+   * repeated reminders on every job tick.
+   */
+  reminderSentAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,6 +68,7 @@ const classSchema = new Schema<ClassDocument>(
     instructorId: { type: String, required: true, index: true },
     instructorName: { type: String, required: true },
     courseId: { type: String, index: true },
+    cohortId: { type: String, index: true },
     scheduledAt: { type: Date, required: true, index: true },
     durationMinutes: { type: Number, default: 60, min: 5, max: 480 },
     status: {
@@ -71,10 +79,13 @@ const classSchema = new Schema<ClassDocument>(
     },
     meetLink: { type: String, required: true },
     recording: { type: recordingSchema, default: undefined },
+    reminderSentAt: { type: Date, index: true },
   },
   { timestamps: true }
 );
 
 classSchema.index({ scheduledAt: -1 });
+classSchema.index({ cohortId: 1, scheduledAt: -1 });
+classSchema.index({ status: 1, scheduledAt: 1, reminderSentAt: 1 });
 
 export const Class = mongoose.model<ClassDocument>('Class', classSchema);

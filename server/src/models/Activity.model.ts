@@ -6,6 +6,7 @@ export type ActivityType =
   | 'problem_attempted'
   | 'project_saved'
   | 'project_completed'
+  | 'project_reviewed'
   | 'class_attended'
   | 'recording_watched'
   | 'achievement_unlocked'

@@ -10,7 +10,7 @@ import {
 } from './problemNumber.service.js';
 import { z } from 'zod';
 
-// ─── Zod schemas ──────────────────────────────────────────────────
+/* ─── Zod schemas ────────────────────────────────────────────────── */
 
 const testCaseSchema = z
   .object({
@@ -51,6 +51,24 @@ const projectFileSchema = z.object({
   isEntry: z.boolean().optional(),
 });
 
+const rubricCategorySchema = z
+  .object({
+    category: z.string().min(1).max(60),
+    weight: z.number().int().min(0).max(100),
+  })
+  .strict();
+
+const specificationSchema = z
+  .object({
+    objective: z.string().max(2000).optional(),
+    requiredFeatures: z.array(z.string()).optional(),
+    technicalRequirements: z.array(z.string()).optional(),
+    designRequirements: z.array(z.string()).optional(),
+    accessibilityRequirements: z.array(z.string()).optional(),
+    expectedBehaviour: z.string().max(4000).optional(),
+  })
+  .strict();
+
 const projectSchema = z.object({
   title: z.string().min(2).max(150),
   slug: z.string().min(2).max(80).regex(/^[a-z0-9-]+$/),
@@ -64,6 +82,10 @@ const projectSchema = z.object({
   instructions: z.string().default(''),
   estimatedMinutes: z.number().int().min(5).max(600).default(60),
   xpReward: z.number().int().min(0).max(1000).default(100),
+
+  mode: z.enum(['required', 'recommended', 'open_choice']).default('required'),
+  specification: specificationSchema.default({}),
+  rubric: z.array(rubricCategorySchema).default([]),
 });
 
 const lessonSchema = z.object({
@@ -98,7 +120,7 @@ const courseSchema = z.object({
   lessons: z.array(lessonSchema).min(1),
 });
 
-// ─── Types ────────────────────────────────────────────────────────
+/* ─── Types ──────────────────────────────────────────────────────── */
 
 export type ImportMode = 'merge' | 'replace';
 
@@ -110,7 +132,7 @@ export interface ImportReport {
   totalProcessed: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────
+/* ─── Helpers ────────────────────────────────────────────────────── */
 
 function zipValidationErrors(
   items: unknown[],
@@ -141,7 +163,7 @@ function zipValidationErrors(
   return { valid, errors };
 }
 
-// ─── Service ──────────────────────────────────────────────────────
+/* ─── Service ────────────────────────────────────────────────────── */
 
 export const bulkService = {
   async importProblems(
@@ -164,7 +186,6 @@ export const bulkService = {
     const { valid, errors } = zipValidationErrors(items, problemSchema);
     report.failed = errors;
 
-    // Structural sqlSetup validation.
     const structurallyValid: unknown[] = [];
     valid.forEach((item, i) => {
       const candidate = item as { slug: string; sqlSetup?: string };
@@ -183,7 +204,6 @@ export const bulkService = {
       }
     });
 
-    // Scope / courseId consistency check.
     const scopeValid: unknown[] = [];
     structurallyValid.forEach((item, i) => {
       const c = item as {
@@ -202,7 +222,6 @@ export const bulkService = {
       scopeValid.push(item);
     });
 
-    // Dedup within the batch.
     const seenSlugs = new Set<string>();
     const deduped: unknown[] = [];
     scopeValid.forEach((item, i) => {
@@ -234,13 +253,11 @@ export const bulkService = {
 
       if (existing) {
         if (mode === 'merge') {
-          // Never reassign problemId on update. Merge the rest.
           const { ...rest } = doc;
           Object.assign(existing, rest);
           await existing.save();
           report.updated++;
         } else {
-          // Replace mode: assign a fresh problemId.
           const kind = inferProblemKind(doc.starterCode);
           const problemId = await allocateProblemId(kind);
           await Problem.create({ ...doc, problemId });
@@ -277,13 +294,35 @@ export const bulkService = {
     const { valid, errors } = zipValidationErrors(items, projectSchema);
     report.failed = errors;
 
+    // Rubric-sum validation.
+    const rubricValid: unknown[] = [];
+    valid.forEach((item, i) => {
+      const p = item as {
+        slug: string;
+        rubric?: { weight: number }[];
+      };
+      const rubric = p.rubric ?? [];
+      if (rubric.length > 0) {
+        const total = rubric.reduce((sum, r) => sum + r.weight, 0);
+        if (total !== 100) {
+          report.failed.push({
+            index: i,
+            slug: p.slug,
+            error: `Rubric weights must sum to 100 (got ${total}).`,
+          });
+          return;
+        }
+      }
+      rubricValid.push(item);
+    });
+
     if (dryRun) return report;
 
     if (mode === 'replace') {
       await Project.deleteMany({});
     }
 
-    for (const item of valid) {
+    for (const item of rubricValid) {
       const doc = item as { slug: string };
       const existing = await Project.findOne({ slug: doc.slug });
       if (existing) {

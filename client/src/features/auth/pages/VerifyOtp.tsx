@@ -6,12 +6,15 @@ import { AuthLayout } from '../components/AuthLayout';
 import { OtpInput } from '../components/OtpInput';
 import { Seo } from '../../../shared/components/seo/Seo';
 import { authApi } from '../api';
+import { resolveNext, withNext } from '../lib/redirect';
 
 export const VerifyOtp: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const email = searchParams.get('email') ?? '';
+  const next = resolveNext(searchParams.toString());
+
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,9 +23,9 @@ export const VerifyOtp: React.FC = () => {
 
   useEffect(() => {
     if (!email) {
-      navigate('/signup', { replace: true });
+      navigate(withNext('/signup', next), { replace: true });
     }
-  }, [email, navigate]);
+  }, [email, navigate, next]);
 
   const handleVerify = async (value: string) => {
     if (busy) return;
@@ -30,10 +33,10 @@ export const VerifyOtp: React.FC = () => {
     setError('');
     try {
       const { setupToken } = await authApi.verifyOtp(email, value);
-      navigate(
-        `/signup/setup?setupToken=${encodeURIComponent(setupToken)}`,
-        { replace: true }
-      );
+      const setupPath = `/signup/setup?setupToken=${encodeURIComponent(
+        setupToken
+      )}`;
+      navigate(withNext(setupPath, next), { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
@@ -84,7 +87,7 @@ export const VerifyOtp: React.FC = () => {
           <>
             Wrong email?{' '}
             <Link
-              to="/signup"
+              to={withNext('/signup', next)}
               className="font-medium text-brand-500 hover:underline"
             >
               Start over

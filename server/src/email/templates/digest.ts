@@ -17,10 +17,10 @@ export function renderDigest(data: DigestData): {
 
   const statRow = (label: string, value: string | number) => `
     <tr>
-      <td style="padding:12px 0;border-bottom:1px solid #f0f6f2;font-size:14px;color:#60736d;">
+      <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px;color:#64748b;">
         ${escapeHtml(label)}
       </td>
-      <td style="padding:12px 0;border-bottom:1px solid #f0f6f2;font-size:16px;font-weight:600;color:#092328;text-align:right;">
+      <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:16px;font-weight:600;color:#0f172a;text-align:right;">
         ${value}
       </td>
     </tr>
@@ -38,7 +38,7 @@ export function renderDigest(data: DigestData): {
     </table>
     <div style="margin:28px 0;text-align:center;">
       <a href="${data.dashboardUrl}"
-         style="display:inline-block;padding:12px 24px;background:#2a835f;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;border-radius:8px;">
+         style="display:inline-block;padding:12px 24px;background:#1e3a8a;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;border-radius:8px;">
         Open dashboard
       </a>
     </div>
@@ -50,7 +50,6 @@ export function renderDigest(data: DigestData): {
       preheader: `${data.xpThisWeek} XP · ${data.problemsThisWeek} problems · ${data.streakDays}-day streak`,
       title: 'Your weekly summary',
       body,
-      footer: 'Weekly summary from KodxCamp.',
     }),
   };
 }

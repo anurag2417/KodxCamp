@@ -2,6 +2,28 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, Loader2, Play, Terminal } from 'lucide-react';
 import { cn } from '../../../shared/lib/utils';
 
+/**
+ * Animated mock of the KodxCamp practice workspace.
+ *
+ * Runs a fixed loop: idle → running (tests pass one by one) → accepted →
+ * idle. Purely decorative. Lives only on the auth shell's left panel,
+ * which is always dark. All colors in this component are hardcoded on
+ * purpose — the panel is theme-invariant, so we do NOT want the app's
+ * theme tokens flipping these surfaces when the user toggles light/dark.
+ *
+ * Palette (matches the spec's dark 3D / code-editor surface language):
+ *   Editor background  #0B1120   (spec "code editor" dark)
+ *   Toolbar background #0F172A   (spec dark background)
+ *   Secondary surface  #1E293B   (spec dark surface)
+ *   Primary text       #F8FAFC
+ *   Secondary text     #CBD5E1
+ *   Muted text         #94A3B8
+ *   Brand bright blue  #60A5FA   (identifiers, function names)
+ *   Action orange      #F97316   (accents)
+ *   Success            #22C55E
+ *   Traffic-light dots #EF4444, #F59E0B, #22C55E
+ */
+
 const TESTS = [
   { label: '[2, 7, 11, 15], 9', expected: '[0,1]' },
   { label: '[3, 2, 4], 6', expected: '[1,2]' },
@@ -44,36 +66,36 @@ export const AuthWorkspacePreview: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl border border-white/10 bg-[#06191D] shadow-2xl">
+    <div className="relative w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0B1120] shadow-2xl">
       {/* Toolbar */}
-      <div className="flex items-center gap-3 border-b border-white/10 bg-[#092328] px-5 py-3">
+      <div className="flex items-center gap-3 border-b border-white/10 bg-[#0F172A] px-5 py-3">
         <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-[#F07178]" />
-          <span className="h-3 w-3 rounded-full bg-[#EBCB7A]" />
-          <span className="h-3 w-3 rounded-full bg-[#8BBB92]" />
+          <span className="h-3 w-3 rounded-full bg-[#EF4444]" />
+          <span className="h-3 w-3 rounded-full bg-[#F59E0B]" />
+          <span className="h-3 w-3 rounded-full bg-[#22C55E]" />
         </div>
-        <span className="ml-2 flex items-center gap-2 font-mono text-xs text-[#88A39A]">
+        <span className="ml-2 flex items-center gap-2 font-mono text-xs text-[#94A3B8]">
           <Terminal size={12} />
           two-sum.js
         </span>
 
-        <div className="ml-auto flex items-center gap-2 rounded-md bg-[#0D3032] px-3 py-1.5 text-xs font-medium">
+        <div className="ml-auto flex items-center gap-2 rounded-md bg-[#1E293B] px-3 py-1.5 text-xs font-medium">
           {phase === 'idle' && (
             <>
-              <Play size={12} className="text-[#8BBB92]" />
-              <span className="text-[#8BBB92]">Run</span>
+              <Play size={12} className="text-[#60A5FA]" />
+              <span className="text-[#60A5FA]">Run</span>
             </>
           )}
           {phase === 'running' && (
             <>
-              <Loader2 size={12} className="animate-spin text-[#8BBB92]" />
-              <span className="text-[#8BBB92]">Running…</span>
+              <Loader2 size={12} className="animate-spin text-[#60A5FA]" />
+              <span className="text-[#60A5FA]">Running…</span>
             </>
           )}
           {phase === 'accepted' && (
             <>
-              <CheckCircle2 size={12} className="text-[var(--color-success)]" />
-              <span className="text-[var(--color-success)]">Accepted</span>
+              <CheckCircle2 size={12} className="text-[#22C55E]" />
+              <span className="text-[#22C55E]">Accepted</span>
             </>
           )}
         </div>
@@ -81,53 +103,53 @@ export const AuthWorkspacePreview: React.FC = () => {
 
       <div className="grid grid-cols-5">
         {/* Code column (60%) */}
-        <pre className="col-span-3 overflow-hidden p-5 font-mono text-[12px] leading-relaxed text-[#C7D8D1] xl:text-[13px]">
+        <pre className="col-span-3 overflow-hidden p-5 font-mono text-[12px] leading-relaxed text-[#CBD5E1] xl:text-[13px]">
           <code>
-            <span className="text-[#88A39A]">{'// Find two numbers that add to target'}</span>
+            <span className="text-[#94A3B8]">{'// Find two numbers that add to target'}</span>
             {'\n'}
-            <span className="text-[#8BBB92]">function</span>{' '}
+            <span className="text-[#F97316]">function</span>{' '}
             <span className="text-white">twoSum</span>
-            <span className="text-[#C7D8D1]">(</span>
-            <span className="text-[#EBCB7A]">nums</span>
-            <span className="text-[#C7D8D1]">, </span>
-            <span className="text-[#EBCB7A]">target</span>
-            <span className="text-[#C7D8D1]">) {'{'}</span>
+            <span className="text-[#CBD5E1]">(</span>
+            <span className="text-[#60A5FA]">nums</span>
+            <span className="text-[#CBD5E1]">, </span>
+            <span className="text-[#60A5FA]">target</span>
+            <span className="text-[#CBD5E1]">) {'{'}</span>
             {'\n  '}
-            <span className="text-[#8BBB92]">const</span>{' '}
+            <span className="text-[#F97316]">const</span>{' '}
             <span className="text-white">seen</span>{' '}
-            <span className="text-[#C7D8D1]">= </span>
-            <span className="text-[#8BBB92]">new</span>{' '}
+            <span className="text-[#CBD5E1]">= </span>
+            <span className="text-[#F97316]">new</span>{' '}
             <span className="text-white">Map</span>
-            <span className="text-[#C7D8D1]">();</span>
+            <span className="text-[#CBD5E1]">();</span>
             {'\n  '}
-            <span className="text-[#8BBB92]">for</span>{' '}
-            <span className="text-[#C7D8D1]">(</span>
-            <span className="text-[#8BBB92]">let</span>{' '}
+            <span className="text-[#F97316]">for</span>{' '}
+            <span className="text-[#CBD5E1]">(</span>
+            <span className="text-[#F97316]">let</span>{' '}
             <span className="text-white">i</span>{' '}
-            <span className="text-[#C7D8D1]">= 0; i &lt; nums.length; i++) {'{'}</span>
+            <span className="text-[#CBD5E1]">= 0; i &lt; nums.length; i++) {'{'}</span>
             {'\n    '}
-            <span className="text-[#8BBB92]">const</span>{' '}
+            <span className="text-[#F97316]">const</span>{' '}
             <span className="text-white">diff</span>{' '}
-            <span className="text-[#C7D8D1]">= target - nums[i];</span>
+            <span className="text-[#CBD5E1]">= target - nums[i];</span>
             {'\n    '}
-            <span className="text-[#8BBB92]">if</span>{' '}
-            <span className="text-[#C7D8D1]">(seen.has(diff))</span>
+            <span className="text-[#F97316]">if</span>{' '}
+            <span className="text-[#CBD5E1]">(seen.has(diff))</span>
             {'\n      '}
-            <span className="text-[#8BBB92]">return</span>{' '}
-            <span className="text-[#C7D8D1]">[seen.get(diff), i];</span>
+            <span className="text-[#F97316]">return</span>{' '}
+            <span className="text-[#CBD5E1]">[seen.get(diff), i];</span>
             {'\n    '}
             <span className="text-white">seen.set</span>
-            <span className="text-[#C7D8D1]">(nums[i], i);</span>
+            <span className="text-[#CBD5E1]">(nums[i], i);</span>
             {'\n  '}
-            <span className="text-[#C7D8D1]">{'}'}</span>
+            <span className="text-[#CBD5E1]">{'}'}</span>
             {'\n'}
-            <span className="text-[#C7D8D1]">{'}'}</span>
+            <span className="text-[#CBD5E1]">{'}'}</span>
           </code>
         </pre>
 
         {/* Tests column (40%) */}
-        <div className="col-span-2 border-l border-white/10 bg-[#092328] p-4">
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[#88A39A]">
+        <div className="col-span-2 border-l border-white/10 bg-[#0F172A] p-4">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[#94A3B8]">
             Test cases
           </p>
           <ul className="space-y-2">
@@ -139,8 +161,8 @@ export const AuthWorkspacePreview: React.FC = () => {
                   className={cn(
                     'flex items-start gap-2 rounded-md px-2.5 py-1.5 font-mono text-[10px] transition-all duration-300',
                     revealed
-                      ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
-                      : 'text-[#88A39A]'
+                      ? 'bg-[#22C55E]/10 text-[#22C55E]'
+                      : 'text-[#94A3B8]'
                   )}
                 >
                   <span
@@ -169,11 +191,11 @@ export const AuthWorkspacePreview: React.FC = () => {
           </ul>
 
           {phase === 'accepted' && (
-            <div className="mt-4 rounded-md bg-[var(--color-success)]/15 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-success)]">
+            <div className="mt-4 rounded-md bg-[#22C55E]/15 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#22C55E]">
                 Accepted
               </p>
-              <p className="mt-0.5 text-[10px] text-[#88A39A]">
+              <p className="mt-0.5 text-[10px] text-[#94A3B8]">
                 All tests passed in 42ms
               </p>
             </div>

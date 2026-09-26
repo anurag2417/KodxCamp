@@ -20,6 +20,14 @@ export const markStepCompleteSchema = z.object({
   }),
 });
 
+export const markChallengeCompleteSchema = z.object({
+  body: z.object({
+    courseId: z.string().min(1),
+    lessonId: z.string().min(1),
+    challengeIndex: z.number().int().min(0),
+  }),
+});
+
 export const progressController = {
   getForCourse: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user!._id.toString();
@@ -45,5 +53,17 @@ export const progressController = {
       stepIndex
     );
     return ApiResponse.success(res, progress, 'Step marked complete');
+  }),
+
+  markChallengeComplete: asyncHandler(async (req: AuthRequest, res: Response) => {
+    const userId = req.user!._id.toString();
+    const { courseId, lessonId, challengeIndex } = req.body;
+    const progress = await progressService.markChallengeComplete(
+      userId,
+      courseId,
+      lessonId,
+      challengeIndex
+    );
+    return ApiResponse.success(res, progress, 'Challenge marked complete');
   }),
 };

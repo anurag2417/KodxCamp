@@ -22,17 +22,17 @@ export function renderInvitation(data: InvitationData): {
     </p>
     <div style="margin:28px 0;text-align:center;">
       <a href="${data.acceptUrl}"
-         style="display:inline-block;padding:12px 24px;background:#2a835f;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;border-radius:8px;">
+         style="display:inline-block;padding:12px 24px;background:#1e3a8a;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;border-radius:8px;">
         Accept invitation
       </a>
     </div>
-    <p style="margin:16px 0 0;font-size:13px;color:#60736d;">
+    <p style="margin:16px 0 0;font-size:13px;color:#64748b;">
       This invitation expires in ${data.expiresInDays} day${data.expiresInDays === 1 ? '' : 's'}.
       If you don't have a KodxCamp account, you'll be asked to create one.
     </p>
-    <p style="margin:12px 0 0;font-size:12px;color:#60736d;word-break:break-all;">
+    <p style="margin:12px 0 0;font-size:12px;color:#64748b;word-break:break-all;">
       Or paste this link into your browser:<br />
-      <span style="color:#2a835f;">${escapeHtml(data.acceptUrl)}</span>
+      <span style="color:#2563eb;">${escapeHtml(data.acceptUrl)}</span>
     </p>
   `;
 
@@ -46,12 +46,22 @@ export function renderInvitation(data: InvitationData): {
   };
 }
 
+/**
+ * Role labels keyed by the raw role string. Kept in sync with
+ * `COURSE_TEAM_ROLES` in shared/src/types/permissions.ts. The
+ * `reviewer` entry is retained for legacy invitations that predate
+ * the 2D taxonomy migration.
+ */
 const ROLE_LABELS: Record<string, string> = {
   lead: 'Lead',
-  author: 'Author',
-  reviewer: 'Reviewer',
+  course_author: 'Course Author',
+  problem_author: 'Problem Author',
+  class_coordinator: 'Class Coordinator',
   ta: 'Teaching Assistant',
   viewer: 'Viewer',
+  // legacy
+  author: 'Author',
+  reviewer: 'Reviewer',
 };
 
 function escapeHtml(s: string): string {

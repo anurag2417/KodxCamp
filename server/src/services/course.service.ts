@@ -1,5 +1,6 @@
 import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
+import { Module } from '../models/Module.model.js';
 import { Progress } from '../models/Progress.model.js';
 import { CourseMembership } from '../models/CourseMembership.model.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -40,12 +41,30 @@ interface WebLessonStepInput {
   webChecks?: WebChecksInput;
 }
 
+interface ChallengeCheckInput {
+  type: 'includes' | 'dom';
+  value?: string;
+  selector?: string;
+  expect?: 'exists' | 'textEquals' | 'textMatches';
+  label?: string;
+}
+
+interface TutorialChallengeInput {
+  title: string;
+  instructions: string;
+  hint?: string;
+  starterCode?: string;
+  checks: ChallengeCheckInput[];
+  language?: string;
+}
+
 interface LessonInput {
   title: string;
   slug: string;
   order: number;
   content: string;
   contentType?: string;
+  moduleId?: string;
   starterCode?: string;
   starterFiles?: Record<string, string>;
   webChecks?: WebChecksInput;
@@ -56,6 +75,7 @@ interface LessonInput {
   language: string;
   testCases?: TestCaseInput[];
   steps?: WebLessonStepInput[];
+  tutorialChallenges?: TutorialChallengeInput[];
 }
 
 function getUser(req: AuthRequest) {
@@ -146,6 +166,95 @@ function normalizeSteps(
   });
 }
 
+/**
+ * Normalize a tutorial-challenge check. Throws on structural errors
+ * so the author gets a clear message at save time, not at student
+ * runtime.
+ */
+function normalizeChallengeCheck(
+  check: ChallengeCheckInput,
+  challengeIndex: number,
+  checkIndex: number
+): ChallengeCheckInput {
+  const label = `Challenge #${challengeIndex + 1}, check #${checkIndex + 1}`;
+
+  if (check.type === 'includes') {
+    if (!check.value || check.value.length === 0) {
+      throw new ApiError(400, `${label}: "value" is required for includes`);
+    }
+    return {
+      type: 'includes',
+      value: check.value,
+      label: check.label,
+    };
+  }
+
+  if (check.type === 'dom') {
+    if (!check.selector || check.selector.length === 0) {
+      throw new ApiError(400, `${label}: "selector" is required for dom`);
+    }
+    if (!check.expect) {
+      throw new ApiError(400, `${label}: "expect" is required for dom`);
+    }
+    if (
+      check.expect !== 'exists' &&
+      (!check.value || check.value.length === 0)
+    ) {
+      throw new ApiError(
+        400,
+        `${label}: "value" is required for dom with expect "${check.expect}"`
+      );
+    }
+    return {
+      type: 'dom',
+      selector: check.selector,
+      expect: check.expect,
+      value: check.value,
+      label: check.label,
+    };
+  }
+
+  throw new ApiError(400, `${label}: unknown check type`);
+}
+
+function normalizeTutorialChallenges(
+  challenges: TutorialChallengeInput[] | undefined
+): Array<{
+  title: string;
+  instructions: string;
+  hint?: string;
+  starterCode: string;
+  checks: ChallengeCheckInput[];
+  language: string;
+}> {
+  if (!challenges || challenges.length === 0) return [];
+
+  return challenges.map((c, i) => {
+    if (!c.title || c.title.trim().length === 0) {
+      throw new ApiError(400, `Challenge #${i + 1}: title is required`);
+    }
+    if (!c.instructions || c.instructions.trim().length === 0) {
+      throw new ApiError(400, `Challenge #${i + 1}: instructions are required`);
+    }
+    if (!c.checks || c.checks.length === 0) {
+      throw new ApiError(
+        400,
+        `Challenge #${i + 1}: at least one check is required`
+      );
+    }
+    return {
+      title: c.title.trim(),
+      instructions: c.instructions,
+      hint: c.hint,
+      starterCode: c.starterCode ?? '',
+      checks: c.checks.map((check, j) =>
+        normalizeChallengeCheck(check, i, j)
+      ),
+      language: c.language ?? 'html',
+    };
+  });
+}
+
 function normalizeStarterFiles(
   language: string,
   files?: Record<string, string>
@@ -156,6 +265,21 @@ function normalizeStarterFiles(
     'styles.css': files?.['styles.css'] ?? '',
     'script.js': files?.['script.js'] ?? '',
   };
+}
+
+async function assertModuleBelongsToCourse(
+  moduleId: string | undefined,
+  courseId: string
+): Promise<void> {
+  if (!moduleId) return;
+  const mod = await Module.findById(moduleId).select('courseId').lean();
+  if (!mod) throw new ApiError(400, 'Module not found');
+  if (mod.courseId !== courseId) {
+    throw new ApiError(
+      400,
+      'The module belongs to a different course than the lesson.'
+    );
+  }
 }
 
 export const courseService = {
@@ -210,14 +334,18 @@ export const courseService = {
       ...lesson,
       testCases,
       steps: lesson.steps ?? [],
+      tutorialChallenges: lesson.tutorialChallenges ?? [],
     };
 
-    const siblingLessons = await Lesson.find({
-      courseId: course._id.toString(),
-    })
-      .sort({ order: 1 })
-      .select('_id title slug order language problemSlug')
-      .lean();
+    const [siblingLessons, modules] = await Promise.all([
+      Lesson.find({ courseId: course._id.toString() })
+        .sort({ order: 1 })
+        .select('_id title slug order language problemSlug moduleId')
+        .lean(),
+      Module.find({ courseId: course._id.toString() })
+        .sort({ order: 1 })
+        .lean(),
+    ]);
 
     const safeCourse = {
       _id: course._id,
@@ -230,6 +358,13 @@ export const courseService = {
       isFree: course.isFree,
       totalLessons: siblingLessons.length,
       lessons: siblingLessons,
+      modules: modules.map((m) => ({
+        _id: m._id.toString(),
+        courseId: m.courseId,
+        title: m.title,
+        description: m.description,
+        order: m.order,
+      })),
     };
 
     return { course: safeCourse, lesson: safeLesson };
@@ -279,13 +414,15 @@ export const courseService = {
       throw new ApiError(403, 'You do not have access to this course');
     }
 
-    const lessons = await Lesson.find({ courseId: course._id.toString() })
-      .sort({ order: 1 })
-      .lean();
-
-    const members = await courseMembershipService.listForCourse(
-      course._id.toString()
-    );
+    const [lessons, modules, members] = await Promise.all([
+      Lesson.find({ courseId: course._id.toString() })
+        .sort({ order: 1 })
+        .lean(),
+      Module.find({ courseId: course._id.toString() })
+        .sort({ order: 1 })
+        .lean(),
+      courseMembershipService.listForCourse(course._id.toString()),
+    ]);
 
     const courseObj = course.toObject();
 
@@ -294,6 +431,14 @@ export const courseService = {
       lessons: lessons.map((l) => ({
         ...l,
         steps: l.steps ?? [],
+        tutorialChallenges: l.tutorialChallenges ?? [],
+      })),
+      modules: modules.map((m) => ({
+        _id: m._id.toString(),
+        courseId: m.courseId,
+        title: m.title,
+        description: m.description,
+        order: m.order,
       })),
       members,
       myRole: role,
@@ -375,6 +520,7 @@ export const courseService = {
 
     await Promise.all([
       Lesson.deleteMany({ courseId }),
+      Module.deleteMany({ courseId }),
       Progress.deleteMany({ courseId }),
       CourseMembership.deleteMany({ courseId }),
       Course.deleteOne({ _id: course._id }),
@@ -390,8 +536,14 @@ export const courseService = {
       throw new ApiError(403, 'You do not have permission to edit this course');
     }
 
+    const courseId = course._id.toString();
+
+    if (input.moduleId) {
+      await assertModuleBelongsToCourse(input.moduleId, courseId);
+    }
+
     const existing = await Lesson.findOne({
-      courseId: course._id.toString(),
+      courseId,
       slug: input.slug,
     }).lean();
     if (existing) throw new ApiError(409, 'Lesson slug already exists in this course');
@@ -401,19 +553,23 @@ export const courseService = {
     );
 
     const steps = normalizeSteps(input.language, input.steps);
+    const tutorialChallenges = normalizeTutorialChallenges(
+      input.tutorialChallenges
+    );
 
     const created = await Lesson.create({
       ...input,
-      courseId: course._id.toString(),
+      courseId,
       starterFiles: normalizeStarterFiles(course.language, input.starterFiles),
       webChecks: normalizeWebChecks(input.webChecks),
       testCases,
       steps,
+      tutorialChallenges,
       functionName: input.functionName ?? 'solve',
       outputMode: input.outputMode ?? 'print',
     });
 
-    const count = await Lesson.countDocuments({ courseId: course._id.toString() });
+    const count = await Lesson.countDocuments({ courseId });
     await Course.updateOne({ _id: course._id }, { totalLessons: count });
 
     return created.toObject();
@@ -431,9 +587,15 @@ export const courseService = {
       throw new ApiError(403, 'You do not have permission to edit this course');
     }
 
+    const courseId = course._id.toString();
+
+    if (patch.moduleId !== undefined) {
+      await assertModuleBelongsToCourse(patch.moduleId, courseId);
+    }
+
     if (patch.slug && patch.slug !== lessonSlug) {
       const collision = await Lesson.findOne({
-        courseId: course._id.toString(),
+        courseId,
         slug: patch.slug,
       }).lean();
       if (collision) {
@@ -467,8 +629,14 @@ export const courseService = {
       );
     }
 
+    if (patch.tutorialChallenges) {
+      update.tutorialChallenges = normalizeTutorialChallenges(
+        patch.tutorialChallenges
+      );
+    }
+
     const updated = await Lesson.findOneAndUpdate(
-      { courseId: course._id.toString(), slug: lessonSlug },
+      { courseId, slug: lessonSlug },
       update,
       { new: true, runValidators: true }
     ).lean();
@@ -483,11 +651,13 @@ export const courseService = {
       throw new ApiError(403, 'You do not have permission to edit this course');
     }
 
+    const courseId = course._id.toString();
+
     await Lesson.deleteOne({
-      courseId: course._id.toString(),
+      courseId,
       slug: lessonSlug,
     });
-    const count = await Lesson.countDocuments({ courseId: course._id.toString() });
+    const count = await Lesson.countDocuments({ courseId });
     await Course.updateOne({ _id: course._id }, { totalLessons: count });
 
     return { ok: true };

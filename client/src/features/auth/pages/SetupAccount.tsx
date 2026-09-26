@@ -7,6 +7,16 @@ import { AuthField } from '../components/AuthField';
 import { Seo } from '../../../shared/components/seo/Seo';
 import { authApi } from '../api';
 import { useAuthStore } from '../../../shared/store/auth.store';
+import { resolveNext, withNext } from '../lib/redirect';
+
+function strengthColor(level: number, slot: number): string {
+  if (slot >= level) return 'var(--color-border)';
+  if (level <= 2) return '#F59E0B';
+  if (level === 3) return '#2563EB';
+  return '#22C55E';
+}
+
+const STRENGTH_LABELS = ['Weak', 'Weak', 'Fair', 'Good', 'Strong'];
 
 export const SetupAccount: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -14,6 +24,8 @@ export const SetupAccount: React.FC = () => {
   const setSession = useAuthStore((s) => s.setSession);
 
   const setupToken = searchParams.get('setupToken') ?? '';
+  const next = resolveNext(searchParams.toString());
+
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,9 +33,9 @@ export const SetupAccount: React.FC = () => {
 
   useEffect(() => {
     if (!setupToken) {
-      navigate('/signup', { replace: true });
+      navigate(withNext('/signup', next), { replace: true });
     }
-  }, [setupToken, navigate]);
+  }, [setupToken, navigate, next]);
 
   const passwordStrength = (() => {
     let s = 0;
@@ -49,7 +61,7 @@ export const SetupAccount: React.FC = () => {
         password,
       });
       setSession(user);
-      navigate('/dashboard', { replace: true });
+      navigate(next, { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
@@ -70,7 +82,7 @@ export const SetupAccount: React.FC = () => {
           <>
             Having trouble?{' '}
             <Link
-              to="/signup"
+              to={withNext('/signup', next)}
               className="font-medium text-brand-500 hover:underline"
             >
               Start over
@@ -118,21 +130,13 @@ export const SetupAccount: React.FC = () => {
                     key={i}
                     className="h-1 flex-1 rounded-full transition-colors duration-300"
                     style={{
-                      background:
-                        i < passwordStrength
-                          ? passwordStrength <= 2
-                            ? '#C58A24'
-                            : passwordStrength === 3
-                              ? '#2A835F'
-                              : '#12544F'
-                          : 'var(--color-border)',
+                      background: strengthColor(passwordStrength, i),
                     }}
                   />
                 ))}
               </div>
               <p className="mt-1.5 text-[10px] uppercase tracking-widest text-text-muted">
-                Strength:{' '}
-                {['Weak', 'Weak', 'Fair', 'Good', 'Strong'][passwordStrength]}
+                Strength: {STRENGTH_LABELS[passwordStrength]}
               </p>
             </div>
           )}

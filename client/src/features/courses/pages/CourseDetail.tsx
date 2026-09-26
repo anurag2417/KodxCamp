@@ -30,6 +30,14 @@ declare global {
   }
 }
 
+/**
+ * Razorpay checkout brand color.
+ * Hardcoded to the brand navy because Razorpay's widget renders in its
+ * own iframe and cannot read our CSS variables. Must match the favicon
+ * and the deep-blue brand anchor in the design spec (#1E3A8A).
+ */
+const RAZORPAY_THEME_COLOR = '#1E3A8A';
+
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
     if (window.Razorpay) {
@@ -177,10 +185,10 @@ export const CourseDetail: React.FC = () => {
         amount: order.amount,
         currency: order.currency,
         name: 'KodxCamp',
-        description: order.courseTitle,
+        description: order.title,
         order_id: order.orderId,
         prefill: { name: user.name, email: user.email },
-        theme: { color: '#2A835F' },
+        theme: { color: RAZORPAY_THEME_COLOR },
         handler: async (response: {
           razorpay_order_id: string;
           razorpay_payment_id: string;

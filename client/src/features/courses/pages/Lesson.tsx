@@ -19,6 +19,7 @@ import { TestPanel } from '@/features/problems/components/TestPanel';
 import { readStoredValue, writeStoredValue } from '@/shared/lib/storage';
 import { buildPreviewHtml } from '@/shared/lib/preview';
 import { CourseQuiz } from '@/features/courses/components/CourseQuiz';
+import { TutorialChallengeList } from '@/features/courses/components/TutorialChallengeList';
 import { cn } from '@/shared/lib/utils';
 import type { ApiWebLessonStep } from '@/features/courses/api';
 
@@ -60,6 +61,77 @@ function toMonacoLanguage(langOrFile: string): string {
   }
 }
 
+function getFileName(lang: string): string {
+  switch (lang) {
+    case 'html-css':
+      return 'index.html';
+    case 'javascript':
+    case 'dsa-javascript':
+      return 'script.js';
+    case 'typescript':
+      return 'script.ts';
+    case 'python':
+    case 'dsa-python':
+      return 'main.py';
+    case 'ruby':
+      return 'main.rb';
+    case 'java':
+      return 'Main.java';
+    case 'sql':
+      return 'query.sql';
+    case 'react':
+      return 'App.jsx';
+    case 'tailwind':
+      return 'index.html';
+    default:
+      return 'file.txt';
+  }
+}
+
+function isWebLessonLanguage(lang: string): boolean {
+  return lang === 'html-css' || lang === 'react' || lang === 'tailwind';
+}
+
+function lessonLanguage(lang: string | undefined): string {
+  return lang ?? '';
+}
+
+function validateWebFiles(
+  files: Record<string, string>,
+  checks?: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] }
+): { ok: boolean; message: string } {
+  const html = files['index.html']?.trim() ?? '';
+  const css = files['styles.css']?.trim() ?? '';
+  const javascript = files['script.js']?.trim() ?? '';
+  if (!html) return { ok: false, message: 'index.html is empty.' };
+  if ((css.match(/{/g) ?? []).length !== (css.match(/}/g) ?? []).length) {
+    return { ok: false, message: 'styles.css has an unmatched brace.' };
+  }
+  try {
+    new Function(javascript);
+  } catch (error) {
+    return {
+      ok: false,
+      message: `script.js has a syntax error: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  if (parsed.querySelector('parsererror')) {
+    return { ok: false, message: 'index.html could not be parsed.' };
+  }
+  const missingHtml = (checks?.requiredHtml ?? []).find((token) => !html.includes(token));
+  if (missingHtml) return { ok: false, message: `HTML check failed: missing "${missingHtml}".` };
+  const missingCss = (checks?.requiredCss ?? []).find((token) => !css.includes(token));
+  if (missingCss) return { ok: false, message: `CSS check failed: missing "${missingCss}".` };
+  const missingJs = (checks?.requiredJs ?? []).find((token) => !javascript.includes(token));
+  if (missingJs) return { ok: false, message: `JavaScript check failed: missing "${missingJs}".` };
+  return { ok: true, message: 'All checks passed.' };
+}
+
+type LessonMode = 'classic' | 'steps' | 'challenges';
+
 export const Lesson: React.FC = () => {
   const { courseSlug, lessonSlug } = useParams<{
     courseSlug: string;
@@ -88,6 +160,24 @@ export const Lesson: React.FC = () => {
   const isWebLesson = isWebLessonLanguage(lessonLanguage(data?.lesson?.language));
   const steps: ApiWebLessonStep[] = data?.lesson.steps ?? [];
   const hasSteps = isWebLesson && steps.length > 0;
+  const challenges = data?.lesson.tutorialChallenges ?? [];
+  const hasChallenges = challenges.length > 0;
+
+  /**
+   * The lesson's interactive mode:
+   *   - `challenges` — tutorial challenges present. Takes priority.
+   *   - `steps`      — step-by-step web lesson.
+   *   - `classic`    — single-shot code with tests.
+   *
+   * The Master Spec allows a lesson to have both steps and challenges
+   * conceptually, but for v1 we only show one interactive surface at a
+   * time. Challenges win when both are present.
+   */
+  const mode: LessonMode = hasChallenges
+    ? 'challenges'
+    : hasSteps
+      ? 'steps'
+      : 'classic';
 
   const currentStepIndex = useMemo(() => {
     if (!hasSteps) return 0;
@@ -104,6 +194,7 @@ export const Lesson: React.FC = () => {
   useEffect(() => {
     if (!data?.lesson) return;
     if (!isWebLesson) return;
+    if (mode === 'challenges') return; // challenges manage their own code
 
     const key = hasSteps
       ? `${data.lesson._id}:${currentStepIndex}`
@@ -191,10 +282,11 @@ export const Lesson: React.FC = () => {
 
     initializedForRef.current = key;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.lesson?._id, currentStepIndex, isWebLesson, hasSteps]);
+  }, [data?.lesson?._id, currentStepIndex, isWebLesson, hasSteps, mode]);
 
   useEffect(() => {
     if (!data?.lesson || isWebLesson) return;
+    if (mode === 'challenges') return;
 
     const key = `code:${data.lesson._id}`;
     if (initializedForRef.current === key) return;
@@ -209,7 +301,7 @@ export const Lesson: React.FC = () => {
 
     initializedForRef.current = key;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.lesson?._id, isWebLesson, user?._id]);
+  }, [data?.lesson?._id, isWebLesson, user?._id, mode]);
 
   useEffect(() => {
     if (!user || !data?.course) return;
@@ -226,6 +318,7 @@ export const Lesson: React.FC = () => {
 
   useEffect(() => {
     if (!data?.lesson || !activeCode) return;
+    if (mode === 'challenges') return;
     writeStoredValue(`lesson:${user?._id ?? 'guest'}:${data.lesson._id}`, {
       code: isWebLesson ? undefined : code,
       files: isWebLesson ? files : undefined,
@@ -242,6 +335,7 @@ export const Lesson: React.FC = () => {
     user?._id,
     hasSteps,
     currentStepIndex,
+    mode,
   ]);
 
   useEffect(() => {
@@ -325,6 +419,7 @@ export const Lesson: React.FC = () => {
         completedSteps: Array.from(
           new Set([...(prev?.completedSteps ?? []), currentStepIndex])
         ).sort((a, b) => a - b),
+        completedChallenges: prev?.completedChallenges ?? {},
         percentage: prev?.percentage ?? 0,
       }));
       setAccepted(false);
@@ -399,7 +494,7 @@ export const Lesson: React.FC = () => {
   const isLastStep = hasSteps && currentStepIndex === steps.length - 1;
   const allStepsDone =
     hasSteps && steps.every((_, i) => completedSteps.has(i));
-  const showMarkCompleteInBar = !hasSteps;
+  const showMarkCompleteInBar = mode === 'classic';
 
   const editorLanguage = isWebLesson
     ? toMonacoLanguage(activeFile)
@@ -410,6 +505,7 @@ export const Lesson: React.FC = () => {
       <LessonSidebar
         courseSlug={course.slug}
         lessons={course.lessons}
+        modules={course.modules}
         completedLessons={progress?.completedLessons ?? []}
         currentLessonId={lesson._id}
       />
@@ -433,9 +529,15 @@ export const Lesson: React.FC = () => {
                   <CheckCircle2 size={14} /> Completed
                 </span>
               )}
-              {hasSteps && (
+              {mode === 'steps' && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-500">
                   Step {currentStepIndex + 1} of {steps.length}
+                </span>
+              )}
+              {mode === 'challenges' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-500">
+                  {challenges.length}{' '}
+                  {challenges.length === 1 ? 'Challenge' : 'Challenges'}
                 </span>
               )}
             </div>
@@ -444,7 +546,7 @@ export const Lesson: React.FC = () => {
               {lesson.title}
             </h1>
 
-            {hasSteps && currentStep ? (
+            {mode === 'steps' && currentStep ? (
               <>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {steps.map((s, i) => {
@@ -534,6 +636,10 @@ export const Lesson: React.FC = () => {
                   </div>
                 )}
               </>
+            ) : mode === 'challenges' ? (
+              <div className="prose prose-sm mt-4 max-w-none whitespace-pre-wrap text-sm text-text-secondary">
+                {lesson.content}
+              </div>
             ) : (
               <>
                 <div className="prose prose-sm mt-4 max-w-none whitespace-pre-wrap text-sm text-text-secondary">
@@ -629,184 +735,125 @@ export const Lesson: React.FC = () => {
         <PanelResizeHandle className="w-1 bg-border transition-colors hover:bg-brand-500" />
 
         <Panel defaultSize={65}>
-          <PanelGroup direction="vertical">
-            <Panel defaultSize={65}>
-              <div className="flex h-full flex-col bg-surface">
-                <RunBar
-                  left={
-                    isWebLesson ? (
-                      <div className="flex gap-1">
-                        {WEB_FILES.map((fileName) => (
-                          <button
-                            key={fileName}
-                            type="button"
-                            onClick={() => setActiveFile(fileName)}
-                            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                              activeFile === fileName
-                                ? 'bg-surface-tertiary text-brand-500'
-                                : 'text-text-muted hover:bg-surface-tertiary hover:text-text-primary'
-                            }`}
-                          >
-                            {fileName}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
-                        {getFileName(lesson.language)}
-                      </span>
-                    )
-                  }
-                  onRun={handleRunCode}
-                  running={running}
-                  onSubmit={isWebLesson ? handleSubmitWeb : undefined}
-                  submitting={submitting}
-                  hideSubmit={!isWebLesson}
-                  onMarkComplete={
-                    showMarkCompleteInBar
-                      ? () => void markComplete()
-                      : undefined
-                  }
-                  markCompleteDisabled={
-                    !user || !canComplete || completing || isCompleted
-                  }
-                  markCompleteBusy={completing}
-                  completed={isCompleted}
-                />
-                <div className="flex-1">
-                  <CodeEditor
-                    language={editorLanguage}
-                    value={activeCode}
-                    onChange={(value) => {
-                      if (isWebLesson) {
-                        handleFileChange(activeFile, value);
-                      } else {
-                        setCode(value);
-                      }
-                    }}
-                    projectFiles={isWebLesson ? files : undefined}
+          {mode === 'challenges' ? (
+            <TutorialChallengeList
+              courseId={course._id}
+              lessonId={lesson._id}
+              challenges={challenges}
+              progress={progress}
+              onProgressChange={setProgress}
+            />
+          ) : (
+            <PanelGroup direction="vertical">
+              <Panel defaultSize={65}>
+                <div className="flex h-full flex-col bg-surface">
+                  <RunBar
+                    left={
+                      isWebLesson ? (
+                        <div className="flex gap-1">
+                          {WEB_FILES.map((fileName) => (
+                            <button
+                              key={fileName}
+                              type="button"
+                              onClick={() => setActiveFile(fileName)}
+                              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                                activeFile === fileName
+                                  ? 'bg-surface-tertiary text-brand-500'
+                                  : 'text-text-muted hover:bg-surface-tertiary hover:text-text-primary'
+                              }`}
+                            >
+                              {fileName}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
+                          {getFileName(lesson.language)}
+                        </span>
+                      )
+                    }
+                    onRun={handleRunCode}
+                    running={running}
+                    onSubmit={isWebLesson ? handleSubmitWeb : undefined}
+                    submitting={submitting}
+                    hideSubmit={!isWebLesson}
+                    onMarkComplete={
+                      showMarkCompleteInBar
+                        ? () => void markComplete()
+                        : undefined
+                    }
+                    markCompleteDisabled={
+                      !user || !canComplete || completing || isCompleted
+                    }
+                    markCompleteBusy={completing}
+                    completed={isCompleted}
                   />
-                </div>
-              </div>
-            </Panel>
-
-            <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-brand-500" />
-
-            <Panel defaultSize={35}>
-              {isWebLesson ? (
-                <div className="flex h-full flex-col bg-surface-secondary">
-                  <div className="border-b border-border px-4 py-2 text-xs font-semibold uppercase tracking-widest text-text-muted">
-                    Live preview
+                  <div className="flex-1">
+                    <CodeEditor
+                      language={editorLanguage}
+                      value={activeCode}
+                      onChange={(value) => {
+                        if (isWebLesson) {
+                          handleFileChange(activeFile, value);
+                        } else {
+                          setCode(value);
+                        }
+                      }}
+                      projectFiles={isWebLesson ? files : undefined}
+                    />
                   </div>
-                  <div className="flex-1 bg-white">
-                    {webPreview ? (
-                      <iframe
-                        title="Web lesson preview"
-                        srcDoc={webPreview}
-                        className="h-full w-full border-0"
-                        sandbox="allow-scripts"
-                      />
-                    ) : (
-                      <div className="grid h-full place-items-center p-6 text-center text-sm text-text-muted">
-                        Start typing to see a live preview. Submit to check your
-                        work.
-                      </div>
+                </div>
+              </Panel>
+
+              <PanelResizeHandle className="h-1 bg-border transition-colors hover:bg-brand-500" />
+
+              <Panel defaultSize={35}>
+                {isWebLesson ? (
+                  <div className="flex h-full flex-col bg-surface-secondary">
+                    <div className="border-b border-border px-4 py-2 text-xs font-semibold uppercase tracking-widest text-text-muted">
+                      Live preview
+                    </div>
+                    <div className="flex-1 bg-white">
+                      {webPreview ? (
+                        <iframe
+                          title="Web lesson preview"
+                          srcDoc={webPreview}
+                          className="h-full w-full border-0"
+                          sandbox="allow-scripts"
+                        />
+                      ) : (
+                        <div className="grid h-full place-items-center p-6 text-center text-sm text-text-muted">
+                          Start typing to see a live preview. Submit to check your
+                          work.
+                        </div>
+                      )}
+                    </div>
+                    {webMessage && (
+                      <p
+                        className={`border-t border-border px-4 py-2 text-xs ${
+                          accepted
+                            ? 'text-[var(--color-success)]'
+                            : 'text-[var(--color-error)]'
+                        }`}
+                      >
+                        {webMessage}
+                      </p>
                     )}
                   </div>
-                  {webMessage && (
-                    <p
-                      className={`border-t border-border px-4 py-2 text-xs ${
-                        accepted
-                          ? 'text-[var(--color-success)]'
-                          : 'text-[var(--color-error)]'
-                      }`}
-                    >
-                      {webMessage}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <TestPanel
-                  testCases={testCases}
-                  results={summary?.results}
-                  running={running}
-                  accepted={accepted}
-                  totalRuntimeMs={totalRuntimeMs}
-                />
-              )}
-            </Panel>
-          </PanelGroup>
+                ) : (
+                  <TestPanel
+                    testCases={testCases}
+                    results={summary?.results}
+                    running={running}
+                    accepted={accepted}
+                    totalRuntimeMs={totalRuntimeMs}
+                  />
+                )}
+              </Panel>
+            </PanelGroup>
+          )}
         </Panel>
       </PanelGroup>
     </div>
   );
 };
-
-function getFileName(lang: string): string {
-  switch (lang) {
-    case 'html-css':
-      return 'index.html';
-    case 'javascript':
-    case 'dsa-javascript':
-      return 'script.js';
-    case 'typescript':
-      return 'script.ts';
-    case 'python':
-    case 'dsa-python':
-      return 'main.py';
-    case 'ruby':
-      return 'main.rb';
-    case 'java':
-      return 'Main.java';
-    case 'sql':
-      return 'query.sql';
-    case 'react':
-      return 'App.jsx';
-    case 'tailwind':
-      return 'index.html';
-    default:
-      return 'file.txt';
-  }
-}
-
-function isWebLessonLanguage(lang: string): boolean {
-  return lang === 'html-css' || lang === 'react' || lang === 'tailwind';
-}
-
-function lessonLanguage(lang: string | undefined): string {
-  return lang ?? '';
-}
-
-function validateWebFiles(
-  files: Record<string, string>,
-  checks?: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] }
-): { ok: boolean; message: string } {
-  const html = files['index.html']?.trim() ?? '';
-  const css = files['styles.css']?.trim() ?? '';
-  const javascript = files['script.js']?.trim() ?? '';
-  if (!html) return { ok: false, message: 'index.html is empty.' };
-  if ((css.match(/{/g) ?? []).length !== (css.match(/}/g) ?? []).length) {
-    return { ok: false, message: 'styles.css has an unmatched brace.' };
-  }
-  try {
-    new Function(javascript);
-  } catch (error) {
-    return {
-      ok: false,
-      message: `script.js has a syntax error: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    };
-  }
-  const parsed = new DOMParser().parseFromString(html, 'text/html');
-  if (parsed.querySelector('parsererror')) {
-    return { ok: false, message: 'index.html could not be parsed.' };
-  }
-  const missingHtml = (checks?.requiredHtml ?? []).find((token) => !html.includes(token));
-  if (missingHtml) return { ok: false, message: `HTML check failed: missing "${missingHtml}".` };
-  const missingCss = (checks?.requiredCss ?? []).find((token) => !css.includes(token));
-  if (missingCss) return { ok: false, message: `CSS check failed: missing "${missingCss}".` };
-  const missingJs = (checks?.requiredJs ?? []).find((token) => !javascript.includes(token));
-  if (missingJs) return { ok: false, message: `JavaScript check failed: missing "${missingJs}".` };
-  return { ok: true, message: 'All checks passed.' };
-}

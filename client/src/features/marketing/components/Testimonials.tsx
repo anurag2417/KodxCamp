@@ -1,72 +1,43 @@
-import { useInView } from '../hooks/useInView';
+import { motion } from 'framer-motion';
 
-const testimonials = [
-  {
-    quote:
-      'Finally a coding platform that respects my time. No 30-minute video intros. Just code.',
-    name: 'Aditya R.',
-    role: 'CS student',
-  },
-  {
-    quote:
-      'The browser execution is what sold me. I can practice on the train without installing anything.',
-    name: 'Priya K.',
-    role: 'Career switcher',
-  },
-  {
-    quote:
-      'DSA practice that isn\'t a leaderboard. I actually want to come back every day.',
-    name: 'Vikram S.',
-    role: 'Self-taught developer',
-  },
+const testimonials: [string, string, string][] = [
+  [
+    'Aarav',
+    'Student',
+    'The practice-first flow finally made coding feel active instead of passive.',
+  ],
+  [
+    'Mira',
+    'Frontend learner',
+    'The interface gets out of the way and lets me focus on building.',
+  ],
 ];
 
-export const Testimonials: React.FC = () => {
-  const { ref, inView } = useInView();
-
+export default function Testimonials() {
   return (
-    <section ref={ref} className="bg-surface-secondary py-24">
-      <div className="mx-auto max-w-7xl px-6">
-        <div
-          className={`mx-auto max-w-2xl text-center ${
-            inView ? 'reveal-up' : 'opacity-0'
-          }`}
-        >
-          <p className="text-xs font-semibold uppercase tracking-widest text-brand-500">
-            Loved by learners
-          </p>
-          <h2 className="mt-3 text-3xl font-bold text-text-primary md:text-4xl">
-            Built for people who actually want to learn.
-          </h2>
-        </div>
-
-        <div className="mt-16 grid gap-6 md:grid-cols-3">
-          {testimonials.map((t, i) => (
-            <figure
-              key={t.name}
-              className={`rounded-2xl border border-border bg-surface p-6 ${
-                inView ? 'reveal-up' : 'opacity-0'
-              }`}
-              style={{ animationDelay: `${i * 100}ms` }}
-            >
-              <blockquote className="text-sm leading-relaxed text-text-secondary">
-                &ldquo;{t.quote}&rdquo;
-              </blockquote>
-              <figcaption className="mt-6 flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-full bg-brand-500/10 text-sm font-bold text-brand-500">
-                  {t.name[0]}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">
-                    {t.name}
-                  </p>
-                  <p className="text-xs text-text-muted">{t.role}</p>
-                </div>
-              </figcaption>
-            </figure>
-          ))}
-        </div>
+    <section className="kc-section kc-testimonials">
+      <div className="kc-section-heading">
+        <span className="kc-eyebrow">Learner notes</span>
+        <h2>Built around the way people actually learn.</h2>
+      </div>
+      <div className="kc-testimonial-grid">
+        {testimonials.map((item, index) => (
+          <motion.article
+            key={item[0]}
+            className="kc-testimonial"
+            initial={{ opacity: 0, y: 22 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.55, delay: index * 0.08 }}
+          >
+            <p>“{item[2]}”</p>
+            <div>
+              <strong>{item[0]}</strong>
+              <span>{item[1]}</span>
+            </div>
+          </motion.article>
+        ))}
       </div>
     </section>
   );
-};
+}

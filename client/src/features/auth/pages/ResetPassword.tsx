@@ -8,6 +8,25 @@ import { Seo } from '../../../shared/components/seo/Seo';
 import { authApi } from '../api';
 import { useAuthStore } from '../../../shared/store/auth.store';
 
+/**
+ * Password strength meter.
+ *
+ * 4-level scale (0 = empty, 4 = strong). Fill color steps through
+ * warning → brand → success:
+ *   level 1–2  warning  (#F59E0B)
+ *   level 3    brand    (#2563EB) — "good"
+ *   level 4    success  (#22C55E)
+ * Empty slots use the theme border token so the bar reads as a rail.
+ */
+function strengthColor(level: number, slot: number): string {
+  if (slot >= level) return 'var(--color-border)';
+  if (level <= 2) return '#F59E0B';
+  if (level === 3) return '#2563EB';
+  return '#22C55E';
+}
+
+const STRENGTH_LABELS = ['Weak', 'Weak', 'Fair', 'Good', 'Strong'];
+
 export const ResetPassword: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -103,21 +122,13 @@ export const ResetPassword: React.FC = () => {
                     key={i}
                     className="h-1 flex-1 rounded-full transition-colors duration-300"
                     style={{
-                      background:
-                        i < passwordStrength
-                          ? passwordStrength <= 2
-                            ? '#C58A24'
-                            : passwordStrength === 3
-                              ? '#2A835F'
-                              : '#12544F'
-                          : 'var(--color-border)',
+                      background: strengthColor(passwordStrength, i),
                     }}
                   />
                 ))}
               </div>
               <p className="mt-1.5 text-[10px] uppercase tracking-widest text-text-muted">
-                Strength:{' '}
-                {['Weak', 'Weak', 'Fair', 'Good', 'Strong'][passwordStrength]}
+                Strength: {STRENGTH_LABELS[passwordStrength]}
               </p>
             </div>
           )}

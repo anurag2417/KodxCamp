@@ -84,20 +84,16 @@ export const validateResultsSchema = z.object({
 });
 
 /**
- * Does the caller have access to the course that owns a
- * course-scoped problem?
+ * Can the caller see a course-scoped problem?
  *
- * Admin: yes.
- * Course team (any role): yes.
- * Enrolled student: handled by the caller in a later batch; for now,
- * since enrollment gating is Batch 6, we treat "logged in and not
- * banned" as sufficient for course-scoped reads, and let the gate be
- * added when Batch 6 lands.
+ * Admins always can. Everyone else needs a non-null effective role
+ * on the owning course — meaning they're on the course team, or
+ * they're an enrolled student whose `resolveEffectiveRole` has been
+ * extended to include `student`. Anonymous callers always get
+ * `false`; course-scoped problems are never public.
  *
- * For Batch 3, this is deliberately permissive: a course-scoped
- * problem is visible to any logged-in user. Tightening the check to
- * require course membership is a one-line change here once Batch 6
- * adds the enrollment gate.
+ * Global problems skip this check entirely — see the caller in
+ * `getBySlug`.
  */
 async function hasCourseAccess(
   req: AuthRequest,
@@ -107,7 +103,6 @@ async function hasCourseAccess(
   if (!req.user) return false;
   if (req.user.role === 'admin') return true;
 
-  // Non-admins: check course team membership.
   const course = await Course.findById(courseId).select('_id').lean();
   if (!course) return false;
 
@@ -119,22 +114,40 @@ async function hasCourseAccess(
 }
 
 export const problemController = {
+  /**
+   * GET /problems
+   *
+   * Public. Anonymous callers get the same list as signed-in ones,
+   * minus the per-user `solved` flag, which is `undefined` when no
+   * user is attached by `optionalAuth`.
+   */
   list: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?._id.toString();
-    const tier = (req.query.tier as 'starter' | 'interview' | undefined) ?? undefined;
+    const tier =
+      (req.query.tier as 'starter' | 'interview' | undefined) ?? undefined;
     const problems = await problemService.listGlobal(userId, tier);
     return ApiResponse.success(res, problems);
   }),
 
+  /**
+   * GET /problems/:slug
+   *
+   * Public for global problems. Course-scoped problems are only
+   * visible to users who can access the owning course.
+   *
+   * The order of operations here matters: we peek at the problem to
+   * learn its scope, decide access, and only then ask the service
+   * for the full payload. A signed-out caller hitting a
+   * course-scoped problem gets a 404, not a 403 — that's the right
+   * status for a resource the caller isn't even allowed to know
+   * exists.
+   */
   getBySlug: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?._id.toString();
     const slug = Array.isArray(req.params.slug)
       ? req.params.slug[0]
       : req.params.slug;
 
-    // Peek at the problem to learn its scope before deciding access.
-    // The service handles the 404 for course-scoped problems the
-    // caller can't see.
     const peek = await problemService.getFullBySlug(slug);
     const access =
       peek.scope === 'global'

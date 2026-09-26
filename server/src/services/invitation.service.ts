@@ -9,6 +9,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { env } from '../config/env.js';
 import { emailService } from './email.service.js';
 import { courseMembershipService } from './courseMembership.service.js';
+import { notificationService } from './notification.service.js';
 import { logger } from '../utils/logger.js';
 
 const TTL_DAYS = 7;
@@ -30,6 +31,12 @@ function generateRaw(): string {
  * As of Batch 2D, a course's team lives entirely in the
  * `CourseMembership` collection. Accepting an invitation creates a
  * membership row; it does not touch any embedded array.
+ *
+ * On invitation create, if the invitee already has an account, we
+ * also raise an in-app notification so they see the invitation the
+ * next time they open the app. New users get the invitation by
+ * email only — the notification row needs a user id, and we don't
+ * have one until they sign up.
  */
 export const invitationService = {
   async create(input: {
@@ -116,6 +123,35 @@ export const invitationService = {
         courseId: input.courseId,
         inviteUrl,
       });
+    }
+
+    // Notify the invitee if they already have an account. New users
+    // get the invitation by email only — they'll see any in-app
+    // notifications once they sign up and their user id exists.
+    //
+    // Fire-and-forget: the invitation row is already written, and a
+    // failed notification is not a reason to fail the create.
+    if (existingUser) {
+      void (async () => {
+        try {
+          await notificationService.create({
+            userId: existingUser._id.toString(),
+            type: 'team_invitation',
+            title: `You've been invited to teach a course`,
+            body: `You've been invited to join the team for "${course.title}" as ${input.role}.`,
+            link: `/invitations/${invitation._id.toString()}.${raw}`,
+            metadata: {
+              invitationId: invitation._id.toString(),
+              courseId: input.courseId,
+            },
+          });
+        } catch (err) {
+          logger.warn('Failed to notify team invitation', {
+            invitationId: invitation._id.toString(),
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })();
     }
 
     return { invitationId: invitation._id.toString() };

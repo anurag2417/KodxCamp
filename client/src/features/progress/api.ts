@@ -8,6 +8,11 @@ export interface ApiProgress {
   currentLessonId?: string;
   currentStepIndex: number;
   completedSteps: number[];
+  /**
+   * Tutorial challenge completion, keyed by lesson id.
+   * Absent key and empty array mean the same thing.
+   */
+  completedChallenges: Record<string, number[]>;
   percentage: number;
 }
 
@@ -84,6 +89,19 @@ export const progressApi = {
       courseId,
       lessonId,
       stepIndex,
+    });
+    return data.data;
+  },
+
+  markChallengeComplete: async (
+    courseId: string,
+    lessonId: string,
+    challengeIndex: number
+  ): Promise<ApiProgress> => {
+    const { data } = await api.post('/progress/complete-challenge', {
+      courseId,
+      lessonId,
+      challengeIndex,
     });
     return data.data;
   },

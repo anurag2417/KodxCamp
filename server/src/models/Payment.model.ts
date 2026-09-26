@@ -20,8 +20,10 @@ export type PaymentStatus =
 export interface PaymentDocument extends Document {
   /** Mongo user id of the buyer. */
   userId: string;
-  /** Mongo course id. */
-  courseId: string;
+  /** Mongo course id. Set for course payments. */
+  courseId?: string;
+  /** Mongo roadmap id. Set for roadmap payments. */
+  roadmapId?: string;
   /** Razorpay order id (`order_xxx`). Unique. */
   orderId: string;
   /** Razorpay payment id (`pay_xxx`), set once a payment attempt exists. */
@@ -41,7 +43,8 @@ export interface PaymentDocument extends Document {
 const paymentSchema = new Schema<PaymentDocument>(
   {
     userId: { type: String, required: true, index: true },
-    courseId: { type: String, required: true, index: true },
+    courseId: { type: String, required: false, index: true },
+    roadmapId: { type: String, required: false, index: true },
     orderId: { type: String, required: true, unique: true, index: true },
     paymentId: { type: String, index: true, sparse: true },
     signature: { type: String },
@@ -59,5 +62,9 @@ const paymentSchema = new Schema<PaymentDocument>(
 );
 
 paymentSchema.index({ userId: 1, courseId: 1, createdAt: -1 });
+paymentSchema.index({ userId: 1, roadmapId: 1, createdAt: -1 });
 
-export const Payment = mongoose.model<PaymentDocument>('Payment', paymentSchema);
+export const Payment = mongoose.model<PaymentDocument>(
+  'Payment',
+  paymentSchema
+);

@@ -3,6 +3,7 @@ import {
   progressController,
   markCompleteSchema,
   markStepCompleteSchema,
+  markChallengeCompleteSchema,
 } from '../controllers/progress.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
@@ -17,6 +18,11 @@ router.post(
   '/complete-step',
   validate(markStepCompleteSchema),
   progressController.markStepComplete
+);
+router.post(
+  '/complete-challenge',
+  validate(markChallengeCompleteSchema),
+  progressController.markChallengeComplete
 );
 
 export default router;

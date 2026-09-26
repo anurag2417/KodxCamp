@@ -1,4 +1,11 @@
-import { Play, Send, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  Play,
+  Send,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  LogIn,
+} from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/shared/lib/utils';
 import { preloadNow, type PreloadStatus } from '@/shared/runner/preloadManager';
@@ -14,6 +21,15 @@ interface Props {
   onLanguageChange: (l: string) => void;
   onRun: () => void;
   onSubmit: () => void;
+  /**
+   * Called when a signed-out user clicks "Sign in to submit". The
+   * caller (ProblemDetail) uses this to redirect to the login page
+   * with a `?next=` pointing back to this exact problem and
+   * language. When `canSubmit` is false and this prop is provided,
+   * the Submit button is replaced with a "Sign in to submit"
+   * button; otherwise the Submit button is simply disabled.
+   */
+  onSignIn?: () => void;
   running: boolean;
   canSubmit: boolean;
   /** Warm-up status per language id. */
@@ -26,6 +42,7 @@ export const EditorToolbar: React.FC<Props> = ({
   onLanguageChange,
   onRun,
   onSubmit,
+  onSignIn,
   running,
   canSubmit,
   preloadStatus = {},
@@ -75,19 +92,43 @@ export const EditorToolbar: React.FC<Props> = ({
           )}
           Run
         </Button>
-        <Button
-          size="sm"
-          onClick={onSubmit}
-          disabled={running || !canSubmit}
-          className="btn-press"
-        >
-          {running ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
+
+        {canSubmit ? (
+          <Button
+            size="sm"
+            onClick={onSubmit}
+            disabled={running}
+            className="btn-press"
+          >
+            {running ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Send size={14} />
+            )}
+            Submit
+          </Button>
+        ) : onSignIn ? (
+          <Button
+            size="sm"
+            onClick={onSignIn}
+            disabled={running}
+            className="btn-press"
+          >
+            <LogIn size={14} />
+            Sign in to submit
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            onClick={onSubmit}
+            disabled
+            className="btn-press"
+            title="Sign in to submit"
+          >
             <Send size={14} />
-          )}
-          Submit
-        </Button>
+            Submit
+          </Button>
+        )}
       </div>
     </div>
   );

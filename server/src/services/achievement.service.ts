@@ -6,6 +6,7 @@ import { Submission } from '../models/Submission.model.js';
 import { UserProject } from '../models/UserProject.model.js';
 import { Progress } from '../models/Progress.model.js';
 import { Problem } from '../models/Problem.model.js';
+import { notificationService } from './notification.service.js';
 import { logger } from '../utils/logger.js';
 
 export interface AchievementDefinition {
@@ -13,12 +14,12 @@ export interface AchievementDefinition {
   title: string;
   description: string;
   category:
-  | 'learning'
-  | 'practice'
-  | 'projects'
-  | 'classes'
-  | 'streak'
-  | 'milestones';
+    | 'learning'
+    | 'practice'
+    | 'projects'
+    | 'classes'
+    | 'streak'
+    | 'milestones';
   icon: string;
   xpReward: number;
   secret: boolean;
@@ -284,7 +285,9 @@ async function buildStats(userId: string): Promise<StatsSnapshot> {
     (p) => (p.completedLessons?.length ?? 0) > 0
   ).length;
 
-  const solvedProblems = await Problem.find({ _id: { $in: problemsSolvedDistinct } })
+  const solvedProblems = await Problem.find({
+    _id: { $in: problemsSolvedDistinct },
+  })
     .select('difficulty')
     .lean();
   const difficultySolved = { easy: 0, medium: 0, hard: 0 };
@@ -294,7 +297,9 @@ async function buildStats(userId: string): Promise<StatsSnapshot> {
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
-  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
+  const cutoffKey = `${cutoff.getFullYear()}-${String(
+    cutoff.getMonth() + 1
+  ).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
   const activeDaySet = new Set(
     activityRows.filter((a) => a.day >= cutoffKey).map((a) => a.day)
   );
@@ -317,8 +322,14 @@ async function buildStats(userId: string): Promise<StatsSnapshot> {
 
 export const achievementService = {
   /**
-   * Evaluate all achievements for a user. Idempotent - uses a unique index
-   * on {userId, achievementKey} so concurrent calls can't double-award XP.
+   * Evaluate all achievements for a user. Idempotent — uses a unique
+   * index on `{userId, achievementKey}` so concurrent calls can't
+   * double-award XP.
+   *
+   * On each newly unlocked achievement, an in-app notification is
+   * raised. The notification is `inAppOnly` — achievement emails are
+   * noise, and the badge appearing in the app is where the delight
+   * lives.
    */
   async evaluate(userId: string): Promise<string[]> {
     const stats = await buildStats(userId);
@@ -353,6 +364,19 @@ export const achievementService = {
         });
         newlyUnlocked.push(def.key);
         totalBonusXp += def.xpReward;
+
+        // Notify. inAppOnly — achievement emails would be noise.
+        // Fire-and-forget; a failed notification is not a reason to
+        // fail the achievement award.
+        void notificationService.create({
+          userId,
+          type: 'achievement_unlocked',
+          title: `Achievement unlocked: ${def.title}`,
+          body: def.description,
+          link: '/achievements',
+          metadata: { achievementKey: def.key },
+          inAppOnly: true,
+        });
       } catch (err) {
         // Duplicate key = another request already unlocked it. Ignore.
         if (
@@ -374,8 +398,9 @@ export const achievementService = {
     if (totalBonusXp > 0) {
       await User.updateOne({ _id: userId }, { $inc: { xp: totalBonusXp } });
 
-      // Also log one activity row per unlocked achievement so analytics
-      // and the recent-activity feed stay in sync with User.xp.
+      // Also log one activity row per unlocked achievement so
+      // analytics and the recent-activity feed stay in sync with
+      // User.xp.
       void Promise.all(
         newlyUnlocked.map((key) =>
           Activity.create({
@@ -398,7 +423,11 @@ export const achievementService = {
     for (const def of DEFS) {
       const { predicate, ...rest } = def;
       void predicate;
-      await Achievement.updateOne({ key: def.key }, { $set: rest }, { upsert: true });
+      await Achievement.updateOne(
+        { key: def.key },
+        { $set: rest },
+        { upsert: true }
+      );
     }
   },
 

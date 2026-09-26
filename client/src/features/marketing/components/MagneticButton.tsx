@@ -1,52 +1,48 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { cn } from '../../../shared/lib/utils';
+import { motion, useMotionValue, useSpring } from 'framer-motion';
+import { useRef, type ReactNode } from 'react';
 
-interface Props {
+interface MagneticButtonProps {
   children: ReactNode;
-  strength?: number;
+  href?: string;
+  variant?: 'primary' | 'secondary';
   className?: string;
-  onClick?: () => void;
 }
 
-export const MagneticButton: React.FC<Props> = ({
+export default function MagneticButton({
   children,
-  strength = 0.35,
-  className,
-  onClick,
-}) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  href = '#',
+  variant = 'primary',
+  className = '',
+}: MagneticButtonProps) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const springX = useSpring(x, { stiffness: 260, damping: 20 });
+  const springY = useSpring(y, { stiffness: 260, damping: 20 });
 
-  const isTouch =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(hover: none)').matches;
-
-  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isTouch || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    setOffset({
-      x: (e.clientX - cx) * strength,
-      y: (e.clientY - cy) * strength,
-    });
+  const handleMove = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    const element = ref.current;
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    x.set((event.clientX - rect.left - rect.width / 2) * 0.08);
+    y.set((event.clientY - rect.top - rect.height / 2) * 0.08);
   };
 
-  const handleLeave = () => setOffset({ x: 0, y: 0 });
+  const reset = () => {
+    x.set(0);
+    y.set(0);
+  };
 
   return (
-    <div
+    <motion.a
       ref={ref}
-      className={cn('inline-block will-change-transform', className)}
+      href={href}
+      style={{ x: springX, y: springY }}
       onMouseMove={handleMove}
-      onMouseLeave={handleLeave}
-      onClick={onClick}
-      style={{
-        transform: `translate3d(${offset.x}px, ${offset.y}px, 0)`,
-        transition: 'transform 300ms cubic-bezier(0.16, 1, 0.3, 1)',
-      }}
+      onMouseLeave={reset}
+      className={`kc-button kc-button-${variant} ${className}`}
     >
-      {children}
-    </div>
+      <span>{children}</span>
+    </motion.a>
   );
-};
+}

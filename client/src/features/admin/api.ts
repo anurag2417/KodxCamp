@@ -77,7 +77,6 @@ export interface AdminCourse {
   totalLessons: number;
   createdBy: string;
   published: boolean;
-  /** INR paise. Undefined for free courses. */
   price?: number;
   isFree: boolean;
   createdAt: string;
@@ -129,6 +128,83 @@ export interface AdminEnrollment {
   avatar?: string;
   joinedAt: string;
   source: 'manual' | 'paid' | 'invited';
+  cohortId?: string;
+}
+
+// ─── Roadmaps ─────────────────────────────────────────────────────
+
+export type AdminRoadmapBadge =
+  | 'LIVE'
+  | 'NEW'
+  | 'POPULAR'
+  | 'STARTING SOON';
+
+export interface AdminRoadmapCourseInput {
+  courseId: string;
+  order: number;
+  isRequired: boolean;
+}
+
+export interface AdminRoadmapSummary {
+  _id: string;
+  title: string;
+  slug: string;
+  description: string;
+  tagline?: string;
+  tags?: string[];
+  badge?: AdminRoadmapBadge;
+  thumbnail?: string;
+  isFree: boolean;
+  price?: number;
+  originalPrice?: number;
+  courseCount: number;
+  published: boolean;
+  updatedAt?: string;
+}
+
+export interface AdminRoadmapDetail {
+  _id: string;
+  title: string;
+  slug: string;
+  description: string;
+  tagline?: string;
+  tags?: string[];
+  badge?: AdminRoadmapBadge;
+  thumbnail?: string;
+  heroVideoUrl?: string;
+
+  courses: AdminRoadmapCourseInput[];
+  enrichedCourses: {
+    _id: string;
+    courseId: string;
+    order: number;
+    isRequired: boolean;
+    title: string;
+    slug: string;
+    description: string;
+    language: string;
+    thumbnail?: string;
+    totalLessons: number;
+  }[];
+
+  isFree: boolean;
+  price?: number;
+  originalPrice?: number;
+
+  features?: unknown[];
+  sellingPoints?: unknown[];
+  sellingHeadline?: string;
+  learningOutcomes?: string[];
+  curriculum?: unknown[];
+  projects?: unknown[];
+  instructor?: unknown;
+  certificateIncluded?: boolean;
+  faq?: unknown[];
+
+  published: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─── Problems ─────────────────────────────────────────────────────
@@ -154,6 +230,55 @@ export interface AdminProblem {
 
 // ─── Projects ─────────────────────────────────────────────────────
 
+export type AdminProjectMode = 'required' | 'recommended' | 'open_choice';
+
+export interface AdminProjectRubricCategory {
+  category: string;
+  weight: number;
+}
+
+export interface AdminProjectSpecification {
+  objective?: string;
+  requiredFeatures?: string[];
+  technicalRequirements?: string[];
+  designRequirements?: string[];
+  accessibilityRequirements?: string[];
+  expectedBehaviour?: string;
+}
+
+export type AdminProjectTestType =
+  | 'dom-exists'
+  | 'dom-text'
+  | 'dom-attribute'
+  | 'dom-count'
+  | 'event-click'
+  | 'event-input'
+  | 'visual-nonblank';
+
+export interface AdminDomAssertion {
+  type: 'dom-exists' | 'dom-text' | 'dom-attribute' | 'dom-count';
+  selector: string;
+  mode?: 'equals' | 'matches';
+  value?: string;
+  attribute?: string;
+  count?: number;
+}
+
+export interface AdminProjectTest {
+  name: string;
+  check: {
+    type: AdminProjectTestType;
+    selector?: string;
+    mode?: 'equals' | 'matches';
+    value?: string;
+    attribute?: string;
+    count?: number;
+    assert?: AdminDomAssertion;
+    minimumChars?: number;
+  };
+  description?: string;
+}
+
 export interface AdminProject {
   _id: string;
   title: string;
@@ -173,7 +298,161 @@ export interface AdminProject {
   instructions: string;
   estimatedMinutes: number;
   xpReward: number;
+  mode: AdminProjectMode;
+  specification: AdminProjectSpecification;
+  rubric: AdminProjectRubricCategory[];
+  tests: AdminProjectTest[];
   createdAt: string;
+}
+
+// ─── Project submissions + AI evaluation ──────────────────────────
+
+/**
+ * A summary row for one project submission, as returned by
+ * `GET /admin/projects/:slug/submissions`.
+ *
+ * Deliberately light: it carries what the list view needs (student,
+ * attempt number, test summary, latest AI scores) without the full
+ * submission files or screenshots. Those are fetched per-submission
+ * by `AdminSubmissionEvaluation`.
+ */
+export interface AdminSubmissionSummary {
+  _id: string;
+  attemptNumber: number;
+  status: string;
+  submittedAt: string;
+  testRunSummary: {
+    totalTests: number;
+    passedTests: number;
+    allPassed: boolean;
+  } | null;
+  hasScreenshots: boolean;
+  student: {
+    _id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  latestEvaluations: {
+    code: { score: number | null; evaluationDate: string } | null;
+    vision: { score: number | null; evaluationDate: string } | null;
+  };
+}
+
+/**
+ * A single submission in full, as returned by
+ * `GET /admin/projects/submissions/:submissionId`.
+ *
+ * The `student` field is attached by the server from the User
+ * document, so it is never undefined. `testRun` and `screenshots` are
+ * their real shapes rather than `unknown`, so consumers can read them
+ * without casts.
+ */
+export interface AdminSubmissionDetail {
+  _id: string;
+  userId: string;
+  projectId: string;
+  attemptNumber: number;
+  files: { name: string; language: string; content: string }[];
+  status: string;
+  submittedAt: string;
+  notes?: string;
+  testRun?: {
+    totalTests: number;
+    passedTests: number;
+    failedTests: number;
+    allPassed: boolean;
+    durationMs: number;
+    ranAt: string;
+    error?: string;
+    results?: {
+      name: string;
+      passed: boolean;
+      actual: string;
+      message?: string;
+    }[];
+  };
+  screenshots?: {
+    desktop?: {
+      viewport: 'desktop' | 'mobile';
+      width: number;
+      height: number;
+      dataUrl: string;
+    };
+    mobile?: {
+      viewport: 'desktop' | 'mobile';
+      width: number;
+      height: number;
+      dataUrl: string;
+    };
+    error?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+  student: {
+    _id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+}
+
+/**
+ * One evaluation row, as returned by
+ * `GET /admin/projects/submissions/:submissionId/evaluations`.
+ *
+ * `parsed` is the model's structured output when parsing succeeded.
+ * `parseError` is set when it didn't — the raw text is preserved in
+ * `rawResponse` regardless.
+ */
+export interface AdminAIEvaluation {
+  _id: string;
+  submissionId: string;
+  projectId: string;
+  userId: string;
+  kind: 'code' | 'vision';
+
+  evaluatorVersion: string;
+  promptVersion: string;
+  provider: string;
+  modelId: string;
+  usedImages: boolean;
+  evaluationDate: string;
+
+  projectVersion: string | null;
+
+  rawResponse: string;
+  parseError?: string;
+  parsed?: {
+    score?: number | null;
+    categoryScores?: {
+      category: string;
+      score: number;
+      max: number;
+      notes: string;
+    }[];
+    requirementResults?: {
+      requirement: string;
+      met: boolean;
+      evidence: string;
+    }[];
+    overallFeedback?: string;
+    evaluatorNotConfigured?: boolean;
+  };
+
+  evaluatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Configuration status of the AI subsystem. The admin UI uses this
+ * to render the "Evaluate" button honestly — disabled with a clear
+ * reason rather than a failed call.
+ */
+export interface AdminAIStatus {
+  textConfigured: boolean;
+  visionConfigured: boolean;
 }
 
 // ─── Classes ──────────────────────────────────────────────────────
@@ -298,10 +577,12 @@ export const adminApi = {
 
   enrollUser: async (
     slug: string,
-    userId: string
+    userId: string,
+    cohortId?: string
   ): Promise<{ ok: boolean; alreadyEnrolled: boolean }> => {
     const { data } = await api.post(`/admin/courses/${slug}/enroll`, {
       userId,
+      cohortId,
     });
     return data.data;
   },
@@ -313,6 +594,54 @@ export const adminApi = {
     const { data } = await api.delete(
       `/admin/courses/${slug}/enrollments/${userId}`
     );
+    return data.data;
+  },
+
+  // ─── Roadmaps ─────────────────────────────────────────────
+  listRoadmaps: async (): Promise<AdminRoadmapSummary[]> => {
+    const { data } = await api.get('/admin/roadmaps');
+    return data.data;
+  },
+
+  getRoadmapFull: async (slug: string): Promise<AdminRoadmapDetail> => {
+    const { data } = await api.get(`/admin/roadmaps/${slug}`);
+    return data.data;
+  },
+
+  createRoadmap: async (input: {
+    title: string;
+    slug: string;
+    description: string;
+    tagline?: string;
+    courses?: AdminRoadmapCourseInput[];
+    isFree?: boolean;
+    price?: number;
+    published?: boolean;
+  }): Promise<AdminRoadmapDetail> => {
+    const { data } = await api.post('/admin/roadmaps', input);
+    return data.data;
+  },
+
+  updateRoadmap: async (
+    slug: string,
+    patch: Record<string, unknown>
+  ): Promise<AdminRoadmapDetail> => {
+    const { data } = await api.patch(`/admin/roadmaps/${slug}`, patch);
+    return data.data;
+  },
+
+  setRoadmapPublished: async (
+    slug: string,
+    published: boolean
+  ): Promise<AdminRoadmapDetail> => {
+    const { data } = await api.patch(`/admin/roadmaps/${slug}/publish`, {
+      published,
+    });
+    return data.data;
+  },
+
+  deleteRoadmap: async (slug: string): Promise<{ ok: boolean }> => {
+    const { data } = await api.delete(`/admin/roadmaps/${slug}`);
     return data.data;
   },
 
@@ -365,6 +694,54 @@ export const adminApi = {
 
   deleteProject: async (slug: string): Promise<{ ok: boolean }> => {
     const { data } = await api.delete(`/admin/projects/${slug}`);
+    return data.data;
+  },
+
+  // ─── Project submissions + AI evaluation ──────────────────
+  listProjectSubmissions: async (
+    slug: string
+  ): Promise<AdminSubmissionSummary[]> => {
+    const { data } = await api.get(`/admin/projects/${slug}/submissions`);
+    return data.data;
+  },
+
+  /**
+   * Read a single submission, owner-agnostic. Admin-only on the
+   * server. The `student` field is attached server-side, and
+   * `testRun` / `screenshots` come back in their real shapes — see
+   * `AdminSubmissionDetail`.
+   */
+  getAdminSubmission: async (
+    submissionId: string
+  ): Promise<AdminSubmissionDetail> => {
+    const { data } = await api.get(
+      `/admin/projects/submissions/${submissionId}`
+    );
+    return data.data;
+  },
+
+  listEvaluations: async (
+    submissionId: string,
+    kind?: 'code' | 'vision'
+  ): Promise<AdminAIEvaluation[]> => {
+    const { data } = await api.get(
+      `/admin/projects/submissions/${submissionId}/evaluations`,
+      { params: kind ? { kind } : undefined }
+    );
+    return data.data;
+  },
+
+  evaluateSubmission: async (
+    submissionId: string
+  ): Promise<{ evaluations: AdminAIEvaluation[] }> => {
+    const { data } = await api.post(
+      `/admin/projects/submissions/${submissionId}/evaluate`
+    );
+    return data.data;
+  },
+
+  getAIStatus: async (): Promise<AdminAIStatus> => {
+    const { data } = await api.get('/admin/ai/status');
     return data.data;
   },
 

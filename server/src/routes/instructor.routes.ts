@@ -30,6 +30,31 @@ import {
   createQuizQuestionSchema,
   quizParamsSchema,
 } from '../controllers/quiz.controller.js';
+import {
+  moduleController,
+  createModuleSchema,
+  updateModuleSchema,
+  moduleParamsSchema,
+  reorderModuleSchema,
+  assignLessonSchema,
+  unassignLessonSchema,
+} from '../controllers/module.controller.js';
+import {
+  cohortController,
+  createCohortSchema,
+  updateCohortSchema,
+  cohortIdSchema,
+  setArchivedSchema,
+  addMemberSchema,
+  updateMemberRoleSchema,
+  memberParamsSchema,
+} from '../controllers/cohort.controller.js';
+import {
+  instructorEvaluationController,
+  createReviewSchema,
+  submissionParamsSchema,
+  projectSubmissionsParamsSchema,
+} from '../controllers/instructorEvaluation.controller.js';
 
 const router = Router();
 
@@ -64,11 +89,6 @@ router.delete(
 );
 
 // ─── Quiz questions ───────────────────────────────
-//
-// `createQuizQuestionSchema` declares both `params` and `body` so a
-// single `validate()` call covers the request. Calling `validate()`
-// twice (once for params, once for body) caused the second call to
-// reject because the first call wiped `req.body`.
 router.post(
   '/courses/:slug/quiz',
   validate(createQuizQuestionSchema),
@@ -83,6 +103,43 @@ router.delete(
   '/courses/:slug/quiz/:questionId',
   validate(quizParamsSchema),
   quizController.remove
+);
+
+// ─── Modules ──────────────────────────────────────
+router.get(
+  '/courses/:courseSlug/modules',
+  validate(courseSlugSchema),
+  moduleController.list
+);
+router.post(
+  '/courses/:courseSlug/modules',
+  validate(createModuleSchema),
+  moduleController.create
+);
+router.patch(
+  '/courses/:courseSlug/modules/:moduleId',
+  validate(updateModuleSchema),
+  moduleController.update
+);
+router.delete(
+  '/courses/:courseSlug/modules/:moduleId',
+  validate(moduleParamsSchema),
+  moduleController.remove
+);
+router.patch(
+  '/courses/:courseSlug/modules/:moduleId/order',
+  validate(reorderModuleSchema),
+  moduleController.reorder
+);
+router.post(
+  '/courses/:courseSlug/modules/:moduleId/lessons',
+  validate(assignLessonSchema),
+  moduleController.assignLesson
+);
+router.delete(
+  '/courses/:courseSlug/modules/lessons/:lessonId',
+  validate(unassignLessonSchema),
+  moduleController.unassignLesson
 );
 
 // ─── Lessons ──────────────────────────────────────
@@ -100,6 +157,87 @@ router.delete(
   '/courses/:courseSlug/lessons/:lessonSlug',
   validate(lessonSlugSchema),
   instructorCourseController.removeLesson
+);
+
+// ─── Cohorts ──────────────────────────────────────
+router.get('/cohorts', cohortController.listMine);
+router.post(
+  '/cohorts',
+  validate(createCohortSchema),
+  cohortController.create
+);
+router.get(
+  '/cohorts/:cohortId',
+  validate(cohortIdSchema),
+  cohortController.getDetail
+);
+router.patch(
+  '/cohorts/:cohortId',
+  validate(updateCohortSchema),
+  cohortController.update
+);
+router.patch(
+  '/cohorts/:cohortId/archive',
+  validate(setArchivedSchema),
+  cohortController.setArchived
+);
+router.delete(
+  '/cohorts/:cohortId',
+  validate(cohortIdSchema),
+  cohortController.remove
+);
+router.post(
+  '/cohorts/:cohortId/members',
+  validate(addMemberSchema),
+  cohortController.addMember
+);
+router.patch(
+  '/cohorts/:cohortId/members/:userId',
+  validate(updateMemberRoleSchema),
+  cohortController.updateMemberRole
+);
+router.delete(
+  '/cohorts/:cohortId/members/:userId',
+  validate(memberParamsSchema),
+  cohortController.removeMember
+);
+
+// ─── Project submissions + reviews ────────────────
+//
+// Ordered: the pending-reviews aggregate first (most specific
+// path), then the per-project listing, then the submission
+// detail, then the evaluations reader, then the review reader,
+// then the review writer. Order here is by specificity, not by
+// HTTP verb — nothing in this block collides today, but keeping
+// the pattern consistent with admin.routes.ts avoids surprise.
+router.get(
+  '/reviews/pending',
+  instructorEvaluationController.listPendingReviews
+);
+router.get(
+  '/projects/:slug/submissions',
+  validate(projectSubmissionsParamsSchema),
+  instructorEvaluationController.listProjectSubmissions
+);
+router.get(
+  '/submissions/:submissionId',
+  validate(submissionParamsSchema),
+  instructorEvaluationController.getSubmission
+);
+router.get(
+  '/submissions/:submissionId/evaluations',
+  validate(submissionParamsSchema),
+  instructorEvaluationController.listEvaluations
+);
+router.get(
+  '/submissions/:submissionId/reviews',
+  validate(submissionParamsSchema),
+  instructorEvaluationController.list
+);
+router.post(
+  '/submissions/:submissionId/reviews',
+  validate(createReviewSchema),
+  instructorEvaluationController.create
 );
 
 // ─── Team (by user id) ────────────────────────────

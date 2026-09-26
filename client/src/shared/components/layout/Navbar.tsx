@@ -1,21 +1,37 @@
 import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { Button } from '../ui/Button';
 import { UserMenu } from './UserMenu';
 import { MobileNav } from './MobileNav';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { useAuthStore } from '../../store/auth.store';
 import { useIsMarketingRoute } from '../../hooks/useIsMarketingRoute';
 import { useScrolled } from '../../hooks/useScrolled';
+import { withNext } from '@/features/auth/lib/redirect';
 import { cn } from '../../lib/utils';
 
+/**
+ * Public + student navigation.
+ *
+ * Master Spec, section 2 — Public Navigation:
+ *   Home · Roadmaps · Practice · Compiler · [Login / Get Started]
+ *
+ * Once signed in, the right side shows the bell (unread count) and
+ * the user menu. The left side stays the same so a signed-in student
+ * keeps the same map of the product.
+ *
+ * "Compiler" is the label; the route is `/playground` (Batch 1
+ * decision A — keep the URL, change the label).
+ *
+ * Layout: full-bleed.
+ */
 const navItems = [
-  { to: '/courses', label: 'Courses' },
+  { to: '/', label: 'Home', end: true },
+  { to: '/roadmaps', label: 'Roadmaps' },
   { to: '/practice', label: 'Practice' },
-  { to: '/playground', label: 'Playground' },
-  { to: '/projects', label: 'Projects' },
-  { to: '/classes', label: 'Classes' },
+  { to: '/playground', label: 'Compiler' },
 ];
 
 export const Navbar: React.FC = () => {
@@ -23,11 +39,10 @@ export const Navbar: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isMarketing = useIsMarketingRoute();
   const scrolled = useScrolled(8);
+  const location = useLocation();
 
-  // On the marketing landing page, when the user hasn't scrolled yet,
-  // we render the navbar transparently over the hero. Once scrolled
-  // (or on any other route), it becomes the standard solid bar.
   const transparent = isMarketing && !scrolled;
+  const currentPath = `${location.pathname}${location.search}`;
 
   return (
     <>
@@ -40,7 +55,7 @@ export const Navbar: React.FC = () => {
         )}
       >
         <div className="flex h-16 w-full items-center justify-between px-4 md:px-6">
-          {/* Left: hamburger (mobile) + logo */}
+          {/* Left: hamburger + logo */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setMobileOpen(true)}
@@ -76,6 +91,7 @@ export const Navbar: React.FC = () => {
               <NavLink
                 key={item.to}
                 to={item.to}
+                end={item.end}
                 className={({ isActive }) =>
                   cn(
                     'rounded-lg px-3 py-2 text-sm font-medium transition-colors',
@@ -94,23 +110,31 @@ export const Navbar: React.FC = () => {
             ))}
           </nav>
 
-          {/* Right: theme + user */}
+          {/* Right: theme + bell + user */}
           <div className="flex items-center gap-2">
             <ThemeToggle transparent={transparent} />
             {user ? (
-              <UserMenu transparent={transparent} />
+              <>
+                <NotificationBell transparent={transparent} />
+                <UserMenu transparent={transparent} />
+              </>
             ) : (
               <>
-                <Link to="/login">
+                <Link to={withNext('/login', currentPath)}>
                   <Button
-                    variant={transparent ? 'ghost' : 'ghost'}
+                    variant="ghost"
                     size="sm"
-                    className={transparent ? '!text-white hover:bg-white/10' : ''}
+                    className={
+                      transparent ? '!text-white hover:bg-white/10' : ''
+                    }
                   >
                     Login
                   </Button>
                 </Link>
-                <Link to="/signup" className="hidden sm:inline-flex">
+                <Link
+                  to={withNext('/signup', currentPath)}
+                  className="hidden sm:inline-flex"
+                >
                   <Button size="sm">Get Started</Button>
                 </Link>
               </>

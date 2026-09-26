@@ -1,4 +1,5 @@
 import type { GlobalPermission, CourseTeamRole } from './permissions.js';
+import type { ITutorialChallenge } from './tutorial.js';
 
 export const COURSE_LANGUAGES = [
   'html-css', 'javascript', 'typescript', 'python', 'ruby', 'java',
@@ -76,6 +77,7 @@ export interface IWebLessonStep {
 export interface ILesson {
   _id: string;
   courseId: string;
+  moduleId?: string;
   title: string;
   slug: string;
   order: number;
@@ -93,6 +95,12 @@ export interface ILesson {
   language: CourseLanguage;
   testCases: ITestCase[];
   steps: IWebLessonStep[];
+  /**
+   * FreeCodeCamp-style guided exercises. Usually empty. When
+   * non-empty, the lesson shows a challenge strip above the editor
+   * and the student works through them in order.
+   */
+  tutorialChallenges: ITutorialChallenge[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -136,6 +144,19 @@ export interface ICourseMembership {
   role: CourseTeamRole;
   addedAt: Date;
   addedBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IStudentEnrollment {
+  _id: string;
+  userId: string;
+  courseId?: string;
+  roadmapId?: string;
+  cohortId?: string;
+  joinedAt: Date;
+  source: 'manual' | 'paid' | 'invited';
+  paymentId?: string;
   createdAt: Date;
   updatedAt: Date;
 }

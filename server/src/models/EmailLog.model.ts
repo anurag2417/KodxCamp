@@ -5,7 +5,8 @@ export type EmailTemplate =
   | 'invitation'
   | 'password-reset'
   | 'announcement'
-  | 'digest';
+  | 'digest'
+  | 'notification';
 
 export type EmailStatus = 'queued' | 'sent' | 'failed';
 
@@ -41,7 +42,14 @@ const emailLogSchema = new Schema<EmailLogDocument>(
     to: { type: String, required: true, index: true },
     template: {
       type: String,
-      enum: ['otp', 'invitation', 'password-reset', 'announcement', 'digest'],
+      enum: [
+        'otp',
+        'invitation',
+        'password-reset',
+        'announcement',
+        'digest',
+        'notification',
+      ],
       required: true,
       index: true,
     },

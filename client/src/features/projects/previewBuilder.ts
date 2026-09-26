@@ -1,8 +1,23 @@
 import type { ApiProjectFile } from '@/features/projects/api';
+import { mergeWebFilesIntoHtml } from '@/shared/lib/preview';
 
 /**
- * Combine user files into a single HTML document ready for a sandboxed iframe.
- * Handles: html, css (inlined), js (inlined, after DOM ready), jsx (via CDN React).
+ * Project preview builder.
+ *
+ * This is the project-page preview entry point. It dispatches across
+ * preview modes:
+ *
+ *   - `html`  → merge index.html + styles.css + script.js
+ *   - `react` → wrap in a React 18 UMD + Babel standalone harness
+ *   - `sql`   → a static text preview (real execution is elsewhere)
+ *   - `none`  → a placeholder page
+ *
+ * The HTML branch delegates the merge to `mergeWebFilesIntoHtml` in
+ * `@/shared/lib/preview`, which is the canonical implementation of
+ * that transformation. That primitive is also used by the project
+ * test engine and the screenshot runner.
+ *
+ * The React and SQL branches are project-specific and live here.
  */
 export function buildPreviewHtml(
   files: ApiProjectFile[],
@@ -20,49 +35,35 @@ export function buildPreviewHtml(
     return buildSqlPlaceholder(files);
   }
 
-  // Default: HTML
   return buildHtmlPreview(files);
 }
 
 function buildHtmlPreview(files: ApiProjectFile[]): string {
-  const html = files.find((f) => f.name.endsWith('.html'))?.content ?? '';
-  const css = files.find((f) => f.name.endsWith('.css'))?.content ?? '';
-  const js = files.find((f) => f.name.endsWith('.js'))?.content ?? '';
+  const html = files.find((f) => f.language === 'html')?.content ?? '';
+  const css = files.find((f) => f.language === 'css')?.content ?? '';
+  const js = files.find((f) => f.language === 'javascript')?.content ?? '';
 
-  // If the HTML already links to css/js by filename, we still inline them.
-  let doc = html;
-
-  // Inject CSS
-  if (css) {
-    const styleTag = `<style>${css}</style>`;
-    if (doc.includes('</head>')) {
-      doc = doc.replace('</head>', `${styleTag}\n</head>`);
-    } else {
-      doc = styleTag + doc;
-    }
-  }
-
-  // Inject JS - remove the <script src="..."> so it doesn't 404
-  doc = doc.replace(/<script[^>]*src=[^>]*><\/script>/gi, '');
-
-  if (js) {
-    const scriptTag = `<script>${js}</script>`;
-    if (doc.includes('</body>')) {
-      doc = doc.replace('</body>', `${scriptTag}\n</body>`);
-    } else {
-      doc += scriptTag;
-    }
-  }
-
-  return doc;
+  return mergeWebFilesIntoHtml(html, css, js);
 }
 
 function buildReactPreview(files: ApiProjectFile[]): string {
   const appFile =
-    files.find((f) => f.name.endsWith('.jsx') || f.name.endsWith('.js')) ?? files[0];
+    files.find((f) => f.name.endsWith('.jsx') || f.name.endsWith('.js')) ??
+    files[0];
   const code = appFile?.content ?? '';
 
-  // Use Babel standalone to transform JSX in the iframe. Simple but works.
+  // React 18 UMD + Babel standalone, loaded from unpkg.
+  //
+  // This runs the student's JSX *inside the preview iframe*, with
+  // whatever sandbox flags the caller set on that iframe. The
+  // project workspace uses `allow-scripts allow-forms allow-modals
+  // allow-popups` — scripts run, but the iframe has no same-origin
+  // access to the parent.
+  //
+  // This is fine for the live preview. It is NOT what the test
+  // engine or screenshot runner do — they handle `react` preview
+  // mode differently (the engine skips non-html previews; the
+  // screenshot runner renders a script-stripped static copy).
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -105,7 +106,7 @@ function buildSqlPlaceholder(files: ApiProjectFile[]): string {
 }
 
 function escapeForInline(code: string): string {
-  // Don't let user code close the script tag early
+  // Don't let user code close the script tag early.
   return code.replace(/<\/script>/gi, '<\\/script>');
 }
 

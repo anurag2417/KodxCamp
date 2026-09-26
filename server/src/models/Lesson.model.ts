@@ -6,7 +6,6 @@ type ProblemOutputMode = 'return' | 'print';
 interface LessonTestCase {
   input: string;
   expectedOutput: string;
-  /** Display flag. Hides input/output from the student's test panel. */
   isHidden: boolean;
 }
 
@@ -28,8 +27,31 @@ interface WebLessonStep {
   webChecks: WebChecks;
 }
 
+/**
+ * A tutorial challenge, embedded on the lesson.
+ * See `shared/src/types/tutorial.ts` for the canonical type.
+ */
+interface TutorialChallenge {
+  title: string;
+  instructions: string;
+  hint?: string;
+  starterCode: string;
+  checks: Array<
+    | { type: 'includes'; value: string; label?: string }
+    | {
+        type: 'dom';
+        selector: string;
+        expect: 'exists' | 'textEquals' | 'textMatches';
+        value?: string;
+        label?: string;
+      }
+  >;
+  language: string;
+}
+
 interface LessonFields {
   courseId: string;
+  moduleId?: string;
   title: string;
   slug: string;
   order: number;
@@ -46,6 +68,12 @@ interface LessonFields {
   testCases: LessonTestCase[];
   /** Step-by-step mode. Empty array means classic single-shot. */
   steps: WebLessonStep[];
+  /**
+   * FreeCodeCamp-style guided exercises. Empty by default.
+   * When non-empty, the student sees them as a strip above the
+   * editor and works through them in order.
+   */
+  tutorialChallenges: TutorialChallenge[];
 }
 
 export interface LessonDocument extends LessonFields, Document {}
@@ -102,9 +130,44 @@ const webLessonStepSchema = new Schema<WebLessonStep>(
   { _id: false }
 );
 
+/**
+ * A single tutorial challenge check. `_id: false` because these are
+ * positional data — a challenge's checks are identified by index, not
+ * by an id.
+ */
+const challengeCheckSchema = new Schema(
+  {
+    type: { type: String, enum: ['includes', 'dom'], required: true },
+    // 'includes'
+    value: { type: String },
+    // 'dom'
+    selector: { type: String },
+    expect: {
+      type: String,
+      enum: ['exists', 'textEquals', 'textMatches'],
+    },
+    // shared
+    label: { type: String },
+  },
+  { _id: false, strict: true }
+);
+
+const tutorialChallengeSchema = new Schema<TutorialChallenge>(
+  {
+    title: { type: String, required: true, trim: true },
+    instructions: { type: String, required: true },
+    hint: { type: String, default: undefined },
+    starterCode: { type: String, default: '' },
+    checks: { type: [challengeCheckSchema], default: [] },
+    language: { type: String, default: 'html', trim: true },
+  },
+  { _id: false }
+);
+
 const lessonSchema = new Schema<LessonDocument>(
   {
     courseId: { type: String, required: true, index: true },
+    moduleId: { type: String, required: false, index: true },
     title: { type: String, required: true },
     slug: { type: String, required: true },
     order: { type: Number, required: true },
@@ -131,10 +194,12 @@ const lessonSchema = new Schema<LessonDocument>(
     },
     testCases: { type: [testCaseSchema], default: [] },
     steps: { type: [webLessonStepSchema], default: [] },
+    tutorialChallenges: { type: [tutorialChallengeSchema], default: [] },
   },
   { timestamps: true }
 );
 
 lessonSchema.index({ courseId: 1, order: 1 });
+lessonSchema.index({ courseId: 1, moduleId: 1, order: 1 });
 
 export const Lesson = mongoose.model<LessonDocument>('Lesson', lessonSchema);

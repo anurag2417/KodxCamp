@@ -1,189 +1,253 @@
-import { useState } from 'react';
-import { Play, CheckCircle2, Loader2 } from 'lucide-react';
-import { useInView } from '../hooks/useInView';
-import { cn } from '../../../shared/lib/utils';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Float, RoundedBox, Text } from '@react-three/drei';
+import { useRef } from 'react';
+import * as THREE from 'three';
+import { useThemeStore } from '@/shared/store/theme.store';
 
-type Tab = 'javascript' | 'python';
+/**
+ * The three.js scene is ~600 kB. It is rendered lazily by
+ * `CodePreview` below, which means this module (and three.js) only
+ * load when the hero scrolls into view.
+ */
 
-const SAMPLE_CODE: Record<Tab, string> = {
-  javascript: `function reverse(str) {
-  return str.split('').reverse().join('');
-}
+function LaptopScreen({ dark }: { dark: boolean }) {
+  const group = useRef<THREE.Group>(null);
 
-const result = reverse("kodxcamp");
-console.log(result);`,
-  python: `def reverse(s):
-    return s[::-1]
-
-print(reverse("kodxcamp"))`,
-};
-
-const EXPECTED_OUTPUT = 'pmacxodk';
-
-export const CodePreview: React.FC = () => {
-  const { ref, inView } = useInView();
-  const [tab, setTab] = useState<Tab>('javascript');
-  const [running, setRunning] = useState(false);
-  const [output, setOutput] = useState<string | null>(null);
-  const [passed, setPassed] = useState(false);
-
-  const run = async () => {
-    setRunning(true);
-    setOutput(null);
-    setPassed(false);
-
-    // Simulate a quick "run" - this is a marketing demo, not a real runner
-    await new Promise((r) => setTimeout(r, 600));
-
-    setOutput(EXPECTED_OUTPUT);
-    setPassed(true);
-    setRunning(false);
-  };
+  useFrame((state) => {
+    if (!group.current) return;
+    group.current.rotation.y =
+      Math.sin(state.clock.elapsedTime * 0.42) * 0.035;
+    group.current.rotation.x =
+      -0.1 + Math.sin(state.clock.elapsedTime * 0.3) * 0.012;
+  });
 
   return (
-    <section ref={ref} className="bg-surface-secondary py-24">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="grid items-center gap-16 lg:grid-cols-2">
-          {/* Copy */}
-          <div className={inView ? 'reveal-left' : 'opacity-0'}>
-            <p className="text-xs font-semibold uppercase tracking-widest text-brand-500">
-              The workspace
-            </p>
-            <h2 className="mt-3 text-3xl font-bold text-text-primary md:text-4xl">
-              A code editor that feels like home.
-            </h2>
-            <p className="mt-4 text-base text-text-muted">
-              Monaco-powered editor. Real test cases. Instant feedback. Run
-              JavaScript or Python without installing a thing.
-            </p>
+    <group ref={group} rotation={[0, -0.12, 0]}>
+      <RoundedBox
+        args={[4.8, 3.05, 0.18]}
+        radius={0.16}
+        smoothness={5}
+        position={[0, 1.55, 0]}
+      >
+        <meshStandardMaterial
+          color={dark ? '#111827' : '#cbd5e1'}
+          metalness={0.82}
+          roughness={0.2}
+        />
+      </RoundedBox>
 
-            <ul className="mt-8 space-y-4">
-              {[
-                'Split-panel layout: instructions, editor, console',
-                'Auto-invokes your function and compares output',
-                'Beautiful results view with per-test feedback',
-                'Persistent Python runtime - no cold starts',
-              ].map((line) => (
-                <li key={line} className="flex items-start gap-3">
-                  <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-500/10">
-                    <svg
-                      className="h-3 w-3 text-brand-500"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </span>
-                  <span className="text-sm text-text-secondary">{line}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+      <RoundedBox
+        args={[4.36, 2.61, 0.035]}
+        radius={0.08}
+        smoothness={4}
+        position={[0, 1.55, 0.105]}
+      >
+        <meshStandardMaterial
+          color={dark ? '#07111f' : '#f8fafc'}
+          metalness={0.15}
+          roughness={0.3}
+        />
+      </RoundedBox>
 
-          {/* Interactive mockup */}
-          <div className={inView ? 'reveal-right' : 'opacity-0'}>
-            <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
-              {/* Toolbar */}
-              <div className="flex items-center justify-between border-b border-border bg-surface-secondary px-3 py-2">
-                <div className="flex items-center gap-1 rounded-lg bg-surface p-0.5">
-                  {(['javascript', 'python'] as Tab[]).map((l) => (
-                    <button
-                      key={l}
-                      onClick={() => {
-                        setTab(l);
-                        setOutput(null);
-                        setPassed(false);
-                      }}
-                      className={cn(
-                        'rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors',
-                        tab === l
-                          ? 'bg-brand-500 text-white'
-                          : 'text-text-muted hover:text-text-secondary'
-                      )}
-                    >
-                      {l === 'javascript' ? 'JavaScript' : 'Python'}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={run}
-                  disabled={running}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
-                >
-                  {running ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Play size={12} />
-                  )}
-                  Run
-                </button>
-              </div>
+      <mesh position={[0, 1.55, 0.13]}>
+        <planeGeometry args={[4.02, 2.28]} />
+        <meshBasicMaterial color={dark ? '#0b1627' : '#ffffff'} />
+      </mesh>
 
-              {/* Editor */}
-              <pre className="max-h-[280px] overflow-auto bg-[#06191D] p-5 font-mono text-xs leading-relaxed text-[#D8E7E0]">
-                <code>{SAMPLE_CODE[tab]}</code>
-              </pre>
+      <Text
+        position={[-1.75, 2.42, 0.16]}
+        fontSize={0.13}
+        color="#60a5fa"
+        anchorX="left"
+        anchorY="middle"
+      >
+        KodxCamp / Main.java
+      </Text>
+      <Text
+        position={[-1.75, 2.03, 0.16]}
+        fontSize={0.11}
+        color={dark ? '#94a3b8' : '#475569'}
+        anchorX="left"
+        anchorY="middle"
+      >
+        public static void main(String[] args)
+      </Text>
+      <Text
+        position={[-1.75, 1.69, 0.16]}
+        fontSize={0.11}
+        color="#f97316"
+        anchorX="left"
+        anchorY="middle"
+      >
+        System.out.println(&quot;Build.&quot;);
+      </Text>
+      <Text
+        position={[-1.75, 1.35, 0.16]}
+        fontSize={0.11}
+        color="#93c5fd"
+        anchorX="left"
+        anchorY="middle"
+      >
+        run();
+      </Text>
 
-              {/* Result panel */}
-              <div className="border-t border-border bg-surface p-4">
-                {output === null && !running && (
-                  <p className="text-xs text-text-muted">
-                    Click <strong className="text-text-secondary">Run</strong>{' '}
-                    to execute the code.
-                  </p>
-                )}
-                {running && (
-                  <p className="flex items-center gap-2 text-xs text-text-muted">
-                    <Loader2 size={12} className="animate-spin" /> Running…
-                  </p>
-                )}
-                {output !== null && (
-                  <div
-                    className={cn(
-                      'rounded-lg border p-3 text-xs',
-                      passed
-                        ? 'border-[var(--color-success)]/30 bg-[var(--color-success)]/5'
-                        : 'border-[var(--color-error)]/30 bg-[var(--color-error)]/5'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      {passed && (
-                        <CheckCircle2
-                          size={14}
-                          className="text-[var(--color-success)]"
-                        />
-                      )}
-                      <span
-                        className={cn(
-                          'font-semibold',
-                          passed
-                            ? 'text-[var(--color-success)]'
-                            : 'text-[var(--color-error)]'
-                        )}
-                      >
-                        {passed ? 'Accepted' : 'Wrong Answer'}
-                      </span>
-                      <span className="ml-auto text-text-muted">
-                        {passed ? '1/1 tests passed' : '0/1 tests passed'}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <span className="text-text-muted">Output: </span>
-                      <span className="font-mono text-text-primary">
-                        {output}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+      <RoundedBox
+        args={[0.75, 0.3, 0.045]}
+        radius={0.06}
+        smoothness={4}
+        position={[1.5, 2.34, 0.16]}
+      >
+        <meshStandardMaterial
+          color="#f97316"
+          emissive="#7c2d12"
+          emissiveIntensity={0.45}
+        />
+      </RoundedBox>
+      <Text position={[1.5, 2.34, 0.2]} fontSize={0.105} color="#ffffff">
+        RUN
+      </Text>
+    </group>
   );
-};
+}
+
+function LaptopBase({ dark }: { dark: boolean }) {
+  return (
+    <group rotation={[-0.03, -0.12, 0]}>
+      <RoundedBox
+        args={[5.25, 0.18, 3.6]}
+        radius={0.1}
+        smoothness={5}
+        position={[0, 0, 0.05]}
+      >
+        <meshStandardMaterial
+          color={dark ? '#64748b' : '#94a3b8'}
+          metalness={0.9}
+          roughness={0.18}
+        />
+      </RoundedBox>
+      <RoundedBox
+        args={[4.55, 0.045, 2.85]}
+        radius={0.08}
+        smoothness={4}
+        position={[0, 0.12, 0.08]}
+      >
+        <meshStandardMaterial
+          color={dark ? '#1e293b' : '#e2e8f0'}
+          metalness={0.25}
+          roughness={0.35}
+        />
+      </RoundedBox>
+      <RoundedBox
+        args={[1.25, 0.045, 0.72]}
+        radius={0.06}
+        smoothness={4}
+        position={[0, 0.145, 0.12]}
+      >
+        <meshStandardMaterial
+          color={dark ? '#334155' : '#cbd5e1'}
+          metalness={0.25}
+          roughness={0.3}
+        />
+      </RoundedBox>
+    </group>
+  );
+}
+
+function FloatingBadge({
+  position,
+  color,
+  label,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  color: string;
+  label: string;
+  scale?: number;
+}) {
+  return (
+    <Float speed={1.2} rotationIntensity={0.28} floatIntensity={0.55}>
+      <group position={position} scale={scale}>
+        <RoundedBox args={[0.85, 0.85, 0.25]} radius={0.16} smoothness={5}>
+          <meshStandardMaterial
+            color={color}
+            metalness={0.45}
+            roughness={0.18}
+            emissive={color}
+            emissiveIntensity={0.12}
+          />
+        </RoundedBox>
+        <Text position={[0, 0, 0.14]} fontSize={0.19} color="#ffffff">
+          {label}
+        </Text>
+      </group>
+    </Float>
+  );
+}
+
+function Scene({ dark }: { dark: boolean }) {
+  return (
+    <>
+      <ambientLight intensity={1.3} />
+      <directionalLight
+        position={[4, 6, 6]}
+        intensity={dark ? 3.2 : 2.5}
+        color="#dbeafe"
+      />
+      <pointLight
+        position={[-4, 2, 3]}
+        intensity={dark ? 18 : 10}
+        distance={12}
+        color="#2563eb"
+      />
+      <pointLight
+        position={[4, -1, 3]}
+        intensity={dark ? 13 : 9}
+        distance={10}
+        color="#f97316"
+      />
+
+      <group position={[0, -1.5, 0]} rotation={[-0.08, 0, 0]}>
+        <LaptopScreen dark={dark} />
+        <LaptopBase dark={dark} />
+      </group>
+
+      <FloatingBadge position={[-3.15, 1.7, 0.1]} color="#2563eb" label="</>" />
+      <FloatingBadge
+        position={[3.1, 2.1, 0.15]}
+        color="#f97316"
+        label="K"
+        scale={0.9}
+      />
+      <FloatingBadge
+        position={[3.25, -0.15, 0.2]}
+        color="#1e3a8a"
+        label="{}"
+        scale={0.75}
+      />
+
+      <Float speed={0.8} rotationIntensity={0.18} floatIntensity={0.4}>
+        <mesh position={[-2.9, -0.6, 0.2]}>
+          <icosahedronGeometry args={[0.28, 2]} />
+          <meshStandardMaterial
+            color="#60a5fa"
+            metalness={0.72}
+            roughness={0.16}
+          />
+        </mesh>
+      </Float>
+    </>
+  );
+}
+
+export default function CodePreview() {
+  const theme = useThemeStore((s) => s.theme);
+  const dark = theme === 'dark';
+
+  return (
+    <div className="kc-code-scene" aria-label="3D coding workspace">
+      <Canvas camera={{ position: [0, 0.6, 10], fov: 34 }} dpr={[1, 1.6]}>
+        <Scene dark={dark} />
+      </Canvas>
+    </div>
+  );
+}

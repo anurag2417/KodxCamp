@@ -1,4 +1,5 @@
 import { api } from '@/shared/lib/api';
+import type { ITutorialChallenge } from '@kodxcamp/shared';
 
 export type CourseBadge = 'LIVE' | 'NEW' | 'POPULAR' | 'STARTING SOON';
 
@@ -79,6 +80,7 @@ export interface ApiLessonSummary {
   order: number;
   language: string;
   problemSlug?: string;
+  moduleId?: string;
 }
 
 export interface ApiLessonTestCase {
@@ -107,6 +109,7 @@ export interface ApiWebLessonStep {
 export interface ApiLessonFull {
   _id: string;
   courseId: string;
+  moduleId?: string;
   title: string;
   slug: string;
   order: number;
@@ -125,10 +128,21 @@ export interface ApiLessonFull {
   language: string;
   testCases: ApiLessonTestCase[];
   steps: ApiWebLessonStep[];
+  /** FreeCodeCamp-style guided exercises. Empty when the lesson has none. */
+  tutorialChallenges: ITutorialChallenge[];
+}
+
+export interface ApiCourseModule {
+  _id: string;
+  courseId: string;
+  title: string;
+  description?: string;
+  order: number;
 }
 
 export interface ApiCourseWithLessons extends ApiCourse {
   lessons: ApiLessonSummary[];
+  modules: ApiCourseModule[];
 }
 
 export interface ApiQuizQuestion {
@@ -158,9 +172,7 @@ export const coursesApi = {
     return data.data;
   },
 
-  getBySlug: async (
-    slug: string
-  ): Promise<ApiCourseWithLessons> => {
+  getBySlug: async (slug: string): Promise<ApiCourseWithLessons> => {
     const { data } = await api.get(`/courses/${slug}`);
     return data.data;
   },
@@ -175,8 +187,13 @@ export const coursesApi = {
     return data.data;
   },
 
-  getQuiz: async (courseSlug: string, lessonSlug: string): Promise<ApiQuizQuestion[]> => {
-    const { data } = await api.get(`/courses/${courseSlug}/lessons/${lessonSlug}/quiz`);
+  getQuiz: async (
+    courseSlug: string,
+    lessonSlug: string
+  ): Promise<ApiQuizQuestion[]> => {
+    const { data } = await api.get(
+      `/courses/${courseSlug}/lessons/${lessonSlug}/quiz`
+    );
     return data.data;
   },
 
@@ -185,12 +202,15 @@ export const coursesApi = {
     lessonSlug: string,
     answers: Record<string, string | string[]>
   ): Promise<ApiQuizResult> => {
-    const { data } = await api.post(`/courses/${courseSlug}/lessons/${lessonSlug}/quiz/submit`, { answers });
+    const { data } = await api.post(
+      `/courses/${courseSlug}/lessons/${lessonSlug}/quiz/submit`,
+      { answers }
+    );
     return data.data;
   },
 };
 
-// ─── Payments ─────────────────────────────────────────────────────
+/* ─── Payments ───────────────────────────────────────────────────── */
 
 export interface PaymentConfig {
   configured: boolean;
@@ -203,7 +223,12 @@ export interface CreateOrderResponse {
   amount: number;
   currency: string;
   keyId: string;
-  courseTitle: string;
+  title: string;
+}
+
+export interface PaymentEntityRef {
+  kind: 'course' | 'roadmap';
+  id: string;
 }
 
 export const paymentsApi = {
@@ -212,8 +237,10 @@ export const paymentsApi = {
     return data.data;
   },
 
-  createOrder: async (courseId: string): Promise<CreateOrderResponse> => {
-    const { data } = await api.post('/payments/create-order', { courseId });
+  createOrderFor: async (
+    ref: PaymentEntityRef
+  ): Promise<CreateOrderResponse> => {
+    const { data } = await api.post('/payments/create-order', ref);
     return data.data;
   },
 
@@ -226,8 +253,18 @@ export const paymentsApi = {
     return data.data;
   },
 
-  enrollFree: async (courseId: string): Promise<{ ok: boolean; alreadyEnrolled: boolean }> => {
-    const { data } = await api.post('/payments/enroll-free', { courseId });
+  enrollFreeFor: async (
+    ref: PaymentEntityRef
+  ): Promise<{ ok: boolean; alreadyEnrolled: boolean }> => {
+    const { data } = await api.post('/payments/enroll-free', ref);
     return data.data;
   },
+
+  createOrder: async (courseId: string): Promise<CreateOrderResponse> =>
+    paymentsApi.createOrderFor({ kind: 'course', id: courseId }),
+
+  enrollFree: async (
+    courseId: string
+  ): Promise<{ ok: boolean; alreadyEnrolled: boolean }> =>
+    paymentsApi.enrollFreeFor({ kind: 'course', id: courseId }),
 };

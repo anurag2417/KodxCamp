@@ -55,6 +55,58 @@ const envSchema = z.object({
    * the actual mode. Used to display a banner in the admin UI.
    */
   RAZORPAY_MODE: z.enum(['test', 'live']).optional(),
+
+  // ─── AI providers (optional) ──────────────────────────────────
+  //
+  // Two providers run per submission, in separate, versioned passes:
+  //
+  //   - TEXT    — reviews the student's code against the project
+  //               specification, rubric, and automated test results.
+  //               Default target is Groq's `openai/gpt-oss-120b`,
+  //               a text-only model. It cannot see screenshots.
+  //
+  //   - VISION  — reviews the rendered screenshots against the
+  //               specification's design and accessibility
+  //               requirements. Default target is Groq's
+  //               `meta-llama/llama-4-scout-17b-16e-instruct`, which
+  //               accepts image input.
+  //
+  // Both passes are independent. Neither overwrites the other, and
+  // neither overwrites the instructor's score. When a provider is
+  // not configured, its pass is skipped and its slot in the admin
+  // UI shows "not configured" rather than failing.
+  //
+  // `AI_TEXT_PROVIDER` and `AI_VISION_PROVIDER` accept the literal
+  // value `'null'` to force-disable a pass even when `GROQ_API_KEY`
+  // is set. That makes it possible to run code-only evaluation on a
+  // deployment that has a key, without editing the key itself.
+  //
+  // Get a Groq key at https://console.groq.com/keys
+  GROQ_API_KEY: z.string().optional(),
+
+  AI_TEXT_PROVIDER: z.enum(['groq', 'null']).default('null'),
+  AI_TEXT_MODEL: z.string().default('openai/gpt-oss-120b'),
+
+  AI_VISION_PROVIDER: z.enum(['groq', 'null']).default('null'),
+  AI_VISION_MODEL: z
+    .string()
+    .default('meta-llama/llama-4-scout-17b-16e-instruct'),
+
+  /**
+   * Shared sampling knobs for both passes.
+   *
+   * `temperature` is deliberately low: evaluation is a classification
+   * task, not a creative one. A deterministic-ish evaluator produces
+   * scores an instructor can reason about; a jittery one produces
+   * scores the instructor has to re-check.
+   *
+   * `maxTokens` caps a single response. The prompt asks the model for
+   * JSON only, so this is a ceiling on the size of that JSON. 4096 is
+   * enough for the largest rubric we anticipate (~20 categories with
+   * per-category notes).
+   */
+  AI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
+  AI_MAX_TOKENS: z.coerce.number().int().positive().max(32768).default(4096),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -79,6 +131,39 @@ export function isRazorpayConfigured(): boolean {
     env.RAZORPAY_KEY_ID &&
       env.RAZORPAY_KEY_SECRET &&
       env.RAZORPAY_WEBHOOK_SECRET
+  );
+}
+
+/**
+ * Is the text (code) evaluator configured?
+ *
+ * True only when the provider is `groq`, the Groq API key is present,
+ * and a model name has been set. Anything else falls through to the
+ * `NullProvider`, which returns a fixed "not configured" payload
+ * without making a network call.
+ */
+export function isAITextConfigured(): boolean {
+  return Boolean(
+    env.AI_TEXT_PROVIDER === 'groq' &&
+      env.GROQ_API_KEY &&
+      env.AI_TEXT_MODEL
+  );
+}
+
+/**
+ * Is the vision (screenshot) evaluator configured?
+ *
+ * Same rules as the text side. A deployment may run code-only
+ * evaluation by leaving `AI_VISION_PROVIDER` at its `'null'` default.
+ * That is a supported configuration, not a degraded one — the code
+ * pass runs, the vision pass is skipped, and the admin UI shows the
+ * vision slot as "not configured" rather than as an error.
+ */
+export function isAIVisionConfigured(): boolean {
+  return Boolean(
+    env.AI_VISION_PROVIDER === 'groq' &&
+      env.GROQ_API_KEY &&
+      env.AI_VISION_MODEL
   );
 }
 
@@ -157,5 +242,20 @@ if (env.NODE_ENV === 'production') {
       '❌ Razorpay is partially configured. Set RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, and RAZORPAY_WEBHOOK_SECRET, or none.'
     );
     process.exit(1);
+  }
+
+  // Groq: partial config is fine — the provider falls back to Null.
+  // The only hard rule is that a Groq-configured provider must have
+  // a key. If `AI_TEXT_PROVIDER` or `AI_VISION_PROVIDER` is `'groq'`
+  // but no key is present, we log a warning rather than refuse to
+  // start. Refusing to start would mean a deployment that forgot the
+  // key cannot boot at all — the Null fallback is the safer default.
+  if (
+    (env.AI_TEXT_PROVIDER === 'groq' || env.AI_VISION_PROVIDER === 'groq') &&
+    !env.GROQ_API_KEY
+  ) {
+    console.warn(
+      '⚠️  AI_TEXT_PROVIDER or AI_VISION_PROVIDER is set to "groq" but GROQ_API_KEY is not set. AI evaluation will fall back to the null provider.'
+    );
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -9,6 +9,7 @@ import {
   EyeOff,
   ListOrdered,
   Users,
+  Sparkles,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -17,6 +18,7 @@ import {
   type ApiInstructorCourseFull,
   type ApiInstructorLesson,
   type ApiCoursePermissions,
+  type ApiInstructorModule,
 } from '@/features/instructor/api';
 import { queryKeys } from '@/shared/lib/queryKeys';
 import { Spinner } from '@/shared/components/ui/Spinner';
@@ -31,6 +33,11 @@ import {
 } from '@/features/admin/components/TestCaseEditor';
 import { CourseQuizEditor } from '@/features/instructor/components/CourseQuizEditor';
 import { CourseTeamPanel } from '@/features/instructor/components/CourseTeamPanel';
+import { CourseModuleBar } from '@/features/instructor/components/CourseModuleBar';
+import {
+  TutorialChallengeEditor,
+  type EditableChallenge,
+} from '@/features/instructor/components/TutorialChallengeEditor';
 import {
   WebLessonStepsEditor,
   type EditableWebLessonStep,
@@ -40,6 +47,7 @@ interface LessonEditorState {
   title: string;
   slug: string;
   order: number;
+  moduleId: string | null;
   content: string;
   contentType: string;
   starterCode: string;
@@ -51,12 +59,17 @@ interface LessonEditorState {
   outputMode: 'return' | 'print';
   testCases: EditableTestCase[];
   steps: EditableWebLessonStep[];
+  tutorialChallenges: EditableChallenge[];
 }
 
-const emptyLesson = (order: number): LessonEditorState => ({
+const emptyLesson = (
+  order: number,
+  moduleId: string | null
+): LessonEditorState => ({
   title: '',
   slug: '',
   order,
+  moduleId,
   content: '',
   contentType: 'lesson',
   starterCode: '',
@@ -72,6 +85,7 @@ const emptyLesson = (order: number): LessonEditorState => ({
   outputMode: 'print',
   testCases: [],
   steps: [],
+  tutorialChallenges: [],
 });
 
 const DENY_ALL_PERMISSIONS: ApiCoursePermissions = {
@@ -97,6 +111,19 @@ function extractError(err: unknown): string {
   return 'Failed to save';
 }
 
+function autoSlug(val: string) {
+  return val
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+}
+
+function isWebCourse(language: string): boolean {
+  return language === 'html-css' || language === 'react' || language === 'tailwind';
+}
+
 export const InstructorCourseEdit: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -115,6 +142,7 @@ export const InstructorCourseEdit: React.FC = () => {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
 
   const course: ApiInstructorCourseFull | undefined = query.data;
 
@@ -130,10 +158,27 @@ export const InstructorCourseEdit: React.FC = () => {
     qc.invalidateQueries({ queryKey: queryKeys.courses.all });
   };
 
+  const lessonCountsByModule = useMemo(() => {
+    if (!course) return {};
+    const counts: Record<string, number> = {};
+    for (const lesson of course.lessons) {
+      if (lesson.moduleId) {
+        counts[lesson.moduleId] = (counts[lesson.moduleId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [course]);
+
+  const visibleLessons = useMemo(() => {
+    if (!course) return [];
+    if (!activeModuleId) return course.lessons;
+    return course.lessons.filter((l) => l.moduleId === activeModuleId);
+  }, [course, activeModuleId]);
+
   const openCreate = () => {
     const nextOrder =
       (course?.lessons.reduce((max, l) => Math.max(max, l.order), 0) ?? 0) + 1;
-    setEditing(emptyLesson(nextOrder));
+    setEditing(emptyLesson(nextOrder, activeModuleId));
     setOriginalSlug(null);
     setError('');
   };
@@ -165,10 +210,22 @@ export const InstructorCourseEdit: React.FC = () => {
       })
     );
 
+    const normalizedChallenges: EditableChallenge[] = (
+      lesson.tutorialChallenges ?? []
+    ).map((c) => ({
+      title: c.title,
+      instructions: c.instructions,
+      hint: c.hint ?? '',
+      starterCode: c.starterCode ?? '',
+      checks: c.checks ?? [],
+      language: c.language ?? 'html',
+    }));
+
     setEditing({
       title: lesson.title,
       slug: lesson.slug,
       order: lesson.order,
+      moduleId: lesson.moduleId ?? null,
       content: lesson.content,
       contentType: lesson.contentType ?? 'lesson',
       starterCode: lesson.starterCode ?? '',
@@ -188,6 +245,7 @@ export const InstructorCourseEdit: React.FC = () => {
       outputMode: lesson.outputMode ?? 'print',
       testCases: normalized,
       steps: normalizedSteps,
+      tutorialChallenges: normalizedChallenges,
     });
     setOriginalSlug(lesson.slug);
     setError('');
@@ -227,6 +285,38 @@ export const InstructorCourseEdit: React.FC = () => {
       issues.push('Step-by-step mode is only supported for HTML/CSS, React, and Tailwind courses');
     }
 
+    // Challenge validation: every challenge needs a title, instructions,
+    // and at least one check with a value.
+    editing.tutorialChallenges.forEach((c, i) => {
+      if (!c.title.trim()) issues.push(`Challenge #${i + 1}: title is required`);
+      if (!c.instructions.trim())
+        issues.push(`Challenge #${i + 1}: instructions are required`);
+      if (c.checks.length === 0)
+        issues.push(`Challenge #${i + 1}: at least one check is required`);
+      c.checks.forEach((check, j) => {
+        if (check.type === 'includes' && !check.value.trim()) {
+          issues.push(
+            `Challenge #${i + 1}, check #${j + 1}: substring is required`
+          );
+        }
+        if (check.type === 'dom') {
+          if (!check.selector.trim()) {
+            issues.push(
+              `Challenge #${i + 1}, check #${j + 1}: CSS selector is required`
+            );
+          }
+          if (
+            check.expect !== 'exists' &&
+            (!check.value || !check.value.trim())
+          ) {
+            issues.push(
+              `Challenge #${i + 1}, check #${j + 1}: expected value is required for "${check.expect}"`
+            );
+          }
+        }
+      });
+    });
+
     if (issues.length) {
       setError(issues.map((p) => `• ${p}`).join('\n'));
       setBusy(false);
@@ -237,6 +327,7 @@ export const InstructorCourseEdit: React.FC = () => {
       title: editing.title,
       slug: editing.slug,
       order: editing.order,
+      moduleId: editing.moduleId,
       content: editing.content,
       contentType: editing.contentType,
       starterCode: editing.starterCode,
@@ -253,6 +344,14 @@ export const InstructorCourseEdit: React.FC = () => {
         input: tc.input,
         expectedOutput: tc.expectedOutput,
         isHidden: tc.isHidden,
+      })),
+      tutorialChallenges: editing.tutorialChallenges.map((c) => ({
+        title: c.title.trim(),
+        instructions: c.instructions,
+        hint: c.hint || undefined,
+        starterCode: c.starterCode,
+        checks: c.checks,
+        language: c.language,
       })),
     };
 
@@ -389,6 +488,38 @@ export const InstructorCourseEdit: React.FC = () => {
         </div>
       </div>
 
+      {perms.canEditContent && !editing && (
+        <div className="mb-6">
+          <CourseModuleBar
+            courseSlug={course.slug}
+            modules={course.modules ?? []}
+            lessonCounts={lessonCountsByModule}
+            onChanged={refresh}
+            activeModuleId={activeModuleId ?? undefined}
+            onSelect={(id) =>
+              setActiveModuleId((current) => (current === id ? null : id))
+            }
+          />
+          {activeModuleId && (
+            <p className="mt-2 text-xs text-text-muted">
+              Showing lessons in{' '}
+              <strong>
+                {course.modules?.find((m) => m._id === activeModuleId)?.title ??
+                  'selected module'}
+              </strong>
+              .{' '}
+              <button
+                type="button"
+                onClick={() => setActiveModuleId(null)}
+                className="text-brand-500 hover:underline"
+              >
+                Show all
+              </button>
+            </p>
+          )}
+        </div>
+      )}
+
       {editing && (
         <Card className="mb-6 p-6">
           <div className="mb-4 flex items-center justify-between">
@@ -433,6 +564,29 @@ export const InstructorCourseEdit: React.FC = () => {
             className="mt-3"
           />
 
+          <div className="mt-3">
+            <label className="mb-1 block text-xs font-semibold text-text-secondary">
+              Module
+            </label>
+            <select
+              value={editing.moduleId ?? ''}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  moduleId: e.target.value === '' ? null : e.target.value,
+                })
+              }
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary"
+            >
+              <option value="">— No module (ungrouped) —</option>
+              {(course.modules ?? []).map((m: ApiInstructorModule) => (
+                <option key={m._id} value={m._id}>
+                  {m.order}. {m.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <textarea
             placeholder="Content (Markdown supported)"
             rows={6}
@@ -450,6 +604,26 @@ export const InstructorCourseEdit: React.FC = () => {
                 onChange={(e) => setEditing({ ...editing, contentType: e.target.value })}
               />
             </div>
+          </div>
+
+          {/* Tutorial challenges section — always available */}
+          <div className="mt-4 rounded-lg border border-border bg-surface-secondary p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles size={16} className="text-brand-500" />
+              <p className="text-sm font-semibold text-text-primary">
+                Tutorial Challenges
+              </p>
+            </div>
+            <p className="mb-3 text-xs text-text-muted">
+              FreeCodeCamp-style guided exercises. When present, they
+              replace the classic lesson editor for the student.
+            </p>
+            <TutorialChallengeEditor
+              challenges={editing.tutorialChallenges}
+              onChange={(tutorialChallenges) =>
+                setEditing({ ...editing, tutorialChallenges })
+              }
+            />
           </div>
 
           {isWebCourse(course.language) && (
@@ -630,7 +804,7 @@ export const InstructorCourseEdit: React.FC = () => {
       )}
 
       <div className="flex flex-col gap-2">
-        {course.lessons.map((l) => (
+        {visibleLessons.map((l) => (
           <Card key={l._id} className="flex items-center justify-between gap-4 p-4">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -641,6 +815,12 @@ export const InstructorCourseEdit: React.FC = () => {
                 {(l.steps?.length ?? 0) > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-medium text-brand-500">
                     <ListOrdered size={10} /> {l.steps.length} steps
+                  </span>
+                )}
+                {(l.tutorialChallenges?.length ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-medium text-brand-500">
+                    <Sparkles size={10} /> {l.tutorialChallenges.length}{' '}
+                    challenge{l.tutorialChallenges.length === 1 ? '' : 's'}
                   </span>
                 )}
                 {l.testCases.some((tc) => tc.isHidden) && (
@@ -670,20 +850,17 @@ export const InstructorCourseEdit: React.FC = () => {
           </Card>
         ))}
 
-        {course.lessons.length === 0 && (
+        {visibleLessons.length === 0 && (
           <Card className="p-8 text-center text-sm text-text-muted">
-            {perms.canEditContent
-              ? 'No lessons yet. Add the first one above.'
-              : 'No lessons yet.'}
+            {activeModuleId
+              ? 'This module has no lessons yet.'
+              : perms.canEditContent
+                ? 'No lessons yet. Add the first one above.'
+                : 'No lessons yet.'}
           </Card>
         )}
       </div>
 
-      {/*
-        Course team panel. Rendered whenever the viewer can manage the
-        team (admins and course leads). Instructors on the course who
-        only have `course_author` or below don't see this section.
-      */}
       {perms.canManageTeam && (
         <div className="mt-8">
           <div className="mb-3 flex items-center gap-2">
@@ -730,16 +907,3 @@ export const InstructorCourseEdit: React.FC = () => {
     </div>
   );
 };
-
-function autoSlug(val: string) {
-  return val
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-');
-}
-
-function isWebCourse(language: string): boolean {
-  return language === 'html-css' || language === 'react' || language === 'tailwind';
-}

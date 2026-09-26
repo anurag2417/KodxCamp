@@ -17,6 +17,13 @@ interface Props {
   transparent?: boolean;
 }
 
+/**
+ * User menu dropdown.
+ *
+ * Menu items mirror the student's primary destinations. "Dashboard"
+ * currently links to `/dashboard`; once the real My Learning page
+ * lands (Batch 2), this becomes `/my-learning`.
+ */
 export const UserMenu: React.FC<Props> = ({ transparent }) => {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);

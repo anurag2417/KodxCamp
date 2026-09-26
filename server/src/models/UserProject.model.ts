@@ -1,12 +1,19 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 import type { IProjectFile } from './Project.model.js';
 
+export type UserProjectStatus =
+  | 'in_progress'
+  | 'submitted'
+  | 'needs_improvement'
+  | 'resubmission_requested'
+  | 'completed';
+
 export interface IUserProject {
   _id: string;
   userId: string;
   projectId: string;
   files: IProjectFile[];
-  status: 'in_progress' | 'completed';
+  status: UserProjectStatus;
   completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -31,7 +38,13 @@ const userProjectSchema = new Schema<UserProjectDocument>(
     files: { type: [fileSchema], default: [] },
     status: {
       type: String,
-      enum: ['in_progress', 'completed'],
+      enum: [
+        'in_progress',
+        'submitted',
+        'needs_improvement',
+        'resubmission_requested',
+        'completed',
+      ],
       default: 'in_progress',
     },
     completedAt: { type: Date },

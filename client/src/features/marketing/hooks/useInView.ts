@@ -1,43 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 
-interface Options {
-  rootMargin?: string;
-  threshold?: number;
-  /** If true, once in view, stay in view (don't toggle on scroll out) */
-  once?: boolean;
-}
-
-export function useInView<T extends HTMLElement = HTMLElement>(
-  options: Options = {}
-) {
-  const { rootMargin = '0px 0px -10% 0px', threshold = 0.1, once = true } = options;
-  const ref = useRef<T | null>(null);
+export function useInView(ref: RefObject<Element | null>, threshold = 0.2) {
   const [inView, setInView] = useState(false);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    if (typeof IntersectionObserver === 'undefined') {
-      setInView(true);
-      return;
-    }
+    const element = ref.current;
+    if (!element) return;
 
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setInView(true);
-          if (once) observer.disconnect();
-        } else if (!once) {
-          setInView(false);
-        }
-      },
-      { rootMargin, threshold }
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold, rootMargin: '0px 0px -10% 0px' }
     );
 
-    observer.observe(el);
+    observer.observe(element);
     return () => observer.disconnect();
-  }, [rootMargin, threshold, once]);
+  }, [ref, threshold]);
 
-  return { ref, inView };
+  return inView;
 }

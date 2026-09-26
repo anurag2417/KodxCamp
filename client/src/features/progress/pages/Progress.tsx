@@ -10,6 +10,20 @@ import { XPBar } from '@/features/progress/components/XPBar';
 import { StreakFlame } from '@/features/progress/components/StreakFlame';
 import { ActivityHeatmap } from '@/features/progress/components/ActivityHeatmap';
 
+/**
+ * Difficulty accents for the breakdown bar.
+ * These are semantic (easy/medium/hard), not brand. They live outside
+ * the theme tokens on purpose — a "hard" problem should read red in
+ * both light and dark mode, and the same for "medium" amber and
+ * "easy" green. The `--color-difficulty-*` tokens in index.css are
+ * the canonical source; this file just references them.
+ */
+const DIFFICULTY_ACCENTS: Record<'easy' | 'medium' | 'hard', string> = {
+  easy: 'var(--color-success)',
+  medium: 'var(--color-warning)',
+  hard: 'var(--color-error)',
+};
+
 export const Progress: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const {
@@ -149,11 +163,13 @@ export const Progress: React.FC = () => {
                 <span className="mt-1 text-xs text-text-muted">solved</span>
               </div>
               <div className="w-full space-y-3">
-                {[
-                  { label: 'Easy', value: difficulty?.easy ?? 0, color: '#2A835F' },
-                  { label: 'Medium', value: difficulty?.medium ?? 0, color: '#C58A24' },
-                  { label: 'Hard', value: difficulty?.hard ?? 0, color: '#C65353' },
-                ].map((d) => (
+                {(
+                  [
+                    { label: 'Easy', value: difficulty?.easy ?? 0, key: 'easy' as const },
+                    { label: 'Medium', value: difficulty?.medium ?? 0, key: 'medium' as const },
+                    { label: 'Hard', value: difficulty?.hard ?? 0, key: 'hard' as const },
+                  ]
+                ).map((d) => (
                   <div key={d.label}>
                     <div className="flex justify-between text-xs text-text-muted">
                       <span>{d.label}</span>
@@ -164,7 +180,7 @@ export const Progress: React.FC = () => {
                         className="h-full rounded-full"
                         style={{
                           width: `${totalSolved ? (d.value / totalSolved) * 100 : 0}%`,
-                          background: d.color,
+                          background: DIFFICULTY_ACCENTS[d.key],
                         }}
                       />
                     </div>
@@ -270,7 +286,7 @@ export const Progress: React.FC = () => {
         </Link>
         <Link to="/streak">
           <Card className="flex items-center gap-3 p-5 transition-all hover:border-brand-500/60">
-            <Flame size={28} className="text-orange-400" />
+            <Flame size={28} className="text-accent-500" />
             <div>
               <p className="text-sm font-semibold text-text-primary">Streak</p>
               <p className="text-xs text-text-muted">Keep the fire going</p>
