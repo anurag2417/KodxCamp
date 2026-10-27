@@ -5,6 +5,7 @@ import { Payment } from '../models/Payment.model.js';
 import { StudentEnrollment } from '../models/StudentEnrollment.model.js';
 import { Cohort } from '../models/Cohort.model.js';
 import { ApiError } from '../utils/ApiError.js';
+import { env } from '../config/env.js';
 import { razorpayService } from './razorpay.service.js';
 import { logger } from '../utils/logger.js';
 
@@ -130,7 +131,7 @@ export const paymentService = {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      keyId: process.env.RAZORPAY_KEY_ID,
+      keyId: env.RAZORPAY_KEY_ID,
       title: entity.title,
     };
   },

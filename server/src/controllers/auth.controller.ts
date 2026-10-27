@@ -235,7 +235,7 @@ export const authController = {
   }),
 
   logout: asyncHandler(async (_req: Request, res: Response) => {
-    res.clearCookie(COOKIE_NAME, { path: '/' });
+    res.clearCookie(COOKIE_NAME, cookieOptions());
     return ApiResponse.success(res, null, 'Logged out');
   }),
 

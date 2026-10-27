@@ -1,3 +1,5 @@
+import type { IModuleWithSections } from './module.js';
+
 export type CurriculumItemType =
   | 'lesson'
   | 'mcq'
@@ -75,17 +77,6 @@ export interface ICurriculumItem {
 
 export interface ISectionWithItems extends ISection {
   items: ICurriculumItem[];
-}
-
-export interface IModuleWithSections {
-  _id: string;
-  courseId: string;
-  title: string;
-  description?: string;
-  order: number;
-  createdAt: Date;
-  updatedAt: Date;
-  sections: ISectionWithItems[];
 }
 
 export interface ICourseCurriculum {

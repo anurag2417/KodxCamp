@@ -30,6 +30,9 @@ export const requireAuth = async (
     const user = await User.findById(decoded.id);
 
     if (!user) throw new ApiError(401, 'User no longer exists');
+    if (user.accountStatus === 'suspended') {
+      throw new ApiError(403, 'Your account has been suspended.');
+    }
 
     req.user = user;
     next();

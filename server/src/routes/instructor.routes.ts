@@ -32,6 +32,7 @@ import {
 } from '../controllers/quiz.controller.js';
 import {
   moduleController,
+  listModulesSchema,
   createModuleSchema,
   updateModuleSchema,
   moduleParamsSchema,
@@ -108,7 +109,7 @@ router.delete(
 // ─── Modules ──────────────────────────────────────
 router.get(
   '/courses/:courseSlug/modules',
-  validate(courseSlugSchema),
+  validate(listModulesSchema),
   moduleController.list
 );
 router.post(

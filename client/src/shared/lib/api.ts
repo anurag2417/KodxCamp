@@ -18,7 +18,14 @@ api.interceptors.response.use(
 
     // Don't nuke the session on /auth/me - that call *determines* the session
     if (status === 401 && !url.includes('/auth/me')) {
-      // Clear auth store lazily to avoid circular import at module load
+      // Clear auth store lazily to avoid circular import at module load.
+      // The dynamic import is intentional: api.ts is imported before
+      // auth.store finishes evaluating (auth.store → authApi → api).
+      // Using a dynamic import defers module resolution to after all
+      // modules have initialised, breaking the cycle safely.
+      // Rollup warns that the dynamic import won't split auth.store into
+      // its own chunk (because it is also statically imported elsewhere),
+      // but the behaviour is still correct.
       void import('@/shared/store/auth.store').then(({ useAuthStore }) => {
         useAuthStore.getState().clearUser();
       });

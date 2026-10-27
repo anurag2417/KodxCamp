@@ -5,7 +5,6 @@ import axios from 'axios';
 import { AuthLayout } from '../components/AuthLayout';
 import { AuthField } from '../components/AuthField';
 import { Seo } from '../../../shared/components/seo/Seo';
-import { authApi } from '../api';
 import { useAuthStore } from '../../../shared/store/auth.store';
 import { isFirebaseConfigured } from '../lib/firebase';
 import { getGoogleIdToken } from '../lib/googleSignIn';

@@ -30,7 +30,9 @@ export const validate = (schema: ZodSchema) => {
     }
 
     // Replace with parsed data (defaults applied, unknown keys stripped)
-    req.body = result.data.body ?? req.body;
+    if (result.data.body !== undefined) req.body = result.data.body;
+    if (result.data.query !== undefined) req.query = result.data.query as unknown as typeof req.query;
+    if (result.data.params !== undefined) req.params = result.data.params as unknown as typeof req.params;
     next();
   };
 };

@@ -136,7 +136,11 @@ export function createApp() {
 
   // ─── Serve built client in production ────
   if (env.NODE_ENV === 'production') {
-    const clientDist = path.resolve(process.cwd(), '..', 'client', 'dist');
+    const candidateDists = [
+      path.resolve(process.cwd(), 'client', 'dist'),
+      path.resolve(process.cwd(), '..', 'client', 'dist'),
+    ];
+    const clientDist = candidateDists.find((d) => fs.existsSync(d)) ?? candidateDists[0];
 
     logger.info('Client serving check', {
       cwd: process.cwd(),
@@ -150,10 +154,16 @@ export function createApp() {
           maxAge: '1y',
           immutable: true,
           index: false,
+          setHeaders: (res, filePath) => {
+            if (filePath.endsWith('.html')) {
+              res.setHeader('Cache-Control', 'no-cache');
+            }
+          },
         })
       );
 
       app.get('*', (_req, res) => {
+        res.setHeader('Cache-Control', 'no-cache');
         res.sendFile(path.join(clientDist, 'index.html'));
       });
 

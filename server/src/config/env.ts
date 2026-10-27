@@ -1,7 +1,21 @@
 import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'server/.env') });
+
+if (process.env.NODE_ENV === 'test') {
+  process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kodxcamp_test';
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret_must_be_at_least_32_characters_long_12345';
+  process.env.AUTH_PEPPER = process.env.AUTH_PEPPER || 'test_auth_pepper_must_be_at_least_32_characters_long_12345';
+  process.env.SETUP_TOKEN_SECRET = process.env.SETUP_TOKEN_SECRET || 'test_setup_token_secret_must_be_at_least_32_chars_12345';
+}
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

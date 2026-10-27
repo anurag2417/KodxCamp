@@ -10,6 +10,10 @@ import type { AuthRequest } from '../middleware/auth.middleware.js';
 
 /* ─── Schemas ────────────────────────────────────────────────────── */
 
+export const listModulesSchema = z.object({
+  params: z.object({ courseSlug: z.string().min(1) }),
+});
+
 export const createModuleSchema = z.object({
   params: z.object({ courseSlug: z.string().min(1) }),
   body: z

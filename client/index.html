@@ -47,24 +47,19 @@
 
          The IDs are public (they're visible in the page source), so
          hardcoding them here is fine. If you'd rather keep them in
-         env vars, use Vite's `%VITE_UMAMI_WEBSITE_ID%` syntax — but
+         env vars, use Vite's `VITE_UMAMI_WEBSITE_ID` syntax — but
          the tradeoff is that a build without the env var silently
          disables analytics with no visible error.
          ═══════════════════════════════════════════════════════════ -->
 
   <!-- Umami -->
-  <script 
-    defer 
-    src="https://cloud.umami.is/script.js" 
-    data-website-id="915b7593-c846-45af-b93e-08110b6f01a4">
+  <script defer src="https://cloud.umami.is/script.js" data-website-id="915b7593-c846-45af-b93e-08110b6f01a4">
   </script>
 
   <!-- Cloudflare Web Analytics -->
-  <script 
-    type='module' 
-    src='https://static.cloudflareinsights.com/beacon.min.js'
+  <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js'
     data-cf-beacon='{"token": "ea6b0a73c97142b0b4e796e4af073f58"}'>
-  </script>
+    </script>
   <!-- End Cloudflare Web Analytics -->
 
   <!-- CheerpJ loader (Java runtime for the browser judge).

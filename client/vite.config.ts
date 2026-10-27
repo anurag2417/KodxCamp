@@ -64,6 +64,41 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    // Raise the warning threshold — Monaco + Pyodide are inherently large.
+    // We still split them into their own chunks below so the main bundle
+    // stays as small as possible.
+    chunkSizeWarningLimit: 4500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Monaco editor and its language contributions are ~2 MB minified.
+          // Split into a dedicated chunk so users who never open the editor
+          // don't download it on first load.
+          if (id.includes('node_modules/monaco-editor')) {
+            return 'monaco';
+          }
+          // Pyodide (Python runtime) is large and only needed in the
+          // Python code runner. Keep it out of the main bundle.
+          if (id.includes('node_modules/pyodide')) {
+            return 'pyodide';
+          }
+          // Three.js / fiber / drei — 3-D visualisations only.
+          if (
+            id.includes('node_modules/three') ||
+            id.includes('node_modules/@react-three')
+          ) {
+            return 'three';
+          }
+          // React + React-DOM in a stable vendor chunk that can be
+          // cached independently of app code.
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'react-vendor';
+          }
+        },
+      },
+    },
+  },
   optimizeDeps: {
     exclude: ['@kodxcamp/shared'],
     // Monaco's ESM entry points must be pre-bundled so Vite can resolve
