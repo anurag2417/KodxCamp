@@ -1,291 +1,253 @@
 # KodxCamp
 
-> Browser-first, learn-by-doing programming platform.
+> **Browser-first, learn-by-doing programming platform.**
 
-KodxCamp is a TypeScript monorepo for interactive coding lessons, programming
-practice, browser-based code execution, multi-file projects, live classes,
-recordings, progress tracking, and administration.
+KodxCamp is a modern TypeScript monorepo designed for interactive coding education, structured learning roadmaps, in-browser code execution, multi-file projects, live cohort classes, automated AI grading, and gamified progress tracking.
 
-KodxCamp is intentionally not a competitive programming platform: it has no
-contests, timed rounds, or competitive leaderboard. Problem code runs in the
-browser; the server records submission results and does not execute untrusted
-student code.
+Unlike competitive programming platforms, KodxCamp emphasizes **active learning, real-world development, and immediate feedback**: untrusted student code executes safely inside isolated browser sandboxes (Web Workers, WebAssembly, and sandboxed iframes), eliminating server-side security overhead and cold starts while giving learners instant execution and testing.
 
-## Features
+---
 
-- **Authentication** - registration, login, logout, JWT HTTP-only cookies, and
-  Origin-based CSRF protection.
-- **Roles and permissions** - student, instructor, and admin roles, plus
-  per-course team roles (`lead`, `author`, `reviewer`, `ta`, `viewer`).
-- **Courses and lessons** - course catalog, interactive Monaco lessons,
-  completion tracking, progress, and lesson XP.
-- **Problem practice** - difficulty/topic filters, JavaScript/Python editor,
-  browser test harness, submissions, solved state, and difficulty-based XP.
-- **Browser execution** - JavaScript Web Workers, Python/Pyodide, SQL.js, and
-  sandboxed frontend previews.
-- **Projects** - multi-file workspace, tabs, live preview, save/load, project
-  categories, and project XP.
-- **Live classes** - scheduling, Google Meet links, enrollment, lifecycle
-  transitions, recording uploads, chapters, playback progress, and catch-up
-  recordings.
-- **Progress** - XP, levels, streaks, activity history, weekly data,
-  difficulty breakdown, heatmap data, and achievements.
-- **Admin panel** - users, problems, projects, classes, statistics, and bulk
-  import.
-- **Instructor tools** - course editing, publishing, course teams, and
-  permission-aware team management.
-- **Shared UI** - responsive navigation, light/dark themes, toasts, loading
-  states, error boundary, SEO support, and reusable UI components.
+## Key Features
 
-## Technology
+### 1. In-Browser Multi-Language Execution
+- **Zero Local Setup**: Run code directly in the browser with syntax highlighting, autocomplete, and diagnostics powered by Monaco Editor.
+- **JavaScript & TypeScript**: Executed in dedicated isolated Web Workers.
+- **Python**: Executed in-browser via **Pyodide** (WebAssembly CPython 3.12).
+- **Ruby**: Executed via Web Worker ruby runtime.
+- **Java**: In-browser execution powered by **CheerpJ** with Range-request chunk streaming.
+- **SQL / Relational Databases**: In-browser query execution using **SQLite / sql.js** WebAssembly.
+- **Frontend Live Previews**: Sandboxed iframe previews with live reload for HTML, CSS, JavaScript, React, and Tailwind CSS.
 
-### Frontend
+### 2. Curriculum & Interactive Tutorials
+- **Courses & Modules**: Structured modules with video integration, step-by-step challenges, theory notes, and auto-graded test cases.
+- **Practice Problems**: Categorized by difficulty (Easy, Medium, Hard) and topics (Arrays, Strings, Dynamic Programming, Two Pointers, Greedy, Math, Hash Maps).
+- **Comprehensive Test Harness**: Public and hidden test cases with diffs and execution runtime metrics.
 
-- React 18, Vite, and TypeScript
-- Tailwind CSS and custom design tokens
-- React Router v6
-- Zustand and TanStack Query
-- Monaco Editor
-- Axios and Lucide React
-- Vitest and React Testing Library
+### 3. Career Roadmaps & Skill Trees
+- Guided learning paths (Full-Stack Web Development, Data Structures & Algorithms, Python Backend, etc.) with milestone progress tracking.
 
-### Backend
+### 4. Cohorts, Live Classes & Recordings
+- **Live Classes**: Google Meet integration, calendar scheduling, attendance tracking, and cohort lifecycle states.
+- **Cloudinary / Local Video Storage**: Streamed playback of class recordings, chapter markers, and watch progress.
 
-- Node.js and Express 4
-- TypeScript
-- MongoDB and Mongoose
-- JWT authentication and `bcryptjs`
-- Zod validation
-- Helmet, CORS, rate limiting, request IDs, and CSRF Origin checks
-- Multer for recording uploads
+### 5. Automated AI Evaluation Pipeline
+- **Groq LLM Integration**: Multi-modal evaluation pipeline for project submissions.
+- **Code Review Pass**: Structural and architectural code review evaluating adherence to project specifications.
+- **Vision Pass**: Multi-modal screenshot analysis verifying desktop and mobile UI fidelity.
 
-### Browser execution
+### 6. Gamification & Retention
+- Daily streaks, weekly heatmaps, activity tracking, XP levels, and achievement badges.
 
-- JavaScript isolated Web Worker
-- Python Web Worker with Pyodide
-- SQL.js
-- Sandboxed iframe for HTML/CSS/frontend previews
+### 7. Monetization & Payments
+- Built-in **Razorpay** checkout integration with HMAC webhook signature verification for paid courses and cohort enrollments.
 
-## Repository Structure
+### 8. Role-Based Workflows
+- **Student**: Learning dashboard, course workspaces, coding sandbox, achievements, and notifications.
+- **Instructor**: Cohort management, student roster review, course builder, project submission grading, and class announcements.
+- **Admin**: Platform metrics, user roles, catalog management, media management, AI status inspection, and bulk import.
+
+---
+
+## Monorepo Architecture
 
 ```text
 kodxcamp/
-├── client/       # React/Vite frontend
-├── server/       # Express/MongoDB backend
-├── shared/       # Shared TypeScript package
-├── .github/      # CI workflow
-├── docs/         # Project documentation
-├── package.json
+├── client/       # React 18, Vite, Tailwind CSS, Monaco Editor, Zustand
+├── server/       # Node.js, Express, TypeScript, MongoDB, Mongoose, Groq SDK
+├── shared/       # Shared TypeScript types, interfaces, constants, and permissions
+├── docs/         # Architecture notes and documentation
+├── .github/      # CI/CD workflows (GitHub Actions)
+├── package.json  # Root workspace configuration
 └── package-lock.json
 ```
 
-### Frontend
+### Workspace Details
 
-```text
-client/src/
-├── app/
-│   ├── App.tsx
-│   ├── providers.tsx
-│   ├── router.tsx
-│   └── pages/NotFound.tsx
-├── features/
-│   ├── admin/
-│   ├── auth/
-│   ├── classes/
-│   ├── courses/
-│   ├── dashboard/
-│   ├── instructor/
-│   ├── marketing/
-│   ├── playground/
-│   ├── problems/
-│   ├── progress/
-│   └── projects/
-├── shared/
-│   ├── components/
-│   │   ├── editor/
-│   │   ├── layout/
-│   │   ├── seo/
-│   │   └── ui/
-│   ├── hooks/
-│   ├── lib/
-│   ├── runner/
-│   └── store/
-├── styles/index.css
-├── test/setup.ts
-└── main.tsx
-```
+- **`@kodxcamp/shared`**: Shared domain contracts (`IUser`, `ICourse`, `IProblem`, `IProject`, etc.), permission enums, and constants.
+- **`@kodxcamp/server`**: REST API backend built on Express, secured with JWT HTTP-only cookies, CSRF protection, rate limiting, and Zod request validation.
+- **`@kodxcamp/client`**: Single-Page Application (SPA) built with React 18, React Router v6, Tailwind CSS, TanStack Query, Framer Motion, and Rollup chunk splitting.
 
-Feature-specific pages, components, hooks, and API modules live under their
-feature directory. Cross-cutting UI, runners, stores, and utilities live under
-`shared/`.
+---
 
-### Backend
+## Tech Stack
 
-```text
-server/src/
-├── config/
-├── controllers/
-├── middleware/
-├── models/
-├── routes/
-├── services/
-├── jobs/
-├── scripts/
-├── utils/
-├── app.ts
-└── index.ts
-```
+| Layer | Technologies |
+|---|---|
+| **Frontend** | React 18, Vite 5, TypeScript 5, Tailwind CSS, Monaco Editor, Zustand, TanStack Query, Lucide Icons, Framer Motion |
+| **In-Browser Runtimes** | Pyodide (Python), CheerpJ (Java), sql.js (SQLite), Isolated Web Workers (JS/Ruby) |
+| **Backend** | Node.js (>=20), Express 4, TypeScript 5, Mongoose 8, Zod, Helmet, Morgan, Compression |
+| **Database** | MongoDB (Local or MongoDB Atlas) |
+| **Media & Storage** | Cloudinary (Production) / Local Disk (Development) |
+| **Authentication** | JWT in HTTP-Only Cookies, bcryptjs with pepper, Firebase Admin (Google OAuth) |
+| **Email** | Nodemailer (Gmail SMTP or transactional providers) |
+| **Payments** | Razorpay Node SDK & Webhook verification |
+| **AI Evaluation** | Groq SDK (Llama 3 & Vision models) |
+| **Testing** | Vitest, React Testing Library, JSDOM |
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 20+
-- npm
-- MongoDB locally or through MongoDB Atlas
+- **Node.js**: `v20.x` or higher
+- **npm**: `v10.x` or higher
+- **MongoDB**: Local MongoDB instance (`mongodb://localhost:27017/kodxcamp`) or MongoDB Atlas URI
 
-### Install dependencies
+### 1. Clone & Install Dependencies
 
 ```powershell
+git clone https://github.com/your-org/kodxcamp.git
+cd kodxcamp
+
+# Install monorepo dependencies across all workspaces
 npm install
 ```
 
-### Configure the server
+### 2. Configure Environment Variables
 
-Create `server/.env`:
+Create `server/.env` based on the configuration below:
 
 ```env
 NODE_ENV=development
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/kodxcamp
-JWT_SECRET=<strong-random-secret-at-least-32-characters>
+JWT_SECRET=your_32_character_jwt_secret_here_random_hex
 JWT_EXPIRES_IN=7d
-HMAC_SECRET=<different-strong-random-secret-at-least-32-characters>
 CLIENT_URL=http://localhost:5173
 LOG_LEVEL=info
-PUBLIC_UPLOAD_BASE_URL=
+
+# ─── Auth Secrets ────────────────────────────────────────────────────────
+AUTH_PEPPER=your_32_character_auth_pepper_secret_random_hex
+SETUP_TOKEN_SECRET=your_32_character_setup_token_secret_random_hex
+
+# ─── Media Storage (Cloudinary - Optional in Dev) ────────────────────────
+# Leave blank in dev to store uploads locally under server/uploads/
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+# ─── Email (SMTP - Optional in Dev) ──────────────────────────────────────
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+EMAIL_FROM=KodxCamp <hello@kodxcamp.com>
+EMAIL_ENABLED=false
+
+# ─── Firebase Google Sign-In (Optional) ──────────────────────────────────
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+
+# ─── Payments (Razorpay - Optional in Dev) ───────────────────────────────
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
+RAZORPAY_MODE=test
+
+# ─── AI Evaluation (Groq - Optional) ────────────────────────────────────
+GROQ_API_KEY=
+AI_TEXT_PROVIDER=null
+AI_VISION_PROVIDER=null
 ```
 
-`PUBLIC_UPLOAD_BASE_URL` is optional. It can provide an external public base
-URL for uploaded recordings. Local development stores recordings on disk.
+> [!TIP]
+> Generate secure 64-character random hex keys for `JWT_SECRET`, `AUTH_PEPPER`, and `SETUP_TOKEN_SECRET`:
+> ```powershell
+> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+> ```
 
-Generate a secret with:
+### 3. Build Shared Package
 
-```powershell
-node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
-```
-
-### Build the shared package
+Before running or developing, compile the shared contracts:
 
 ```powershell
 npm run build:shared
 ```
 
-### Seed development data
+### 4. Seed Database with Courses & Problems
+
+Populate the database with sample courses, coding problems, roadmaps, and admin accounts:
 
 ```powershell
+# Seed catalog and accounts
 npm run seed -w server
+
+# Wipe and reseed cleanly (development only)
+npm run seed:force -w server
 ```
 
-### Run the application
+### 5. Promote an Admin User
 
-From the repository root:
+To give an account full administrative access:
+
+```powershell
+npm run make-admin -w server your-email@example.com
+```
+
+### 6. Start Development Servers
+
+Run client and server concurrently from the monorepo root:
 
 ```powershell
 npm run dev
 ```
 
-Default URLs:
+- **Frontend App**: `http://localhost:5173`
+- **Backend API**: `http://localhost:5000/api`
+- **Health Check**: `http://localhost:5000/api/health`
 
-```text
-Frontend: http://localhost:5173
-API:      http://localhost:5000
-Health:   http://localhost:5000/api/health
+---
+
+## Available NPM Scripts
+
+| Command | Action |
+|---|---|
+| `npm run dev` | Builds shared and starts both server and client with hot-reload |
+| `npm run build` | Full production build: compiles shared, server, and bundles client |
+| `npm run build:shared` | Compiles TypeScript contracts in `@kodxcamp/shared` |
+| `npm run build:server` | Compiles backend with `tsc` |
+| `npm run build:client` | Type-checks (`tsc -b`) and bundles client with Vite Rollup |
+| `npm test` | Runs Vitest suites across both server and client |
+| `npm test:server` | Runs server unit tests |
+| `npm test:client` | Runs client test harness and component tests |
+| `npm run make-admin -w server <email>` | Grants admin role and global permissions to a user |
+| `npm run seed -w server` | Populates database with starter courses, problems, and roadmaps |
+| `npm run clean` | Deletes `node_modules` and `dist` build folders across the monorepo |
+
+---
+
+## Testing & Quality Assurance
+
+KodxCamp includes automated tests for both workspaces:
+
+```powershell
+# Run all tests
+npm test
 ```
 
-The Vite development server proxies `/api` requests to the backend.
+- **Server Tests**: Schema validators, code judge contracts, and authentication token sanity (`server/src/services/__tests__/judgeSchemas.test.ts`).
+- **Client Tests**: Multi-language test harness, JSON test case comparators, and routing error boundaries (`client/src/shared/runner/__tests__`).
 
-## Commands
+---
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the client and server together |
-| `npm run build` | Build shared, server, and client packages |
-| `npm run build:shared` | Build the shared package |
-| `npm run build:server` | Type-check/build the server |
-| `npm run build:client` | Type-check/build the client |
-| `npm run seed -w server` | Seed development database records |
-| `npm test -w client` | Run client Vitest tests |
+## Deployment & Production
 
-## Important Current Limitations
-
-- Problem submissions are not securely judged on the server. The browser runs
-  the tests and reports the result; a server-side isolated judge is future
-  work.
-- Pyodide has a first-use loading delay.
-- Recordings use local disk by default; an external storage provider is not
-  implemented.
-- Google Meet links are entered manually; Google Calendar integration does not
-  exist.
-- The reviewer approval workflow is not implemented.
-- The instructor Students page and instructor-wide course analytics are not
-  implemented.
-- Team invitations currently use user IDs rather than email invitations.
-- Notifications and onboarding are not implemented.
-- Production deployment and production smoke testing are not complete.
-- Docker-based sandboxing and plagiarism detection are deliberately not
-  implemented.
-
-## Deployment
-
-The repository contains:
-
-- GitHub Actions workflow: `.github/workflows/ci.yml`
-- Vercel client configuration: `client/vercel.json`
-
-Production deployment is not complete. A production setup will require:
-
-1. MongoDB Atlas configuration.
-2. Server environment variables and secure secrets.
-3. Production cookie/CORS configuration.
-4. External recording storage.
-5. A deployed Express API and client.
-6. Production smoke testing.
-
-## Verification
-
-The current workspace passes:
-
+### Production Build
 ```powershell
 npm run build
 ```
 
-This validates the shared package, server TypeScript build, client TypeScript
-check, and client Vite production build.
+- **Client Bundle**: Optimized with Rollup manual chunking, isolating large dependencies (`monaco-editor`, `pyodide`, `three.js`, and `react-vendor`) to ensure fast page loads.
+- **Server Serving**: When running `NODE_ENV=production`, the Express server automatically serves the compiled `client/dist` static assets with `no-cache` Cache-Control headers on `index.html` and immutable caching for hashed chunks.
 
-Non-blocking Vite warnings remain for auth-store static/dynamic imports and a
-large client bundle chunk.
+### Health & Keepalive
+The server includes a lightweight keepalive route at `GET /api/health/keepalive` (mounted before rate limiters) intended for external ping monitors (such as UptimeRobot or BetterStack) to avoid cold starts on platforms like Render.
 
-## Quick Reference
+---
 
-| Task | Location |
-| --- | --- |
-| Add a frontend feature | `client/src/features/<feature>/` |
-| Add a frontend route | `client/src/app/router.tsx` |
-| Add shared UI | `client/src/shared/components/ui/` |
-| Modify global styles | `client/src/styles/index.css` |
-| Add a feature API | `client/src/features/<feature>/api.ts` |
-| Add a feature hook | `client/src/features/<feature>/hooks/` |
-| Add a code runner | `client/src/shared/runner/` |
-| Modify auth state | `client/src/shared/store/auth.store.ts` |
-| Add an API route | `server/src/routes/` |
-| Add a controller | `server/src/controllers/` |
-| Add a database model | `server/src/models/` |
-| Add business logic | `server/src/services/` |
-| Add seed data | `server/src/scripts/seed.ts` |
+## License
 
-## Documentation
-
-The full implementation brief is available at:
-
-[`docs/KodxCamp-Project-Brief.docx`](docs/KodxCamp-Project-Brief.docx)
+Private repository. Copyright © KodxCamp. All rights reserved.
