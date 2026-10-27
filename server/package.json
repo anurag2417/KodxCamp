@@ -26,6 +26,16 @@
   },
   "dependencies": {
     "@kodxcamp/shared": "*",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.7.5",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.25",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/morgan": "^1.9.9",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^22.9.0",
+    "@types/nodemailer": "^8.0.2",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.5.1",
     "compression": "^1.7.5",
@@ -43,21 +53,11 @@
     "multer": "^2.4.0",
     "nodemailer": "^10.0.10",
     "razorpay": "^2.9.4",
+    "typescript": "^5.6.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/compression": "^1.7.5",
-    "@types/cookie-parser": "^1.4.7",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.25",
-    "@types/jsonwebtoken": "^9.0.7",
-    "@types/morgan": "^1.9.9",
-    "@types/multer": "^2.2.0",
-    "@types/node": "^22.9.0",
-    "@types/nodemailer": "^8.0.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
     "vitest": "^2.1.9"
   }
 }
