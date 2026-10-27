@@ -99,6 +99,7 @@ export interface SeedCourseModule {
 }
 
 export interface SeedCourse {
+  thumbnail?: string;
   title: string;
   slug: string;
   description: string;

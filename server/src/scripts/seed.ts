@@ -174,6 +174,7 @@ async function seedCourses(
     const courseDoc = await Course.create({
       title: c.title,
       slug: c.slug,
+      thumbnail: c.thumbnail,
       description: c.description,
       language: c.language,
       courseType: c.courseType ?? 'general',

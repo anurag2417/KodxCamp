@@ -22,6 +22,7 @@ export const courses: SeedCourse[] = [
   {
     title: 'HTML & CSS Fundamentals',
     slug: 'html-css-fundamentals',
+    thumbnail: 'https://images.unsplash.com/photo-1621839673705-6617adf9e890?auto=format&fit=crop&w=800&q=80',
     description:
       'Build your foundation for web development with modern HTML and CSS. Step-by-step lessons that produce working pages.',
     language: 'html-css',
@@ -283,6 +284,7 @@ export const courses: SeedCourse[] = [
   {
     title: 'JavaScript Essentials',
     slug: 'javascript-essentials',
+    thumbnail: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&w=800&q=80',
     description:
       'Learn programming fundamentals with JavaScript — the language of the web. Guided challenges get you writing code from the first minute.',
     language: 'javascript',
@@ -414,6 +416,7 @@ export const courses: SeedCourse[] = [
   {
     title: 'Python Fundamentals',
     slug: 'python-fundamentals',
+    thumbnail: 'https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=800&q=80',
     description:
       'Learn programming basics with Python — clean syntax, powerful standard library, great for beginners and data work alike.',
     language: 'python',
@@ -453,6 +456,7 @@ export const courses: SeedCourse[] = [
   {
     title: 'Ruby Fundamentals',
     slug: 'ruby-fundamentals',
+    thumbnail: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=800&q=80',
     description:
       'Learn programming basics with Ruby — clean syntax, powerful objects, and a community that values programmer happiness.',
     language: 'ruby',
@@ -488,6 +492,7 @@ export const courses: SeedCourse[] = [
   {
     title: 'Java Fundamentals',
     slug: 'java-fundamentals',
+    thumbnail: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=80',
     description:
       'Learn programming basics with Java — statically typed, object-oriented, and one of the most widely deployed languages in the world.',
     language: 'java',
@@ -547,6 +552,7 @@ export const courses: SeedCourse[] = [
   {
     title: 'SQL Fundamentals',
     slug: 'sql-fundamentals',
+    thumbnail: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?auto=format&fit=crop&w=800&q=80',
     description:
       'Query relational databases with structured query language. Learn SELECT, WHERE, GROUP BY, and JOIN on real data.',
     language: 'sql',
@@ -640,6 +646,7 @@ export const courses: SeedCourse[] = [
   {
     title: 'React Fundamentals',
     slug: 'react-fundamentals',
+    thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?auto=format&fit=crop&w=800&q=80',
     description:
       'Build interactive UIs with React. Components, props, state, and hooks — explained by building a real app.',
     language: 'react',
@@ -928,6 +935,7 @@ console.log("ok");`,
   {
     title: 'Advanced React Patterns (Coming Soon)',
     slug: 'advanced-react-patterns',
+    thumbnail: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&fit=crop&w=800&q=80',
     description:
       'Hooks, context, suspense, and the patterns that production React codebases rely on.',
     language: 'react',
@@ -954,6 +962,7 @@ console.log("ok");`,
   {
     title: 'HTML Forms & Accessibility',
     slug: 'html-forms-accessibility',
+    thumbnail: 'https://images.unsplash.com/photo-1587620962725-abab7fe55159?auto=format&fit=crop&w=800&q=80',
     description:
       'Build forms that everyone can use — labels, input types, error handling, ARIA, and keyboard navigation.',
     language: 'html-css',
@@ -982,6 +991,88 @@ console.log("ok");`,
         },
         testCases: [
           { input: '', expectedOutput: 'Email', isHidden: false },
+        ],
+      },
+    ],
+  },
+  /* ─── 16. Full-Stack Web Development ─────────────────────────── */
+  {
+    title: 'Full-Stack Web Development',
+    slug: 'fullstack-web-development',
+    thumbnail: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Learn how the modern web connects together. Build full-stack applications with React on the client and Express APIs on the backend.',
+    language: 'javascript',
+    courseType: 'general',
+    published: true,
+    isFree: true,
+    tagline: 'Connect Frontend and Backend',
+    tags: ['react', 'node', 'fullstack', 'api'],
+    badge: 'NEW',
+    features: [
+      { icon: '🌐', label: 'Full-stack flow' },
+      { icon: '⚡', label: 'Async patterns' },
+      { icon: '🔒', label: 'Authentication basics' },
+    ],
+    lessons: [
+      {
+        title: 'Making HTTP Requests',
+        slug: 'making-http-requests',
+        content:
+          'In modern JavaScript, fetch returns a Promise that resolves to the Response object. Learn to parse JSON and handle errors safely.',
+        starterCode: 'function formatUserProfile(user) {\n  // Return user info formatted as: Name - Role\n  // TODO\n}\n',
+        solution: 'function formatUserProfile(user) {\n  return user.name + " - " + user.role;\n}\n',
+        functionName: 'formatUserProfile',
+        outputMode: 'return',
+        testCases: [
+          {
+            input: '[{"name": "Alice", "role": "Developer"}]',
+            expectedOutput: '"Alice - Developer"',
+            isHidden: false,
+          },
+          {
+            input: '[{"name": "Bob", "role": "Admin"}]',
+            expectedOutput: '"Bob - Admin"',
+            isHidden: false,
+          },
+        ],
+      },
+    ],
+  },
+
+  /* ─── 17. Advanced SQL & Database Modeling ────────────────────── */
+  {
+    title: 'Relational Database Design & Advanced SQL',
+    slug: 'advanced-sql-database-design',
+    thumbnail: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Master relational data modeling, multi-table joins, subqueries, and index optimization using in-browser SQLite.',
+    language: 'sql',
+    courseType: 'general',
+    published: true,
+    isFree: true,
+    tagline: 'Write queries that scale',
+    tags: ['sql', 'database', 'sqlite', 'backend'],
+    badge: 'POPULAR',
+    features: [
+      { icon: '📊', label: 'Multi-table JOINs' },
+      { icon: '🔍', label: 'Complex aggregations' },
+      { icon: '⚡', label: 'Subqueries & CTEs' },
+    ],
+    lessons: [
+      {
+        title: 'Multi-Table JOINs',
+        slug: 'multi-table-joins',
+        content:
+          'INNER JOIN matches rows from both tables when the condition is met. Use it to join foreign keys to primary keys.',
+        starterCode: '-- Select customers and their order amounts\nSELECT users.name, orders.amount FROM users\n-- JOIN orders ON ...\n',
+        solution: 'SELECT users.name, orders.amount FROM users INNER JOIN orders ON users.id = orders.user_id;',
+        testCases: [
+          {
+            input: '',
+            expectedOutput: 'Alice|150\nBob|220',
+            isHidden: false,
+          },
         ],
       },
     ],

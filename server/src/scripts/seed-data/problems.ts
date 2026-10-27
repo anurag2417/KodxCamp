@@ -429,4 +429,173 @@ export const problems: SeedProblem[] = [
       { input: '[[]]', expectedOutput: '0', isHidden: true },
     ],
   },
+  {
+    title: 'Binary Search',
+    slug: 'binary-search',
+    difficulty: 'easy',
+    topics: ['binary-search', 'array'],
+    statement:
+      'Given an array of distinct integers `nums` sorted in ascending order and an integer `target`, return the index of `target` in `nums`, or `-1` if it is not present.\n\nYour algorithm must have `O(log n)` runtime complexity.',
+    functionName: 'binarySearch',
+    outputMode: 'return',
+    starterCode: {
+      javascript: 'function binarySearch(nums, target) {\n  // TODO\n}',
+      python: 'def binarySearch(nums, target):\n    # TODO\n    pass',
+      ruby: 'def binary_search(nums, target)\n  # TODO\nend',
+      java: `public class Main {
+  public static int binarySearch(int[] nums, int target) {
+    // TODO
+    return -1;
+  }
+}
+`,
+    },
+    testCases: [
+      { input: '[[-1,0,3,5,9,12], 9]', expectedOutput: '4', isHidden: false },
+      { input: '[[-1,0,3,5,9,12], 2]', expectedOutput: '-1', isHidden: false },
+      { input: '[[5], 5]', expectedOutput: '0', isHidden: false },
+      { input: '[[1,3,5,7,9,11], 11]', expectedOutput: '5', isHidden: true },
+      { input: '[[1,2,4,6,8], 0]', expectedOutput: '-1', isHidden: true },
+    ],
+  },
+  {
+    title: 'Valid Anagram',
+    slug: 'valid-anagram',
+    difficulty: 'easy',
+    topics: ['string', 'hashmap'],
+    statement:
+      'Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.\n\nAn anagram is a word formed by rearranging the letters of another word, using all original letters exactly once.',
+    functionName: 'isAnagram',
+    outputMode: 'return',
+    starterCode: {
+      javascript: 'function isAnagram(s, t) {\n  // TODO\n}',
+      python: 'def isAnagram(s, t):\n    # TODO\n    pass',
+      ruby: 'def is_anagram(s, t)\n  # TODO\nend',
+      java: `public class Main {
+  public static boolean isAnagram(String s, String t) {
+    // TODO
+    return false;
+  }
+}
+`,
+    },
+    testCases: [
+      { input: '["anagram", "nagaram"]', expectedOutput: 'true', isHidden: false },
+      { input: '["rat", "car"]', expectedOutput: 'false', isHidden: false },
+      { input: '["listen", "silent"]', expectedOutput: 'true', isHidden: false },
+      { input: '["a", "b"]', expectedOutput: 'false', isHidden: true },
+    ],
+  },
+  {
+    title: 'Best Time to Buy and Sell Stock',
+    slug: 'best-time-to-buy-and-sell-stock',
+    difficulty: 'easy',
+    topics: ['array', 'greedy'],
+    statement:
+      'You are given an array `prices` where `prices[i]` is the price of a given stock on day `i`.\n\nYou want to maximize your profit by choosing a single day to buy one stock and choosing a different day in the future to sell that stock.\n\nReturn the maximum profit you can achieve from this transaction. If you cannot achieve any profit, return `0`.',
+    functionName: 'maxProfit',
+    outputMode: 'return',
+    starterCode: {
+      javascript: 'function maxProfit(prices) {\n  // TODO\n}',
+      python: 'def maxProfit(prices):\n    # TODO\n    pass',
+      ruby: 'def max_profit(prices)\n  # TODO\nend',
+      java: `public class Main {
+  public static int maxProfit(int[] prices) {
+    // TODO
+    return 0;
+  }
+}
+`,
+    },
+    testCases: [
+      { input: '[[7,1,5,3,6,4]]', expectedOutput: '5', isHidden: false },
+      { input: '[[7,6,4,3,1]]', expectedOutput: '0', isHidden: false },
+      { input: '[[2,4,1]]', expectedOutput: '2', isHidden: false },
+      { input: '[[1,2]]', expectedOutput: '1', isHidden: true },
+    ],
+  },
+  {
+    title: 'Climbing Stairs',
+    slug: 'climbing-stairs',
+    difficulty: 'easy',
+    topics: ['dp', 'math'],
+    statement:
+      'You are climbing a staircase. It takes `n` steps to reach the top.\n\nEach time you can either climb 1 or 2 steps. In how many distinct ways can you climb to the top?',
+    functionName: 'climbStairs',
+    outputMode: 'return',
+    starterCode: {
+      javascript: 'function climbStairs(n) {\n  // TODO\n}',
+      python: 'def climbStairs(n):\n    # TODO\n    pass',
+      ruby: 'def climb_stairs(n)\n  # TODO\nend',
+      java: `public class Main {
+  public static int climbStairs(int n) {
+    // TODO
+    return 0;
+  }
+}
+`,
+    },
+    testCases: [
+      { input: '[2]', expectedOutput: '2', isHidden: false },
+      { input: '[3]', expectedOutput: '3', isHidden: false },
+      { input: '[4]', expectedOutput: '5', isHidden: false },
+      { input: '[5]', expectedOutput: '8', isHidden: true },
+      { input: '[1]', expectedOutput: '1', isHidden: true },
+    ],
+  },
+  {
+    title: 'Rotate Array',
+    slug: 'rotate-array',
+    difficulty: 'medium',
+    topics: ['array', 'two-pointers'],
+    statement:
+      'Given an integer array `nums`, rotate the array to the right by `k` steps and return the resulting array.',
+    functionName: 'rotateArray',
+    outputMode: 'return',
+    starterCode: {
+      javascript: 'function rotateArray(nums, k) {\n  // TODO\n}',
+      python: 'def rotateArray(nums, k):\n    # TODO\n    pass',
+      ruby: 'def rotate_array(nums, k)\n  # TODO\nend',
+      java: `public class Main {
+  public static int[] rotateArray(int[] nums, int k) {
+    // TODO
+    return nums;
+  }
+}
+`,
+    },
+    testCases: [
+      { input: '[[1,2,3,4,5,6,7], 3]', expectedOutput: '[5,6,7,1,2,3,4]', isHidden: false },
+      { input: '[[-1,-100,3,99], 2]', expectedOutput: '[3,99,-1,-100]', isHidden: false },
+      { input: '[[1,2], 5]', expectedOutput: '[2,1]', isHidden: true },
+    ],
+  },
+  {
+    title: 'Search in Rotated Sorted Array',
+    slug: 'search-in-rotated-sorted-array',
+    difficulty: 'medium',
+    topics: ['array', 'binary-search'],
+    statement:
+      'Given an integer array `nums` sorted in ascending order (with distinct values) that is rotated at an unknown pivot index, and a target value `target`, return the index of `target` if it is in `nums`, or `-1` if it is not.\n\nYou must write an algorithm with `O(log n)` runtime complexity.',
+    functionName: 'searchRotated',
+    outputMode: 'return',
+    starterCode: {
+      javascript: 'function searchRotated(nums, target) {\n  // TODO\n}',
+      python: 'def searchRotated(nums, target):\n    # TODO\n    pass',
+      ruby: 'def search_rotated(nums, target)\n  # TODO\nend',
+      java: `public class Main {
+  public static int searchRotated(int[] nums, int target) {
+    // TODO
+    return -1;
+  }
+}
+`,
+    },
+    testCases: [
+      { input: '[[4,5,6,7,0,1,2], 0]', expectedOutput: '4', isHidden: false },
+      { input: '[[4,5,6,7,0,1,2], 3]', expectedOutput: '-1', isHidden: false },
+      { input: '[[1], 0]', expectedOutput: '-1', isHidden: false },
+      { input: '[[5,1,3], 5]', expectedOutput: '0', isHidden: true },
+    ],
+  },
 ];

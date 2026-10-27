@@ -185,32 +185,80 @@ export default function FeaturedCourses() {
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  padding: 24,
+                  padding: 20,
                   borderRadius: 20,
                   border: '1px solid var(--color-border)',
                   background: 'var(--color-surface)',
+                  overflow: 'hidden',
                 }}
               >
-                {course.badge && (
-                  <span
-                    style={{
-                      alignSelf: 'flex-start',
-                      padding: '4px 10px',
-                      borderRadius: 999,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: '0.08em',
-                      color: 'var(--color-blue-primary)',
-                      background: 'var(--color-glow-blue)',
-                    }}
-                  >
-                    {course.badge}
-                  </span>
-                )}
+                {/* Course Thumbnail Image */}
+                <div
+                  style={{
+                    position: 'relative',
+                    aspectRatio: '16/9',
+                    borderRadius: 14,
+                    overflow: 'hidden',
+                    marginBottom: 16,
+                    background: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                >
+                  {course.thumbnail ? (
+                    <img
+                      src={course.thumbnail}
+                      alt={course.title}
+                      loading="lazy"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background:
+                          'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(249,115,22,0.18))',
+                        color: 'var(--color-text)',
+                        fontWeight: 700,
+                        fontSize: 15,
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      {course.language.toUpperCase()}
+                    </div>
+                  )}
+
+                  {course.badge && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        left: 8,
+                        padding: '3px 8px',
+                        borderRadius: 999,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.08em',
+                        color: '#60a5fa',
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        backdropFilter: 'blur(8px)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      {course.badge}
+                    </span>
+                  )}
+                </div>
 
                 <h3
                   style={{
-                    marginTop: course.badge ? 16 : 0,
                     fontSize: 20,
                     fontWeight: 700,
                     letterSpacing: '-0.02em',
