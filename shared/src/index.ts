@@ -2,6 +2,7 @@ export * from './types/user';
 export * from './types/course';
 export * from './types/roadmap';
 export * from './types/module';
+//export * from './types/curriculum';
 export * from './types/cohort';
 export * from './types/problem';
 export * from './types/project';

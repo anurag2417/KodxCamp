@@ -1,46 +1,70 @@
 import { Progress } from '../models/Progress.model.js';
 import { Lesson } from '../models/Lesson.model.js';
+import { CurriculumItem } from '../models/CurriculumItem.model.js';
 import { activityService } from './activity.service.js';
+import { activityProgressService } from './activityProgress.service.js';
 import { studentEnrollmentService } from './studentEnrollment.service.js';
 import { ApiError } from '../utils/ApiError.js';
 
-const XP_PER_LESSON = 25;
+async function getLessonCurriculumItems(
+  courseId: string,
+  lessonId: string
+) {
+  return CurriculumItem.find({
+    courseId,
+    referenceId: lessonId,
+    type: 'lesson',
+  }).lean();
+}
 
 export const progressService = {
   async getForCourse(userId: string, courseId: string) {
-    const existing = await Progress.findOne({ userId, courseId }).lean();
-    if (existing) {
+    const progress = await Progress.findOne({
+      userId,
+      courseId,
+    }).lean();
+
+    if (!progress) {
       return {
-        ...existing,
-        currentStepIndex: existing.currentStepIndex ?? 0,
-        completedSteps: existing.completedSteps ?? [],
-        completedChallenges: existing.completedChallenges ?? {},
+        userId,
+        courseId,
+        completedLessons: [],
+        currentLessonId: undefined,
+        currentStepIndex: 0,
+        completedSteps: [],
+        completedChallenges: {},
+        percentage: 0,
       };
     }
 
-    return {
-      _id: null,
-      userId,
-      courseId,
-      completedLessons: [],
-      currentLessonId: undefined,
-      currentStepIndex: 0,
-      completedSteps: [],
-      completedChallenges: {},
-      percentage: 0,
-      updatedAt: new Date(),
-    };
+    return progress;
   },
 
-  async markLessonComplete(userId: string, courseId: string, lessonId: string) {
-    const totalLessons = await Lesson.countDocuments({ courseId });
-    if (totalLessons === 0) {
-      return { completedLessons: [], percentage: 0 };
+  async markLessonComplete(
+    userId: string,
+    courseId: string,
+    lessonId: string
+  ) {
+    const lesson = await Lesson.findOne({
+      _id: lessonId,
+      courseId,
+    }).lean();
+
+    if (!lesson) {
+      throw new ApiError(404, 'Lesson not found');
     }
 
-    let progress = await Progress.findOne({ userId, courseId });
+    const totalLessons = await Lesson.countDocuments({
+      courseId,
+    });
+
+    let progress = await Progress.findOne({
+      userId,
+      courseId,
+    });
+
     if (!progress) {
-      progress = await Progress.create({
+      progress = new Progress({
         userId,
         courseId,
         completedLessons: [],
@@ -51,23 +75,30 @@ export const progressService = {
       });
     }
 
-    const wasNew = !progress.completedLessons.includes(lessonId);
-    if (wasNew) {
+    const alreadyCompleted =
+      progress.completedLessons.includes(lessonId);
+
+    if (!alreadyCompleted) {
       progress.completedLessons.push(lessonId);
     }
 
+    progress.percentage =
+      totalLessons > 0
+        ? Math.round(
+            (progress.completedLessons.length / totalLessons) * 100
+          )
+        : 0;
+
     progress.currentLessonId = lessonId;
-    progress.percentage = Math.round(
-      (progress.completedLessons.length / totalLessons) * 100
-    );
+    progress.currentStepIndex = 0;
+    progress.completedSteps = [];
+
     await progress.save();
 
-    if (wasNew) {
+    if (!alreadyCompleted) {
       await activityService.record({
         userId,
         type: 'lesson_completed',
-        refId: lessonId,
-        xp: XP_PER_LESSON,
       });
 
       await studentEnrollmentService.ensureEnrollment({
@@ -77,12 +108,20 @@ export const progressService = {
       });
     }
 
-    return {
-      ...progress.toObject(),
-      currentStepIndex: progress.currentStepIndex ?? 0,
-      completedSteps: progress.completedSteps ?? [],
-      completedChallenges: progress.completedChallenges ?? {},
-    };
+    const curriculumItems = await getLessonCurriculumItems(
+      courseId,
+      lessonId
+    );
+
+    for (const item of curriculumItems) {
+      await activityProgressService.completeActivity(
+        userId,
+        courseId,
+        item._id.toString()
+      );
+    }
+
+    return progress;
   },
 
   async markStepComplete(
@@ -92,31 +131,35 @@ export const progressService = {
     stepIndex: number
   ) {
     if (!Number.isInteger(stepIndex) || stepIndex < 0) {
-      throw new ApiError(400, 'stepIndex must be a non-negative integer');
+      throw new ApiError(400, 'Invalid step index');
     }
 
-    const lesson = await Lesson.findById(lessonId).lean();
-    if (!lesson || lesson.courseId !== courseId) {
-      throw new ApiError(404, 'Lesson not found in this course');
+    const lesson = await Lesson.findOne({
+      _id: lessonId,
+      courseId,
+    }).lean();
+
+    if (!lesson) {
+      throw new ApiError(404, 'Lesson not found');
     }
 
-    const totalSteps = lesson.steps?.length ?? 0;
-    if (totalSteps === 0) {
-      throw new ApiError(
-        400,
-        'This lesson has no steps - use markLessonComplete instead'
-      );
-    }
-    if (stepIndex >= totalSteps) {
-      throw new ApiError(
-        400,
-        `stepIndex ${stepIndex} is out of bounds (lesson has ${totalSteps} steps)`
-      );
+    const steps = lesson.steps ?? [];
+
+    if (steps.length === 0) {
+      throw new ApiError(400, 'This lesson has no steps');
     }
 
-    let progress = await Progress.findOne({ userId, courseId });
+    if (stepIndex >= steps.length) {
+      throw new ApiError(400, 'Invalid step index');
+    }
+
+    let progress = await Progress.findOne({
+      userId,
+      courseId,
+    });
+
     if (!progress) {
-      progress = await Progress.create({
+      progress = new Progress({
         userId,
         courseId,
         completedLessons: [],
@@ -127,86 +170,99 @@ export const progressService = {
       });
     }
 
-    const existing = new Set(progress.completedSteps ?? []);
-    const alreadyDone = existing.has(stepIndex);
+    const completedSteps = progress.completedSteps ?? [];
 
-    if (!alreadyDone) {
-      for (let i = 0; i < stepIndex; i++) {
-        if (!existing.has(i)) {
-          throw new ApiError(
-            400,
-            `Step ${stepIndex} is locked - complete step ${i} first`
-          );
-        }
-      }
-      existing.add(stepIndex);
+    if (
+      stepIndex > 0 &&
+      !completedSteps.includes(stepIndex - 1)
+    ) {
+      throw new ApiError(
+        400,
+        'Complete the previous step first'
+      );
     }
 
-    const sorted = Array.from(existing).sort((a, b) => a - b);
-    const highestCompleted = sorted.length > 0 ? sorted[sorted.length - 1] : -1;
-    const nextIndex = Math.min(highestCompleted + 1, totalSteps - 1);
+    if (!completedSteps.includes(stepIndex)) {
+      completedSteps.push(stepIndex);
+      completedSteps.sort((a, b) => a - b);
+    }
 
-    progress.completedSteps = sorted;
-    progress.currentStepIndex = nextIndex;
+    progress.completedSteps = completedSteps;
     progress.currentLessonId = lessonId;
+    progress.currentStepIndex = stepIndex;
+
     await progress.save();
 
-    if (sorted.length === totalSteps) {
-      await this.markLessonComplete(userId, courseId, lessonId);
+    const curriculumItems = await getLessonCurriculumItems(
+      courseId,
+      lessonId
+    );
+
+    for (const item of curriculumItems) {
+      await activityProgressService.markStepComplete(
+        userId,
+        courseId,
+        item._id.toString(),
+        stepIndex
+      );
     }
 
-    return {
-      ...progress.toObject(),
-      currentStepIndex: progress.currentStepIndex ?? 0,
-      completedSteps: progress.completedSteps ?? [],
-      completedChallenges: progress.completedChallenges ?? {},
-    };
+    if (completedSteps.length === steps.length) {
+      return this.markLessonComplete(
+        userId,
+        courseId,
+        lessonId
+      );
+    }
+
+    return progress;
   },
 
-  /**
-   * Mark a tutorial challenge complete inside a lesson.
-   *
-   * Guardrails mirror `markStepComplete`:
-   *   - The lesson must exist and belong to the course.
-   *   - The challenge index must be within bounds.
-   *   - Reachability: the student can only mark challenge N complete
-   *     if every challenge before it is already complete. This
-   *     prevents skipping ahead.
-   *
-   * Completion of all challenges does NOT auto-complete the lesson.
-   * A lesson can have both challenges and steps; the lesson is
-   * complete when its own `markLessonComplete` is called. This keeps
-   * the two progress axes orthogonal.
-   */
   async markChallengeComplete(
     userId: string,
     courseId: string,
     lessonId: string,
     challengeIndex: number
   ) {
-    if (!Number.isInteger(challengeIndex) || challengeIndex < 0) {
-      throw new ApiError(400, 'challengeIndex must be a non-negative integer');
+    if (
+      !Number.isInteger(challengeIndex) ||
+      challengeIndex < 0
+    ) {
+      throw new ApiError(400, 'Invalid challenge index');
     }
 
-    const lesson = await Lesson.findById(lessonId).lean();
-    if (!lesson || lesson.courseId !== courseId) {
-      throw new ApiError(404, 'Lesson not found in this course');
+    const lesson = await Lesson.findOne({
+      _id: lessonId,
+      courseId,
+    }).lean();
+
+    if (!lesson) {
+      throw new ApiError(404, 'Lesson not found');
     }
 
-    const totalChallenges = lesson.tutorialChallenges?.length ?? 0;
-    if (totalChallenges === 0) {
-      throw new ApiError(400, 'This lesson has no tutorial challenges');
-    }
-    if (challengeIndex >= totalChallenges) {
+    const challenges = lesson.tutorialChallenges ?? [];
+
+    if (challenges.length === 0) {
       throw new ApiError(
         400,
-        `challengeIndex ${challengeIndex} is out of bounds (lesson has ${totalChallenges} challenges)`
+        'This lesson has no tutorial challenges'
       );
     }
 
-    let progress = await Progress.findOne({ userId, courseId });
+    if (challengeIndex >= challenges.length) {
+      throw new ApiError(
+        400,
+        'Invalid challenge index'
+      );
+    }
+
+    let progress = await Progress.findOne({
+      userId,
+      courseId,
+    });
+
     if (!progress) {
-      progress = await Progress.create({
+      progress = new Progress({
         userId,
         courseId,
         completedLessons: [],
@@ -217,34 +273,48 @@ export const progressService = {
       });
     }
 
-    const map: Record<string, number[]> = progress.completedChallenges ?? {};
-    const list = new Set(map[lessonId] ?? []);
-    const alreadyDone = list.has(challengeIndex);
+    const completedChallenges =
+      progress.completedChallenges ?? {};
 
-    if (!alreadyDone) {
-      for (let i = 0; i < challengeIndex; i++) {
-        if (!list.has(i)) {
-          throw new ApiError(
-            400,
-            `Challenge ${challengeIndex} is locked - complete challenge ${i} first`
-          );
-        }
-      }
-      list.add(challengeIndex);
+    const lessonChallenges =
+      completedChallenges[lessonId] ?? [];
+
+    if (
+      challengeIndex > 0 &&
+      !lessonChallenges.includes(challengeIndex - 1)
+    ) {
+      throw new ApiError(
+        400,
+        'Complete the previous challenge first'
+      );
     }
 
-    const sorted = Array.from(list).sort((a, b) => a - b);
-    map[lessonId] = sorted;
+    if (!lessonChallenges.includes(challengeIndex)) {
+      lessonChallenges.push(challengeIndex);
+      lessonChallenges.sort((a, b) => a - b);
+    }
 
-    progress.completedChallenges = map;
+    completedChallenges[lessonId] = lessonChallenges;
+
+    progress.completedChallenges = completedChallenges;
     progress.currentLessonId = lessonId;
+
     await progress.save();
 
-    return {
-      ...progress.toObject(),
-      currentStepIndex: progress.currentStepIndex ?? 0,
-      completedSteps: progress.completedSteps ?? [],
-      completedChallenges: progress.completedChallenges ?? {},
-    };
+    const curriculumItems = await getLessonCurriculumItems(
+      courseId,
+      lessonId
+    );
+
+    for (const item of curriculumItems) {
+      await activityProgressService.markChallengeComplete(
+        userId,
+        courseId,
+        item._id.toString(),
+        challengeIndex
+      );
+    }
+
+    return progress;
   },
 };

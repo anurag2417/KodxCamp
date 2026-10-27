@@ -14,6 +14,26 @@ import { logger } from '../utils/logger.js';
 
 const TTL_DAYS = 7;
 
+/**
+ * The set of roles a valid invitation may carry. Must match
+ * `COURSE_TEAM_ROLES` in `shared/src/types/permissions.ts`. Kept
+ * here as a runtime guard so a legacy row (or a future enum drift)
+ * fails loudly on accept instead of silently creating a
+ * `CourseMembership` with an unknown role.
+ */
+const VALID_ROLES: readonly InvitationRole[] = [
+  'lead',
+  'course_author',
+  'problem_author',
+  'class_coordinator',
+  'ta',
+  'viewer',
+];
+
+function isInvitationRole(value: string): value is InvitationRole {
+  return (VALID_ROLES as readonly string[]).includes(value);
+}
+
 function hashToken(raw: string): string {
   return crypto
     .createHash('sha256')
@@ -31,12 +51,6 @@ function generateRaw(): string {
  * As of Batch 2D, a course's team lives entirely in the
  * `CourseMembership` collection. Accepting an invitation creates a
  * membership row; it does not touch any embedded array.
- *
- * On invitation create, if the invitee already has an account, we
- * also raise an in-app notification so they see the invitation the
- * next time they open the app. New users get the invitation by
- * email only — the notification row needs a user id, and we don't
- * have one until they sign up.
  */
 export const invitationService = {
   async create(input: {
@@ -46,6 +60,12 @@ export const invitationService = {
     invitedBy: string;
   }): Promise<{ invitationId: string }> {
     const email = input.email.toLowerCase().trim();
+
+    // Belt and braces: the controller validates against a Zod enum,
+    // but the service is also called from tests and scripts.
+    if (!isInvitationRole(input.role)) {
+      throw new ApiError(400, `Unknown invitation role: ${input.role}`);
+    }
 
     const course = await Course.findById(input.courseId).lean();
     if (!course) {
@@ -125,12 +145,7 @@ export const invitationService = {
       });
     }
 
-    // Notify the invitee if they already have an account. New users
-    // get the invitation by email only — they'll see any in-app
-    // notifications once they sign up and their user id exists.
-    //
-    // Fire-and-forget: the invitation row is already written, and a
-    // failed notification is not a reason to fail the create.
+    // Notify the invitee if they already have an account.
     if (existingUser) {
       void (async () => {
         try {
@@ -158,9 +173,9 @@ export const invitationService = {
   },
 
   async listForCourse(courseId: string) {
-    return Invitation.find({ courseId })
-      .sort({ createdAt: -1 })
-      .lean();
+    // tokenHash is `select: false`, so it is absent from these
+    // results without any extra projection.
+    return Invitation.find({ courseId }).sort({ createdAt: -1 }).lean();
   },
 
   async resolve(rawToken: string): Promise<{
@@ -179,7 +194,12 @@ export const invitationService = {
     const random = rawToken.slice(dot + 1);
     const tokenHash = hashToken(random);
 
-    const invitation = await Invitation.findById(invitationId);
+    // Explicitly request `tokenHash` — the model excludes it by
+    // default. Without `+tokenHash` this query returns null and the
+    // resolve silently fails.
+    const invitation = await Invitation.findById(invitationId).select(
+      '+tokenHash'
+    );
     if (!invitation) {
       throw new ApiError(404, 'This invitation no longer exists.');
     }
@@ -258,16 +278,21 @@ export const invitationService = {
       courseDoc.createdBy === input.userId;
 
     if (!alreadyOnTeam) {
+      // Guard against legacy rows. If the invitation carries a role
+      // that no longer exists in the taxonomy (e.g. `author` from
+      // before the 2D rollout), refuse rather than write a
+      // `CourseMembership` with an invalid enum value.
+      if (!isInvitationRole(invitation.role)) {
+        throw new ApiError(
+          500,
+          `Invitation carries an unknown role ("${invitation.role}"). Run the invitation role migration.`
+        );
+      }
+
       await courseMembershipService.upsert({
         userId: input.userId,
         courseId,
-        role: invitation.role as
-          | 'lead'
-          | 'course_author'
-          | 'problem_author'
-          | 'class_coordinator'
-          | 'ta'
-          | 'viewer',
+        role: invitation.role,
         addedBy: invitation.invitedBy,
       });
     }

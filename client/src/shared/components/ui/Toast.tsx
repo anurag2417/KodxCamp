@@ -1,6 +1,17 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { CheckCircle2, XCircle, Info, AlertTriangle, X } from 'lucide-react';
-import { ToastContext, type Toast, type ToastKind } from '@/shared/hooks/useToast';
+import {
+  ToastContext,
+  type Toast,
+  type ToastKind,
+  type ToastContextValue,
+} from '@/shared/hooks/useToast';
 import { cn } from '@/shared/lib/utils';
 
 const kindStyles: Record<ToastKind, string> = {
@@ -17,7 +28,9 @@ const kindIcon: Record<ToastKind, ReactNode> = {
   warning: <AlertTriangle size={18} className="text-[var(--color-warning)]" />,
 };
 
-export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const ToastProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const remove = useCallback((id: string) => {
@@ -36,18 +49,45 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     [remove]
   );
 
-  const value = {
-    push,
-    remove,
-    success: (message: string, title?: string) =>
+  const success = useCallback(
+    (message: string, title?: string) =>
       push({ kind: 'success', message, title }),
-    error: (message: string, title?: string) =>
+    [push]
+  );
+  const error = useCallback(
+    (message: string, title?: string) =>
       push({ kind: 'error', message, title, durationMs: 6000 }),
-    info: (message: string, title?: string) =>
-      push({ kind: 'info', message, title }),
-    warning: (message: string, title?: string) =>
+    [push]
+  );
+  const info = useCallback(
+    (message: string, title?: string) => push({ kind: 'info', message, title }),
+    [push]
+  );
+  const warning = useCallback(
+    (message: string, title?: string) =>
       push({ kind: 'warning', message, title }),
-  };
+    [push]
+  );
+
+  /**
+   * Memoized context value.
+   *
+   * This is the fix for a class of infinite loops: consumers that
+   * included `toast` in a `useCallback` dependency list, where that
+   * callback then ended up in a `useEffect` dependency list. With a
+   * fresh `value` object every render, adding a toast changed the
+   * context value, which changed the consumer's callback identity,
+   * which re-ran its effect, which (on failure) added another toast —
+   * loop.
+   *
+   * Every function below is itself `useCallback`'d, so this memo only
+   * recomputes if one of those function identities changes — which
+   * they don't, for the lifetime of the provider.
+   */
+  const value: ToastContextValue = useMemo(
+    () => ({ push, remove, success, error, info, warning }),
+    [push, remove, success, error, info, warning]
+  );
 
   return (
     <ToastContext.Provider value={value}>

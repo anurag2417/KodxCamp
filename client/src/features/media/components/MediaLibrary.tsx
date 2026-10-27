@@ -19,32 +19,16 @@ import {
 } from '@/features/media/api';
 import { Spinner } from '@/shared/components/ui/Spinner';
 import { Button } from '@/shared/components/ui/Button';
-import { useToast } from '@/shared/hooks/useToast';
+import { useStableToast } from '@/shared/hooks/useStableToast';
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** Restrict the visible/selectable assets to a single kind. */
   kindFilter?: MediaKind;
-  /**
-   * Called when the user picks an asset. The asset's URL is the
-   * typical payload — a caller that stores a URL string (thumbnail,
-   * hero video) uses `asset.url`.
-   */
   onPick: (asset: ApiMediaAsset) => void;
-  /**
-   * Optional additional scoping. When true, `scope=all` is used and
-   * the caller sees every asset in the system (admin only).
-   */
   allOwners?: boolean;
 }
 
-/**
- * `LucideIcon` is lucide-react's canonical icon type. Its `size`
- * prop is `string | number` rather than `number`, so a hand-rolled
- * `ComponentType<{ size?: number }>` rejects every lucide icon. This
- * type is what every other icon map in the codebase uses.
- */
 const KIND_ICON: Record<MediaKind, LucideIcon> = {
   image: ImageIcon,
   video: Video,
@@ -60,7 +44,7 @@ export const MediaLibrary: React.FC<Props> = ({
   onPick,
   allOwners = false,
 }) => {
-  const toast = useToast();
+  const toast = useStableToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [assets, setAssets] = useState<ApiMediaAsset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,7 +65,9 @@ export const MediaLibrary: React.FC<Props> = ({
     } finally {
       setLoading(false);
     }
-  }, [open, allOwners, kindFilter, toast]);
+    // `toast` is a stable ref — intentionally omitted from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, allOwners, kindFilter]);
 
   useEffect(() => {
     void reload();
@@ -123,7 +109,6 @@ export const MediaLibrary: React.FC<Props> = ({
         className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-sm font-semibold uppercase tracking-widest text-text-secondary">
             Media library
@@ -165,7 +150,6 @@ export const MediaLibrary: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {loading && assets.length === 0 && (
             <div className="flex justify-center py-12">
@@ -203,7 +187,6 @@ export const MediaLibrary: React.FC<Props> = ({
                       </div>
                     )}
 
-                    {/* Hover overlay */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
@@ -225,7 +208,6 @@ export const MediaLibrary: React.FC<Props> = ({
                       </button>
                     </div>
 
-                    {/* Name bar */}
                     <div className="absolute bottom-0 left-0 right-0 truncate bg-black/50 px-2 py-1 text-[10px] text-white">
                       {asset.originalName}
                     </div>

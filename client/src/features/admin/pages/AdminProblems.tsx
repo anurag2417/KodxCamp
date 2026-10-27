@@ -102,18 +102,16 @@ export const AdminProblems: React.FC = () => {
   const openEdit = async (p: AdminProblem) => {
     const full = await adminApi.getProblemFull(p.slug);
 
-    // Normalize test cases: the server returns either a hashed form
-    // (`expectedOutputHash`) or, for problems saved before Part 6, a
-    // plaintext `expectedOutput`. We can't reverse a hash, so for
-    // hidden tests we leave the expected output blank and let the
-    // admin re-enter it if they want to change the answer.
+    // The server returns plaintext `expectedOutput` for every test
+    // case, hidden or not. Do NOT blank it here — the server's Zod
+    // schema rejects an empty `expectedOutput`, so blanking it would
+    // make any lesson with a hidden test case unsavable. Admins and
+    // instructors are staff; the hidden flag is a *display* concern
+    // on the student side, not a redaction on the admin side.
     const normalizedTestCases: EditableTestCase[] = (full.testCases ?? []).map(
-      (tc: any) => ({
+      (tc) => ({
         input: tc.input ?? '',
-        expectedOutput:
-          tc.isHidden === true
-            ? '' // can't display a hash; admin re-types to change it
-            : tc.expectedOutput ?? '',
+        expectedOutput: tc.expectedOutput ?? '',
         isHidden: tc.isHidden === true,
       })
     );
@@ -206,11 +204,7 @@ export const AdminProblems: React.FC = () => {
     );
     if (emptyExpected !== -1) {
       issues.push(
-        `Test #${emptyExpected + 1} is missing its expected output${
-          editing.testCases[emptyExpected].isHidden
-            ? ' (required even for hidden tests - the server hashes it)'
-            : ''
-        }`
+        `Test #${emptyExpected + 1} is missing its expected output`
       );
     }
 
@@ -232,9 +226,6 @@ export const AdminProblems: React.FC = () => {
       functionName: editing.functionName,
       outputMode: editing.outputMode,
       starterCode,
-      // The server hashes plaintext for hidden tests. We always send
-      // `expectedOutput`; the server decides whether to store it
-      // directly (visible) or hash it (hidden).
       testCases: editing.testCases.map((tc) => ({
         input: tc.input,
         expectedOutput: tc.expectedOutput,

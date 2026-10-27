@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, ArrowRight, Mail } from 'lucide-react';
 import axios from 'axios';
@@ -7,6 +13,8 @@ import { OtpInput } from '../components/OtpInput';
 import { Seo } from '../../../shared/components/seo/Seo';
 import { authApi } from '../api';
 import { resolveNext, withNext } from '../lib/redirect';
+
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export const VerifyOtp: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -19,10 +27,18 @@ export const VerifyOtp: React.FC = () => {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [resending, setResending] = useState(false);
-  const [resentAt, setResentAt] = useState<number | null>(null);
+  /**
+   * Seconds remaining until the user may resend.
+   *
+   * This is a *state* value, not a derived `Date.now()` computation.
+   * A memo over `Date.now()` never re-evaluates once its deps stop
+   * changing, so the disabled state would never lift. The countdown
+   * has to be driven by an interval.
+   */
+  const [resendSecondsLeft, setResendSecondsLeft] = useState(0);
 
   // Guards against re-submitting the same code while the request is
-  // in flight. Cleared on any failure so the user can retry.
+  // in flight. Cleared on failure so the user can retry.
   const submittedRef = useRef<string | null>(null);
 
   // Auto-submit when all six digits are filled.
@@ -34,16 +50,20 @@ export const VerifyOtp: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
+  // Tick the resend cooldown once per second while it's active.
+  useEffect(() => {
+    if (resendSecondsLeft <= 0) return;
+    const id = window.setInterval(() => {
+      setResendSecondsLeft((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [resendSecondsLeft]);
+
   const handleVerify = async (value: string) => {
     setError('');
     setBusy(true);
     try {
-      // The verify endpoint always returns a setupToken; it never
-      // establishes a session. The account becomes usable only after
-      // /auth/set-password runs on /signup/setup. That is where
-      // signup_complete fires — not here.
       const { setupToken } = await authApi.verifyOtp(email, value);
-
       const setupPath = `/signup/setup?setupToken=${encodeURIComponent(
         setupToken
       )}`;
@@ -61,12 +81,12 @@ export const VerifyOtp: React.FC = () => {
   };
 
   const handleResend = async () => {
-    if (resending) return;
+    if (resending || resendSecondsLeft > 0) return;
     setResending(true);
     setError('');
     try {
       await authApi.resendOtp(email);
-      setResentAt(Date.now());
+      setResendSecondsLeft(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.message) {
         setError(err.response.data.message);
@@ -78,10 +98,13 @@ export const VerifyOtp: React.FC = () => {
     }
   };
 
-  const resendDisabled = useMemo(() => {
-    if (!resentAt) return false;
-    return Date.now() - resentAt < 30_000;
-  }, [resentAt]);
+  const resendDisabled = resending || resendSecondsLeft > 0;
+
+  const resendLabel = useMemo(() => {
+    if (resending) return 'Sending…';
+    if (resendSecondsLeft > 0) return `Resend in ${resendSecondsLeft}s`;
+    return 'Resend code';
+  }, [resending, resendSecondsLeft]);
 
   if (!email) {
     return (
@@ -182,14 +205,10 @@ export const VerifyOtp: React.FC = () => {
             <button
               type="button"
               onClick={() => void handleResend()}
-              disabled={resending || resendDisabled}
+              disabled={resendDisabled}
               className="font-medium text-brand-500 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {resending
-                ? 'Sending…'
-                : resendDisabled
-                  ? 'Resend in 30s'
-                  : 'Resend code'}
+              {resendLabel}
             </button>
           </div>
         </form>

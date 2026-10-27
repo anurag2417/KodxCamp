@@ -43,8 +43,7 @@ export const moduleService = {
 
   /**
    * All modules in a course, plus a bucket of lessons that don't
-   * belong to any module. The bucket exists so the instructor UI has
-   * somewhere to render a lesson whose module was deleted.
+   * belong to any module.
    */
   async listWithLessons(courseId: string) {
     const [modules, ungrouped] = await Promise.all([
@@ -153,8 +152,7 @@ export const moduleService = {
    * Delete a module and re-parent its lessons to `moduleId: null`.
    *
    * Not a cascade. The author deleted an organizational frame, not
-   * content. Lessons survive and appear in the "ungrouped" bucket
-   * until the author assigns them to a new module.
+   * content. Lessons survive and appear in the "ungrouped" bucket.
    */
   async delete(moduleId: string) {
     const doc = await Module.findById(moduleId);
@@ -162,10 +160,7 @@ export const moduleService = {
 
     const courseId = doc.courseId;
 
-    await Lesson.updateMany(
-      { moduleId },
-      { $unset: { moduleId: '' } }
-    );
+    await Lesson.updateMany({ moduleId }, { $unset: { moduleId: '' } });
     await Module.deleteOne({ _id: moduleId });
     await normalizeOrders(courseId);
 
@@ -173,13 +168,7 @@ export const moduleService = {
   },
 
   /**
-   * Move a module to a new position. Both directions (up and down)
-   * are handled by the same call with the target index.
-   *
-   * The `order` values of the affected modules are swapped in a
-   * single transaction-like sequence: temporarily park the moving
-   * module at a high order, shift the others, then set the moving
-   * module's final order.
+   * Move a module to a new position.
    */
   async reorder(moduleId: string, targetOrder: number) {
     const doc = await Module.findById(moduleId);
@@ -193,10 +182,7 @@ export const moduleService = {
     );
     if (currentIndex === -1) throw new ApiError(404, 'Module not found');
 
-    const clampedTarget = Math.max(
-      1,
-      Math.min(targetOrder, modules.length)
-    );
+    const clampedTarget = Math.max(1, Math.min(targetOrder, modules.length));
     if (clampedTarget === currentIndex + 1) {
       return doc.toObject();
     }
@@ -207,14 +193,9 @@ export const moduleService = {
     moving.order = PARK;
     await moving.save();
 
-    // Remove the moving module from the in-memory list and splice it
-    // back at the target index.
-    const rest = modules.filter(
-      (m) => m._id.toString() !== moduleId
-    );
+    const rest = modules.filter((m) => m._id.toString() !== moduleId);
     rest.splice(clampedTarget - 1, 0, moving);
 
-    // Write every module's new order.
     for (let i = 0; i < rest.length; i++) {
       const desired = i + 1;
       if (rest[i].order !== desired) {
@@ -227,12 +208,38 @@ export const moduleService = {
   },
 
   /**
-   * Move a lesson into a module, or move it between modules.
+   * Move a lesson into a module, or between modules.
    * `moduleId = null` removes the lesson from any module.
+   *
+   * SECURITY: this service is called by instructors who may only
+   * have edit rights on *their* course. `expectedCourseId` is the
+   * caller's course context (the `:courseSlug` param, resolved to an
+   * id by the controller). If the lesson does not belong to that
+   * course, the request is rejected — otherwise an instructor of
+   * Course A could unassign or reassign a lesson in Course B by
+   * guessing its id.
+   *
+   * The parameter is optional only for backward compatibility with
+   * internal callers that already operate on a lesson they loaded
+   * themselves (there are none today, but the signature stays
+   * forgiving). Route-level callers MUST pass it.
    */
-  async assignLesson(lessonId: string, moduleId: string | null) {
+  async assignLesson(
+    lessonId: string,
+    moduleId: string | null,
+    expectedCourseId?: string
+  ) {
     const lesson = await Lesson.findById(lessonId);
     if (!lesson) throw new ApiError(404, 'Lesson not found');
+
+    // Cross-course guard. Without this, an instructor editing
+    // Course A could mutate a lesson that belongs to Course B.
+    if (expectedCourseId && lesson.courseId !== expectedCourseId) {
+      throw new ApiError(
+        404,
+        'Lesson not found in this course'
+      );
+    }
 
     if (moduleId !== null) {
       const module = await Module.findById(moduleId).lean();

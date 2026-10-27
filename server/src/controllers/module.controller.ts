@@ -75,11 +75,10 @@ export const unassignLessonSchema = z.object({
 /* ─── Helpers ────────────────────────────────────────────────────── */
 
 /**
- * Resolve the course and the caller's effective role, and assert that
- * the caller can edit content. Throws 403 otherwise.
- *
- * Every mutating module handler funnels through this so the
- * permission check is in exactly one place.
+ * Resolve the course and the caller's effective role, and assert
+ * that the caller can edit content. Returns the resolved course id
+ * so callers that need to scope a downstream write (e.g.
+ * `assignLesson`) can pass it on.
  */
 async function requireEditAccess(
   req: AuthRequest,
@@ -106,12 +105,6 @@ async function requireEditAccess(
 /* ─── Controllers ────────────────────────────────────────────────── */
 
 export const moduleController = {
-  /**
-   * GET /instructor/courses/:courseSlug/modules
-   *
-   * List every module in a course, with its lessons. Used by the
-   * instructor editor.
-   */
   list: asyncHandler(async (req: AuthRequest, res: Response) => {
     const { courseId } = await requireEditAccess(
       req,
@@ -121,9 +114,6 @@ export const moduleController = {
     return ApiResponse.success(res, result);
   }),
 
-  /**
-   * POST /instructor/courses/:courseSlug/modules
-   */
   create: asyncHandler(async (req: AuthRequest, res: Response) => {
     const { courseId } = await requireEditAccess(
       req,
@@ -138,9 +128,6 @@ export const moduleController = {
     return ApiResponse.success(res, created, 'Module created', 201);
   }),
 
-  /**
-   * PATCH /instructor/courses/:courseSlug/modules/:moduleId
-   */
   update: asyncHandler(async (req: AuthRequest, res: Response) => {
     await requireEditAccess(req, String(req.params.courseSlug));
     const updated = await moduleService.update(
@@ -150,11 +137,6 @@ export const moduleController = {
     return ApiResponse.success(res, updated, 'Module updated');
   }),
 
-  /**
-   * DELETE /instructor/courses/:courseSlug/modules/:moduleId
-   *
-   * Re-parents lessons to the ungrouped bucket. Does not delete them.
-   */
   remove: asyncHandler(async (req: AuthRequest, res: Response) => {
     await requireEditAccess(req, String(req.params.courseSlug));
     const result = await moduleService.delete(String(req.params.moduleId));
@@ -165,9 +147,6 @@ export const moduleController = {
     );
   }),
 
-  /**
-   * PATCH /instructor/courses/:courseSlug/modules/:moduleId/order
-   */
   reorder: asyncHandler(async (req: AuthRequest, res: Response) => {
     await requireEditAccess(req, String(req.params.courseSlug));
     const updated = await moduleService.reorder(
@@ -178,30 +157,41 @@ export const moduleController = {
   }),
 
   /**
-   * POST /instructor/courses/:courseSlug/modules/:moduleId/lessons
+   * Assign a lesson to a module.
    *
-   * Assign a lesson to this module.
+   * The `courseId` resolved by `requireEditAccess` is passed into
+   * the service, which rejects the write if the lesson belongs to
+   * a different course. This closes the cross-course mutation hole.
    */
   assignLesson: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await requireEditAccess(req, String(req.params.courseSlug));
+    const { courseId } = await requireEditAccess(
+      req,
+      String(req.params.courseSlug)
+    );
     const updated = await moduleService.assignLesson(
       String(req.body.lessonId),
-      String(req.params.moduleId)
+      String(req.params.moduleId),
+      courseId
     );
     return ApiResponse.success(res, updated, 'Lesson assigned to module');
   }),
 
   /**
-   * DELETE /instructor/courses/:courseSlug/modules/lessons/:lessonId
+   * Remove a lesson from its module.
    *
-   * Remove a lesson from its module. The lesson survives; it moves
-   * to the ungrouped bucket.
+   * Same guard as `assignLesson`: the resolved `courseId` is the
+   * caller's course context, and the service rejects the write if
+   * the lesson belongs elsewhere.
    */
   unassignLesson: asyncHandler(async (req: AuthRequest, res: Response) => {
-    await requireEditAccess(req, String(req.params.courseSlug));
+    const { courseId } = await requireEditAccess(
+      req,
+      String(req.params.courseSlug)
+    );
     const updated = await moduleService.assignLesson(
       String(req.params.lessonId),
-      null
+      null,
+      courseId
     );
     return ApiResponse.success(res, updated, 'Lesson unassigned');
   }),

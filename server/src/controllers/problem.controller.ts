@@ -2,6 +2,7 @@ import type { Response } from 'express';
 import { z } from 'zod';
 import { problemService } from '../services/problem.service.js';
 import { judgeService } from '../services/judge.service.js';
+import { Problem } from '../models/Problem.model.js';
 import { Course } from '../models/Course.model.js';
 import { permissions } from '../services/permissions.service.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
@@ -18,55 +19,40 @@ export const listProblemsSchema = z.object({
   }),
 });
 
-const structuredSubmitSchema = z
-  .object({
-    problemId: z.string().min(1),
-    language: z.string().min(1),
-    code: z.string().min(1),
-    sessionId: z.string().uuid(),
-    visibleResults: z
-      .array(
-        z
-          .object({
-            index: z.number().int().min(0),
-            passed: z.boolean(),
-          })
-          .strict()
-      )
-      .max(500),
-    hiddenResults: z
-      .array(
-        z
-          .object({
-            id: z.string().min(1),
-            passed: z.boolean(),
-          })
-          .strict()
-      )
-      .max(500),
-    runtimeMs: z.number().int().min(0).optional(),
-  })
-  .strict();
-
-const legacySubmitSchema = z
-  .object({
-    problemId: z.string().min(1),
-    language: z.string().min(1),
-    code: z.string().min(1),
-    status: z.enum([
-      'accepted',
-      'wrong_answer',
-      'runtime_error',
-      'compile_error',
-    ]),
-    passedTests: z.number().int().min(0),
-    totalTests: z.number().int().min(0),
-    runtimeMs: z.number().int().min(0).optional(),
-  })
-  .strict();
-
+/**
+ * The submission contract.
+ *
+ * The server does NOT execute code. The client runs every test case
+ * (visible and hidden alike) and reports the outcome — status, pass
+ * count, total count, and optional runtime. The server clamps the
+ * counts against the problem's real test-case count and records the
+ * result.
+ *
+ * An earlier version of this file also accepted a "structured" shape
+ * with `visibleResults` / `hiddenResults` / `sessionId`. That shape
+ * was never sent by the client, was never tested end-to-end, and
+ * silently produced `NaN` values in the submissions collection if a
+ * caller (curl, a future client, a bad test) sent it. It's been
+ * removed. If you ever want a structured contract, add it alongside
+ * a matching client change, not before.
+ */
 export const submitSchema = z.object({
-  body: z.union([structuredSubmitSchema, legacySubmitSchema]),
+  body: z
+    .object({
+      problemId: z.string().min(1),
+      language: z.string().min(1),
+      code: z.string().min(1),
+      status: z.enum([
+        'accepted',
+        'wrong_answer',
+        'runtime_error',
+        'compile_error',
+      ]),
+      passedTests: z.number().int().min(0),
+      totalTests: z.number().int().min(0),
+      runtimeMs: z.number().int().min(0).optional(),
+    })
+    .strict(),
 });
 
 export const validateResultsSchema = z.object({
@@ -87,13 +73,8 @@ export const validateResultsSchema = z.object({
  * Can the caller see a course-scoped problem?
  *
  * Admins always can. Everyone else needs a non-null effective role
- * on the owning course — meaning they're on the course team, or
- * they're an enrolled student whose `resolveEffectiveRole` has been
- * extended to include `student`. Anonymous callers always get
- * `false`; course-scoped problems are never public.
- *
- * Global problems skip this check entirely — see the caller in
- * `getBySlug`.
+ * on the owning course. Anonymous callers always get `false`;
+ * course-scoped problems are never public.
  */
 async function hasCourseAccess(
   req: AuthRequest,
@@ -118,8 +99,7 @@ export const problemController = {
    * GET /problems
    *
    * Public. Anonymous callers get the same list as signed-in ones,
-   * minus the per-user `solved` flag, which is `undefined` when no
-   * user is attached by `optionalAuth`.
+   * minus the per-user `solved` flag.
    */
   list: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?._id.toString();
@@ -135,12 +115,11 @@ export const problemController = {
    * Public for global problems. Course-scoped problems are only
    * visible to users who can access the owning course.
    *
-   * The order of operations here matters: we peek at the problem to
-   * learn its scope, decide access, and only then ask the service
-   * for the full payload. A signed-out caller hitting a
-   * course-scoped problem gets a 404, not a 403 — that's the right
-   * status for a resource the caller isn't even allowed to know
-   * exists.
+   * The order of operations matters: peek at only the scope and
+   * courseId (a lightweight projection), decide access, then fetch
+   * the full payload. A signed-out caller hitting a course-scoped
+   * problem gets a 404 — the right status for a resource they aren't
+   * allowed to know exists.
    */
   getBySlug: asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?._id.toString();
@@ -148,7 +127,17 @@ export const problemController = {
       ? req.params.slug[0]
       : req.params.slug;
 
-    const peek = await problemService.getFullBySlug(slug);
+    // Lightweight peek — only the scope-relevant fields. Earlier
+    // versions fetched the full problem here (including solution and
+    // test cases), which was a wasted round-trip on every request.
+    const peek = await Problem.findOne({ slug })
+      .select('scope courseId')
+      .lean();
+    if (!peek) {
+      // Delegate to the service so the error shape is consistent.
+      return problemService.getBySlug(slug, userId, false);
+    }
+
     const access =
       peek.scope === 'global'
         ? true

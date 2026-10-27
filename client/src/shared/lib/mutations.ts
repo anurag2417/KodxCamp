@@ -18,32 +18,58 @@ export function useSubmitSolution() {
         queryKeys.problems.submissions(variables.problemId),
         (prev = []) => [data, ...prev]
       );
-      qc.invalidateQueries({ queryKey: queryKeys.problems.all });
+
+      qc.invalidateQueries({
+        queryKey: queryKeys.problems.all,
+      });
     },
   });
 }
 
 export function useMarkLessonComplete() {
   const qc = useQueryClient();
+
   return useMutation({
     mutationFn: ({
       courseId,
-      lessonId,
+      curriculumItemId,
     }: {
       courseId: string;
-      lessonId: string;
-    }) => progressApi.markComplete(courseId, lessonId),
-    onSuccess: (_data, { courseId }) => {
+      curriculumItemId: string;
+    }) =>
+      progressApi.completeActivity({
+        courseId,
+        curriculumItemId,
+      }),
+    onSuccess: (_data, { courseId, curriculumItemId }) => {
       qc.invalidateQueries({
         queryKey: queryKeys.progress.course(courseId),
       });
-      qc.invalidateQueries({ queryKey: queryKeys.progress.overview });
+
+      qc.invalidateQueries({
+        queryKey: queryKeys.progress.overview,
+      });
+
+      qc.invalidateQueries({
+        queryKey: ['activity-progress', 'course', courseId],
+      });
+
+      qc.invalidateQueries({
+        queryKey: [
+          'activity-progress',
+          'course',
+          courseId,
+          'item',
+          curriculumItemId,
+        ],
+      });
     },
   });
 }
 
 export function useSaveProject() {
   const qc = useQueryClient();
+
   return useMutation({
     mutationFn: ({
       slug,
@@ -53,8 +79,13 @@ export function useSaveProject() {
       files: Parameters<typeof projectsApi.save>[1];
     }) => projectsApi.save(slug, files),
     onSuccess: (_data, { slug }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.projects.detail(slug) });
-      qc.invalidateQueries({ queryKey: queryKeys.projects.mine });
+      qc.invalidateQueries({
+        queryKey: queryKeys.projects.detail(slug),
+      });
+
+      qc.invalidateQueries({
+        queryKey: queryKeys.projects.mine,
+      });
     },
   });
 }

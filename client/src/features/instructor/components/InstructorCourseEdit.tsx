@@ -52,7 +52,11 @@ interface LessonEditorState {
   contentType: string;
   starterCode: string;
   starterFiles: Record<string, string>;
-  webChecks: { requiredHtml: string[]; requiredCss: string[]; requiredJs: string[] };
+  webChecks: {
+    requiredHtml: string[];
+    requiredCss: string[];
+    requiredJs: string[];
+  };
   solution: string;
   problemSlug: string;
   functionName: string;
@@ -121,7 +125,11 @@ function autoSlug(val: string) {
 }
 
 function isWebCourse(language: string): boolean {
-  return language === 'html-css' || language === 'react' || language === 'tailwind';
+  return (
+    language === 'html-css' ||
+    language === 'react' ||
+    language === 'tailwind'
+  );
 }
 
 export const InstructorCourseEdit: React.FC = () => {
@@ -137,9 +145,10 @@ export const InstructorCourseEdit: React.FC = () => {
 
   const [editing, setEditing] = useState<LessonEditorState | null>(null);
   const [originalSlug, setOriginalSlug] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<{ slug: string; title: string } | null>(
-    null
-  );
+  const [deleting, setDeleting] = useState<{
+    slug: string;
+    title: string;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
@@ -149,6 +158,9 @@ export const InstructorCourseEdit: React.FC = () => {
   useEffect(() => {
     if (!course) return;
     document.title = `${course.title} · KodxCamp`;
+    return () => {
+      document.title = 'KodxCamp';
+    };
   }, [course]);
 
   const refresh = () => {
@@ -184,10 +196,17 @@ export const InstructorCourseEdit: React.FC = () => {
   };
 
   const openEdit = (lesson: ApiInstructorLesson) => {
+    // Do NOT blank `expectedOutput` for hidden tests. The server
+    // returns plaintext for every test case and its Zod schema
+    // requires a non-empty `expectedOutput`. Blanking the field here
+    // makes any lesson with a hidden test case unsavable.
+    //
+    // `isHidden` is a display flag on the student side only; the
+    // instructor editing the lesson is staff and sees the real value.
     const normalized: EditableTestCase[] = (lesson.testCases ?? []).map(
       (tc) => ({
         input: tc.input ?? '',
-        expectedOutput: tc.isHidden ? '' : tc.expectedOutput ?? '',
+        expectedOutput: tc.expectedOutput ?? '',
         isHidden: tc.isHidden === true,
       })
     );
@@ -263,8 +282,10 @@ export const InstructorCourseEdit: React.FC = () => {
     setError('');
 
     const issues: string[] = [];
-    if (!editing.title || editing.title.length < 2) issues.push('Title too short');
-    if (!editing.slug || editing.slug.length < 2) issues.push('Slug too short');
+    if (!editing.title || editing.title.length < 2)
+      issues.push('Title too short');
+    if (!editing.slug || editing.slug.length < 2)
+      issues.push('Slug too short');
     if (!/^[a-z0-9-]+$/.test(editing.slug)) issues.push('Invalid slug');
     if (!editing.content) issues.push('Content required');
     if (!editing.order || editing.order < 1) issues.push('Order must be ≥ 1');
@@ -273,22 +294,19 @@ export const InstructorCourseEdit: React.FC = () => {
     );
     if (emptyExpected !== -1) {
       issues.push(
-        `Test #${emptyExpected + 1} is missing expected output${
-          editing.testCases[emptyExpected].isHidden
-            ? ' (required even for hidden tests)'
-            : ''
-        }`
+        `Test #${emptyExpected + 1} is missing expected output`
       );
     }
 
     if (editing.steps.length > 0 && !isWebCourse(course.language)) {
-      issues.push('Step-by-step mode is only supported for HTML/CSS, React, and Tailwind courses');
+      issues.push(
+        'Step-by-step mode is only supported for HTML/CSS, React, and Tailwind courses'
+      );
     }
 
-    // Challenge validation: every challenge needs a title, instructions,
-    // and at least one check with a value.
     editing.tutorialChallenges.forEach((c, i) => {
-      if (!c.title.trim()) issues.push(`Challenge #${i + 1}: title is required`);
+      if (!c.title.trim())
+        issues.push(`Challenge #${i + 1}: title is required`);
       if (!c.instructions.trim())
         issues.push(`Challenge #${i + 1}: instructions are required`);
       if (c.checks.length === 0)
@@ -442,7 +460,8 @@ export const InstructorCourseEdit: React.FC = () => {
     );
   }
 
-  const perms: ApiCoursePermissions = course.permissions ?? DENY_ALL_PERMISSIONS;
+  const perms: ApiCoursePermissions =
+    course.permissions ?? DENY_ALL_PERMISSIONS;
 
   return (
     <div className="w-full p-6 lg:p-8">
@@ -455,7 +474,9 @@ export const InstructorCourseEdit: React.FC = () => {
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary">{course.title}</h1>
+          <h1 className="text-3xl font-bold text-text-primary">
+            {course.title}
+          </h1>
           <p className="mt-1 text-sm text-text-muted">
             {course.lessons.length} lessons · {course.language} ·{' '}
             {course.published ? (
@@ -597,11 +618,15 @@ export const InstructorCourseEdit: React.FC = () => {
 
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-text-secondary">Lesson type</label>
+              <label className="mb-1 block text-xs font-semibold text-text-secondary">
+                Lesson type
+              </label>
               <Input
                 placeholder="lesson, quiz, project, video, custom"
                 value={editing.contentType}
-                onChange={(e) => setEditing({ ...editing, contentType: e.target.value })}
+                onChange={(e) =>
+                  setEditing({ ...editing, contentType: e.target.value })
+                }
               />
             </div>
           </div>
@@ -629,28 +654,38 @@ export const InstructorCourseEdit: React.FC = () => {
           {isWebCourse(course.language) && (
             <>
               <div className="mt-4 rounded-lg border border-border bg-surface-secondary p-4">
-                <p className="text-sm font-semibold text-text-primary">Classic mode checking requirements</p>
+                <p className="text-sm font-semibold text-text-primary">
+                  Classic mode checking requirements
+                </p>
                 <p className="mt-1 text-xs text-text-muted">
-                  Used when this lesson has no steps. Steps override these checks for the step they belong to.
+                  Used when this lesson has no steps. Steps override these
+                  checks for the step they belong to.
                 </p>
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  {([
-                    ['requiredHtml', 'Required HTML'],
-                    ['requiredCss', 'Required CSS'],
-                    ['requiredJs', 'Required JavaScript'],
-                  ] as const).map(([key, label]) => (
+                  {(
+                    [
+                      ['requiredHtml', 'Required HTML'],
+                      ['requiredCss', 'Required CSS'],
+                      ['requiredJs', 'Required JavaScript'],
+                    ] as const
+                  ).map(([key, label]) => (
                     <textarea
                       key={key}
                       rows={5}
                       placeholder={`${label}\n.example\n.required-class`}
                       value={editing.webChecks[key].join('\n')}
-                      onChange={(e) => setEditing({
-                        ...editing,
-                        webChecks: {
-                          ...editing.webChecks,
-                          [key]: e.target.value.split('\n').map((value) => value.trim()).filter(Boolean),
-                        },
-                      })}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          webChecks: {
+                            ...editing.webChecks,
+                            [key]: e.target.value
+                              .split('\n')
+                              .map((value) => value.trim())
+                              .filter(Boolean),
+                          },
+                        })
+                      }
                       className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-text-primary placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
                       aria-label={label}
                     />
@@ -666,7 +701,9 @@ export const InstructorCourseEdit: React.FC = () => {
                   </p>
                 </div>
                 <p className="mb-3 text-xs text-text-muted">
-                  Add steps to turn this lesson into a guided, learn-by-building tutorial. When steps exist, they replace the classic single-shot flow.
+                  Add steps to turn this lesson into a guided,
+                  learn-by-building tutorial. When steps exist, they replace
+                  the classic single-shot flow.
                 </p>
                 <WebLessonStepsEditor
                   steps={editing.steps}
@@ -694,7 +731,10 @@ export const InstructorCourseEdit: React.FC = () => {
                 placeholder="e.g. sum, double"
                 value={editing.functionName}
                 onChange={(e) =>
-                  setEditing({ ...editing, functionName: e.target.value.trim() })
+                  setEditing({
+                    ...editing,
+                    functionName: e.target.value.trim(),
+                  })
                 }
               />
             </div>
@@ -721,13 +761,18 @@ export const InstructorCourseEdit: React.FC = () => {
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             {isWebCourse(course.language) ? (
               <div className="grid gap-3 md:col-span-2 md:grid-cols-3">
-                <p className="md:col-span-3 text-sm font-semibold text-text-primary">Classic starter files</p>
+                <p className="md:col-span-3 text-sm font-semibold text-text-primary">
+                  Classic starter files
+                </p>
                 <p className="md:col-span-3 -mt-2 text-xs text-text-muted">
                   Used when this lesson has no steps.
                 </p>
                 {(['index.html', 'styles.css', 'script.js'] as const).map(
                   (fileName) => (
-                    <label key={fileName} className="text-xs font-semibold text-text-secondary">
+                    <label
+                      key={fileName}
+                      className="text-xs font-semibold text-text-secondary"
+                    >
                       {fileName}
                       <textarea
                         placeholder={`Write the starting ${fileName} code`}
@@ -805,13 +850,18 @@ export const InstructorCourseEdit: React.FC = () => {
 
       <div className="flex flex-col gap-2">
         {visibleLessons.map((l) => (
-          <Card key={l._id} className="flex items-center justify-between gap-4 p-4">
+          <Card
+            key={l._id}
+            className="flex items-center justify-between gap-4 p-4"
+          >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="grid h-6 w-6 place-items-center rounded bg-surface-tertiary text-xs font-bold text-brand-500">
                   {l.order}
                 </span>
-                <p className="text-sm font-medium text-text-primary">{l.title}</p>
+                <p className="text-sm font-medium text-text-primary">
+                  {l.title}
+                </p>
                 {(l.steps?.length ?? 0) > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-medium text-brand-500">
                     <ListOrdered size={10} /> {l.steps.length} steps
@@ -820,7 +870,8 @@ export const InstructorCourseEdit: React.FC = () => {
                 {(l.tutorialChallenges?.length ?? 0) > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-medium text-brand-500">
                     <Sparkles size={10} /> {l.tutorialChallenges.length}{' '}
-                    challenge{l.tutorialChallenges.length === 1 ? '' : 's'}
+                    challenge
+                    {l.tutorialChallenges.length === 1 ? '' : 's'}
                   </span>
                 )}
                 {l.testCases.some((tc) => tc.isHidden) && (
@@ -840,7 +891,9 @@ export const InstructorCourseEdit: React.FC = () => {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setDeleting({ slug: l.slug, title: l.title })}
+                    onClick={() =>
+                      setDeleting({ slug: l.slug, title: l.title })
+                    }
                   >
                     <Trash2 size={14} className="text-[var(--color-error)]" />
                   </Button>
@@ -865,9 +918,7 @@ export const InstructorCourseEdit: React.FC = () => {
         <div className="mt-8">
           <div className="mb-3 flex items-center gap-2">
             <Users size={18} className="text-brand-500" />
-            <h2 className="text-lg font-semibold text-text-primary">
-              Team
-            </h2>
+            <h2 className="text-lg font-semibold text-text-primary">Team</h2>
           </div>
           <CourseTeamPanel
             courseSlug={course.slug}

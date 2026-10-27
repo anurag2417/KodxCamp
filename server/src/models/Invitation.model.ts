@@ -1,6 +1,22 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 
-export type InvitationRole = 'lead' | 'author' | 'reviewer' | 'ta' | 'viewer';
+/**
+ * The role an invitee will have on the course team once they accept.
+ *
+ * Values must match `COURSE_TEAM_ROLES` in
+ * `shared/src/types/permissions.ts`. Do NOT reintroduce the legacy
+ * `author` / `reviewer` roles — every reader downstream (permissions
+ * service, course membership model, UI labels) expects the modern
+ * taxonomy, and an invitation written with a legacy value will fail
+ * to resolve on acceptance.
+ */
+export type InvitationRole =
+  | 'lead'
+  | 'course_author'
+  | 'problem_author'
+  | 'class_coordinator'
+  | 'ta'
+  | 'viewer';
 
 export type InvitationStatus =
   | 'pending'
@@ -18,7 +34,7 @@ export interface IInvitation {
   role: InvitationRole;
   /** User id of the person who created the invitation. */
   invitedBy: string;
-  /** SHA-256 hex of `<pepper>${rawToken}`. */
+  /** SHA-256 hex of `<rawToken><pepper>`. Never returned in queries. */
   tokenHash: string;
   status: InvitationStatus;
   expiresAt: Date;
@@ -35,14 +51,30 @@ export interface InvitationDocument
 const invitationSchema = new Schema<InvitationDocument>(
   {
     courseId: { type: String, required: true, index: true },
-    email: { type: String, required: true, lowercase: true, trim: true, index: true },
+    email: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true,
+      index: true,
+    },
     role: {
       type: String,
-      enum: ['lead', 'author', 'reviewer', 'ta', 'viewer'] as InvitationRole[],
+      enum: [
+        'lead',
+        'course_author',
+        'problem_author',
+        'class_coordinator',
+        'ta',
+        'viewer',
+      ] as InvitationRole[],
       required: true,
     },
     invitedBy: { type: String, required: true, index: true },
-    tokenHash: { type: String, required: true },
+    // `select: false` keeps the hash out of every default query. The
+    // only code path that needs it (resolving a token) requests it
+    // explicitly with `.select('+tokenHash')`.
+    tokenHash: { type: String, required: true, select: false },
     status: {
       type: String,
       enum: ['pending', 'accepted', 'revoked', 'expired'] as InvitationStatus[],
@@ -69,9 +101,9 @@ invitationSchema.index(
   }
 );
 
-// Auto-expire: mark as expired once `expiresAt` passes.
-// (Mongo's TTL can delete, but we want the audit trail, so we keep
-// the row and only flip the status. A periodic job handles it.)
+// Bulk sweep query: "find pending invitations past their expiry".
+// The job flips them to `expired` (it does NOT delete — we keep the
+// audit trail).
 invitationSchema.index({ status: 1, expiresAt: 1 });
 
 export const Invitation = mongoose.model<InvitationDocument>(

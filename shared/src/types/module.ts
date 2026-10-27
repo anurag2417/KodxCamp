@@ -1,40 +1,43 @@
+import type {
+  ISectionWithItems,
+} from './curriculum.js';
+
 /**
- * A module is an ordered grouping of lessons inside a course.
+ * A module is an ordered grouping of sections inside a course.
  *
- * Hierarchy: Course > Module > Lesson.
+ * New hierarchy:
  *
- * Modules are optional at the schema level but assigned to every
- * lesson by the `migrate-modules.ts` migration. The `moduleId` on
- * `Lesson` is therefore nullable in the type so that:
+ * Course
+ *   → Module
+ *     → Section
+ *       → CurriculumItem
  *
- *   - Un-migrated databases still compile.
- *   - Bulk-import payloads that predate modules still parse.
- *   - The author can remove a lesson from its module without
- *     breaking the lesson's validity.
- *
- * Modules carry no completion logic of their own — a module's state
- * (`completed | in_progress | not_started`) is derived from the
- * completion of its lessons. Deriving rather than storing avoids
- * drift between the two.
+ * Lessons are no longer directly owned by modules from the
+ * perspective of the student curriculum.
  */
 export interface IModule {
   _id: string;
   courseId: string;
   title: string;
-  /** Optional short subtitle rendered under the title in the UI. */
   description?: string;
-  /**
-   * Display order within the course. 1-based, contiguous (no gaps).
-   * The service normalizes this on every write.
-   */
   order: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
 /**
- * A module plus the lessons it contains. Returned by the instructor
- * editor and the student course detail view.
+ * A module with its complete curriculum sections.
+ */
+export interface IModuleWithSections extends IModule {
+  sections: ISectionWithItems[];
+}
+
+/**
+ * Legacy shape retained temporarily so older instructor screens
+ * and APIs can continue to compile during migration.
+ *
+ * This will eventually be removed once all module consumers use
+ * sections and curriculum items.
  */
 export interface IModuleWithLessons extends IModule {
   lessons: {
@@ -48,10 +51,9 @@ export interface IModuleWithLessons extends IModule {
 }
 
 /**
- * A course's modules, plus the "ungrouped" lessons that don't belong
- * to any module. After the migration, `ungrouped` is empty for every
- * course; it exists so the instructor UI has a bucket to render a
- * lesson into if the author deletes the module it belonged to.
+ * Legacy course module response.
+ *
+ * Retained during migration.
  */
 export interface ICourseWithModules {
   modules: IModuleWithLessons[];
@@ -63,4 +65,12 @@ export interface ICourseWithModules {
     language: string;
     problemSlug?: string;
   }[];
+}
+
+/**
+ * New canonical course curriculum response.
+ */
+export interface ICourseCurriculumResponse {
+  courseId: string;
+  modules: IModuleWithSections[];
 }

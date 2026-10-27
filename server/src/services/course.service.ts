@@ -1,6 +1,8 @@
 import { Course } from '../models/Course.model.js';
 import { Lesson } from '../models/Lesson.model.js';
 import { Module } from '../models/Module.model.js';
+import { Section } from '../models/Section.model.js';
+import { CurriculumItem } from '../models/CurriculumItem.model.js';
 import { Progress } from '../models/Progress.model.js';
 import { CourseMembership } from '../models/CourseMembership.model.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -13,6 +15,7 @@ interface CourseInput {
   slug: string;
   description: string;
   language: string;
+  learningType?: 'programming' | 'web-development';
   courseType?: string;
   thumbnail?: string;
 }
@@ -79,8 +82,17 @@ interface LessonInput {
 }
 
 function getUser(req: AuthRequest) {
-  const u = req.user!;
-  return { _id: u._id.toString(), role: u.role as string };
+  if (!req.user) {
+    throw new ApiError(
+      401,
+      'Authentication required'
+    );
+  }
+
+  return {
+    _id: req.user._id.toString(),
+    role: req.user.role as string,
+  };
 }
 
 async function resolveCourseAndRole(
@@ -88,193 +100,386 @@ async function resolveCourseAndRole(
   slug: string
 ): Promise<{
   course: InstanceType<typeof Course>;
-  role: Awaited<ReturnType<typeof permissions.resolveEffectiveRole>>;
+  role: Awaited<
+    ReturnType<
+      typeof permissions.resolveEffectiveRole
+    >
+  >;
 }> {
   const user = getUser(req);
-  const course = await Course.findOne({ slug });
-  if (!course) throw new ApiError(404, 'Course not found');
-  const role = await permissions.resolveEffectiveRole(
-    user,
-    course._id.toString()
-  );
-  return { course, role };
+
+  const course =
+    await Course.findOne({
+      slug,
+    });
+
+  if (!course) {
+    throw new ApiError(
+      404,
+      'Course not found'
+    );
+  }
+
+  const role =
+    await permissions.resolveEffectiveRole(
+      user,
+      course._id.toString()
+    );
+
+  return {
+    course,
+    role,
+  };
 }
 
-function normalizeTestCase(tc: TestCaseInput, index: number) {
+function normalizeTestCase(
+  tc: TestCaseInput,
+  index: number
+) {
   if (!tc.expectedOutput) {
     throw new ApiError(
       400,
       `Test case #${index + 1}: expectedOutput is required`
     );
   }
+
   return {
     input: tc.input ?? '',
-    expectedOutput: tc.expectedOutput,
-    isHidden: Boolean(tc.isHidden),
+    expectedOutput:
+      tc.expectedOutput,
+    isHidden: Boolean(
+      tc.isHidden
+    ),
   };
 }
 
-function normalizeWebChecks(checks?: WebChecksInput) {
+function normalizeWebChecks(
+  checks?: WebChecksInput
+) {
   return {
-    requiredHtml: checks?.requiredHtml ?? [],
-    requiredCss: checks?.requiredCss ?? [],
-    requiredJs: checks?.requiredJs ?? [],
+    requiredHtml:
+      checks?.requiredHtml ?? [],
+
+    requiredCss:
+      checks?.requiredCss ?? [],
+
+    requiredJs:
+      checks?.requiredJs ?? [],
   };
 }
 
 function normalizeSteps(
   language: string,
-  steps: WebLessonStepInput[] | undefined
-): Array<{
-  title: string;
-  instructions: string;
-  hint?: string;
-  starterFiles: {
-    'index.html': string;
-    'styles.css': string;
-    'script.js': string;
-  };
-  webChecks: {
-    requiredHtml: string[];
-    requiredCss: string[];
-    requiredJs: string[];
-  };
-}> {
-  if (!steps || steps.length === 0) return [];
-  if (!['html-css', 'react', 'tailwind'].includes(language)) {
+  steps:
+    | WebLessonStepInput[]
+    | undefined
+) {
+  if (
+    !steps ||
+    steps.length === 0
+  ) {
     return [];
   }
 
-  return steps.map((step, i) => {
-    if (!step.title || step.title.trim().length === 0) {
-      throw new ApiError(400, `Step #${i + 1}: title is required`);
+  if (
+    ![
+      'html-css',
+      'react',
+      'tailwind',
+    ].includes(language)
+  ) {
+    return [];
+  }
+
+  return steps.map(
+    (step, index) => {
+      if (
+        !step.title ||
+        step.title.trim()
+          .length === 0
+      ) {
+        throw new ApiError(
+          400,
+          `Step #${index + 1}: title is required`
+        );
+      }
+
+      if (
+        !step.instructions ||
+        step.instructions
+          .trim()
+          .length === 0
+      ) {
+        throw new ApiError(
+          400,
+          `Step #${index + 1}: instructions are required`
+        );
+      }
+
+      return {
+        title:
+          step.title.trim(),
+
+        instructions:
+          step.instructions,
+
+        hint:
+          step.hint,
+
+        starterFiles: {
+          'index.html':
+            step.starterFiles?.[
+              'index.html'
+            ] ?? '',
+
+          'styles.css':
+            step.starterFiles?.[
+              'styles.css'
+            ] ?? '',
+
+          'script.js':
+            step.starterFiles?.[
+              'script.js'
+            ] ?? '',
+        },
+
+        webChecks:
+          normalizeWebChecks(
+            step.webChecks
+          ),
+      };
     }
-    if (!step.instructions || step.instructions.trim().length === 0) {
-      throw new ApiError(400, `Step #${i + 1}: instructions are required`);
-    }
-    return {
-      title: step.title.trim(),
-      instructions: step.instructions,
-      hint: step.hint,
-      starterFiles: {
-        'index.html': step.starterFiles?.['index.html'] ?? '',
-        'styles.css': step.starterFiles?.['styles.css'] ?? '',
-        'script.js': step.starterFiles?.['script.js'] ?? '',
-      },
-      webChecks: normalizeWebChecks(step.webChecks),
-    };
-  });
+  );
 }
 
-/**
- * Normalize a tutorial-challenge check. Throws on structural errors
- * so the author gets a clear message at save time, not at student
- * runtime.
- */
 function normalizeChallengeCheck(
   check: ChallengeCheckInput,
   challengeIndex: number,
   checkIndex: number
-): ChallengeCheckInput {
-  const label = `Challenge #${challengeIndex + 1}, check #${checkIndex + 1}`;
+) {
+  const label =
+    `Challenge #${challengeIndex + 1}, check #${checkIndex + 1}`;
 
-  if (check.type === 'includes') {
-    if (!check.value || check.value.length === 0) {
-      throw new ApiError(400, `${label}: "value" is required for includes`);
+  if (
+    check.type ===
+    'includes'
+  ) {
+    if (
+      !check.value ||
+      check.value.length === 0
+    ) {
+      throw new ApiError(
+        400,
+        `${label}: "value" is required for includes`
+      );
     }
+
     return {
-      type: 'includes',
+      type: 'includes' as const,
       value: check.value,
       label: check.label,
     };
   }
 
-  if (check.type === 'dom') {
-    if (!check.selector || check.selector.length === 0) {
-      throw new ApiError(400, `${label}: "selector" is required for dom`);
+  if (
+    check.type === 'dom'
+  ) {
+    if (
+      !check.selector ||
+      check.selector.length === 0
+    ) {
+      throw new ApiError(
+        400,
+        `${label}: "selector" is required for dom`
+      );
     }
+
     if (!check.expect) {
-      throw new ApiError(400, `${label}: "expect" is required for dom`);
+      throw new ApiError(
+        400,
+        `${label}: "expect" is required for dom`
+      );
     }
+
     if (
       check.expect !== 'exists' &&
-      (!check.value || check.value.length === 0)
+      (!check.value ||
+        check.value.length === 0)
     ) {
       throw new ApiError(
         400,
         `${label}: "value" is required for dom with expect "${check.expect}"`
       );
     }
+
     return {
-      type: 'dom',
-      selector: check.selector,
-      expect: check.expect,
-      value: check.value,
-      label: check.label,
+      type: 'dom' as const,
+      selector:
+        check.selector,
+      expect:
+        check.expect,
+      value:
+        check.value,
+      label:
+        check.label,
     };
   }
 
-  throw new ApiError(400, `${label}: unknown check type`);
+  throw new ApiError(
+    400,
+    `${label}: unknown check type`
+  );
 }
 
 function normalizeTutorialChallenges(
-  challenges: TutorialChallengeInput[] | undefined
-): Array<{
-  title: string;
-  instructions: string;
-  hint?: string;
-  starterCode: string;
-  checks: ChallengeCheckInput[];
-  language: string;
-}> {
-  if (!challenges || challenges.length === 0) return [];
+  challenges:
+    | TutorialChallengeInput[]
+    | undefined
+) {
+  if (
+    !challenges ||
+    challenges.length === 0
+  ) {
+    return [];
+  }
 
-  return challenges.map((c, i) => {
-    if (!c.title || c.title.trim().length === 0) {
-      throw new ApiError(400, `Challenge #${i + 1}: title is required`);
+  return challenges.map(
+    (challenge, index) => {
+      if (
+        !challenge.title ||
+        challenge.title
+          .trim()
+          .length === 0
+      ) {
+        throw new ApiError(
+          400,
+          `Challenge #${index + 1}: title is required`
+        );
+      }
+
+      if (
+        !challenge.instructions ||
+        challenge.instructions
+          .trim()
+          .length === 0
+      ) {
+        throw new ApiError(
+          400,
+          `Challenge #${index + 1}: instructions are required`
+        );
+      }
+
+      if (
+        !challenge.checks ||
+        challenge.checks.length ===
+          0
+      ) {
+        throw new ApiError(
+          400,
+          `Challenge #${index + 1}: at least one check is required`
+        );
+      }
+
+      return {
+        title:
+          challenge.title.trim(),
+
+        instructions:
+          challenge.instructions,
+
+        hint:
+          challenge.hint,
+
+        starterCode:
+          challenge.starterCode ??
+          '',
+
+        checks:
+          challenge.checks.map(
+            (
+              check,
+              checkIndex
+            ) =>
+              normalizeChallengeCheck(
+                check,
+                index,
+                checkIndex
+              )
+          ),
+
+        language:
+          challenge.language ??
+          'html',
+      };
     }
-    if (!c.instructions || c.instructions.trim().length === 0) {
-      throw new ApiError(400, `Challenge #${i + 1}: instructions are required`);
-    }
-    if (!c.checks || c.checks.length === 0) {
-      throw new ApiError(
-        400,
-        `Challenge #${i + 1}: at least one check is required`
-      );
-    }
-    return {
-      title: c.title.trim(),
-      instructions: c.instructions,
-      hint: c.hint,
-      starterCode: c.starterCode ?? '',
-      checks: c.checks.map((check, j) =>
-        normalizeChallengeCheck(check, i, j)
-      ),
-      language: c.language ?? 'html',
-    };
-  });
+  );
 }
 
 function normalizeStarterFiles(
   language: string,
-  files?: Record<string, string>
-): Record<string, string> | undefined {
-  if (!['html-css', 'react', 'tailwind'].includes(language)) return files;
+  files?: Record<
+    string,
+    string
+  >
+) {
+  if (
+    ![
+      'html-css',
+      'react',
+      'tailwind',
+    ].includes(language)
+  ) {
+    return files;
+  }
+
   return {
-    'index.html': files?.['index.html'] ?? '',
-    'styles.css': files?.['styles.css'] ?? '',
-    'script.js': files?.['script.js'] ?? '',
+    'index.html':
+      files?.[
+        'index.html'
+      ] ?? '',
+
+    'styles.css':
+      files?.[
+        'styles.css'
+      ] ?? '',
+
+    'script.js':
+      files?.[
+        'script.js'
+      ] ?? '',
   };
 }
 
 async function assertModuleBelongsToCourse(
-  moduleId: string | undefined,
+  moduleId:
+    | string
+    | undefined,
   courseId: string
-): Promise<void> {
-  if (!moduleId) return;
-  const mod = await Module.findById(moduleId).select('courseId').lean();
-  if (!mod) throw new ApiError(400, 'Module not found');
-  if (mod.courseId !== courseId) {
+) {
+  if (!moduleId) {
+    return;
+  }
+
+  const module =
+    await Module.findById(
+      moduleId
+    )
+      .select(
+        'courseId'
+      )
+      .lean();
+
+  if (!module) {
+    throw new ApiError(
+      400,
+      'Module not found'
+    );
+  }
+
+  if (
+    module.courseId !==
+    courseId
+  ) {
     throw new ApiError(
       400,
       'The module belongs to a different course than the lesson.'
@@ -284,293 +489,979 @@ async function assertModuleBelongsToCourse(
 
 export const courseService = {
   async listAll() {
-    const courses = await Course.find({ published: true })
-      .sort({ createdAt: 1 })
-      .lean();
-
-    const withCounts = await Promise.all(
-      courses.map(async (c) => {
-        const lessonCount = await Lesson.countDocuments({
-          courseId: c._id.toString(),
-        });
-        return { ...c, totalLessons: lessonCount };
+    const courses =
+      await Course.find({
+        published: true,
       })
-    );
+        .sort({
+          createdAt: 1,
+        })
+        .lean();
+
+    const withCounts =
+      await Promise.all(
+        courses.map(
+          async (course) => {
+            const lessonCount =
+              await Lesson.countDocuments(
+                {
+                  courseId:
+                    course._id.toString(),
+                }
+              );
+
+            return {
+              ...course,
+              totalLessons:
+                lessonCount,
+            };
+          }
+        )
+      );
+
     return withCounts;
   },
 
-  async getBySlug(slug: string) {
-    const course = await Course.findOne({ slug, published: true }).lean();
-    if (!course) throw new ApiError(404, 'Course not found');
+  async getBySlug(
+    slug: string
+  ) {
+    const course =
+      await Course.findOne({
+        slug,
+        published: true,
+      }).lean();
 
-    const lessons = await Lesson.find({ courseId: course._id.toString() })
-      .sort({ order: 1 })
-      .select('-solution -testCases -starterCode -steps')
-      .lean();
+    if (!course) {
+      throw new ApiError(
+        404,
+        'Course not found'
+      );
+    }
 
-    return { ...course, lessons, totalLessons: lessons.length };
+    const lessons =
+      await Lesson.find({
+        courseId:
+          course._id.toString(),
+      })
+        .sort({
+          order: 1,
+        })
+        .select(
+          '-solution -testCases -starterCode -steps'
+        )
+        .lean();
+
+    const curriculumItems =
+      await CurriculumItem.find({
+        courseId:
+          course._id.toString(),
+        type: 'lesson',
+        referenceId: {
+          $in: lessons.map((item) => item._id.toString()),
+        },
+      })
+        .select('_id referenceId')
+        .lean();
+
+    const curriculumItemByLessonId = new Map(
+      curriculumItems.map((item) => [
+        item.referenceId,
+        item._id.toString(),
+      ])
+    );
+
+    const safeLessons = lessons.map((lesson) => ({
+      ...lesson,
+      curriculumItemId:
+        curriculumItemByLessonId.get(lesson._id.toString()),
+    }));
+
+    return {
+      ...course,
+      lessons: safeLessons,
+      totalLessons:
+        safeLessons.length,
+    };
   },
 
-  async getLessonBySlug(courseSlug: string, lessonSlug: string) {
-    const course = await Course.findOne({ slug: courseSlug, published: true }).lean();
-    if (!course) throw new ApiError(404, 'Course not found');
+  async getLessonBySlug(
+    courseSlug: string,
+    lessonSlug: string
+  ) {
+    const course =
+      await Course.findOne({
+        slug: courseSlug,
+        published: true,
+      }).lean();
 
-    const lesson = await Lesson.findOne({
-      courseId: course._id.toString(),
-      slug: lessonSlug,
-    })
-      .select('-solution')
-      .lean();
-    if (!lesson) throw new ApiError(404, 'Lesson not found');
+    if (!course) {
+      throw new ApiError(
+        404,
+        'Course not found'
+      );
+    }
 
-    const testCases = (lesson.testCases ?? []).map((tc, i) => ({
-      index: i,
-      input: tc.input ?? '',
-      expectedOutput: tc.expectedOutput ?? '',
-      isHidden: Boolean(tc.isHidden),
-    }));
+    const lesson =
+      await Lesson.findOne({
+        courseId:
+          course._id.toString(),
+        slug: lessonSlug,
+      })
+        .select(
+          '-solution'
+        )
+        .lean();
+
+    if (!lesson) {
+      throw new ApiError(
+        404,
+        'Lesson not found'
+      );
+    }
+
+    const testCases =
+      (
+        lesson.testCases ??
+        []
+      ).map(
+        (testCase, index) => ({
+          index,
+          input:
+            testCase.input ??
+            '',
+          expectedOutput:
+            testCase.expectedOutput ??
+            '',
+          isHidden:
+            Boolean(
+              testCase.isHidden
+            ),
+        })
+      );
+
+    const lessonCurriculumItem =
+      await CurriculumItem.findOne({
+        courseId:
+          course._id.toString(),
+        type: 'lesson',
+        referenceId:
+          lesson._id.toString(),
+      })
+        .select('_id')
+        .lean();
 
     const safeLesson = {
       ...lesson,
+      curriculumItemId:
+        lessonCurriculumItem?._id.toString(),
       testCases,
-      steps: lesson.steps ?? [],
-      tutorialChallenges: lesson.tutorialChallenges ?? [],
+      steps:
+        lesson.steps ?? [],
+      tutorialChallenges:
+        lesson.tutorialChallenges ??
+        [],
     };
 
-    const [siblingLessons, modules] = await Promise.all([
-      Lesson.find({ courseId: course._id.toString() })
-        .sort({ order: 1 })
-        .select('_id title slug order language problemSlug moduleId')
-        .lean(),
-      Module.find({ courseId: course._id.toString() })
-        .sort({ order: 1 })
-        .lean(),
-    ]);
+    const [
+      siblingLessons,
+      modules,
+      siblingCurriculumItems,
+    ] =
+      await Promise.all([
+        Lesson.find({
+          courseId:
+            course._id.toString(),
+        })
+          .sort({
+            order: 1,
+        })
+          .select(
+            '_id title slug order language problemSlug moduleId'
+          )
+          .lean(),
+
+        Module.find({
+          courseId:
+            course._id.toString(),
+        })
+          .sort({
+            order: 1,
+          })
+          .lean(),
+
+        CurriculumItem.find({
+          courseId:
+            course._id.toString(),
+          type: 'lesson',
+        })
+          .select('_id referenceId')
+          .lean(),
+      ]);
+
+    const curriculumItemByLessonId = new Map(
+      siblingCurriculumItems.map((item) => [
+        item.referenceId,
+        item._id.toString(),
+      ])
+    );
+
+    const safeSiblingLessons = siblingLessons.map((lesson) => ({
+      ...lesson,
+      curriculumItemId:
+        curriculumItemByLessonId.get(lesson._id.toString()),
+    }));
 
     const safeCourse = {
-      _id: course._id,
-      title: course.title,
-      slug: course.slug,
-      description: course.description,
-      language: course.language,
-      thumbnail: course.thumbnail,
-      price: course.price,
-      isFree: course.isFree,
-      totalLessons: siblingLessons.length,
-      lessons: siblingLessons,
-      modules: modules.map((m) => ({
-        _id: m._id.toString(),
-        courseId: m.courseId,
-        title: m.title,
-        description: m.description,
-        order: m.order,
-      })),
+      _id:
+        course._id,
+
+      title:
+        course.title,
+
+      slug:
+        course.slug,
+
+      description:
+        course.description,
+
+      language:
+        course.language,
+
+      learningType:
+        course.learningType,
+
+      thumbnail:
+        course.thumbnail,
+
+      price:
+        course.price,
+
+      isFree:
+        course.isFree,
+
+      totalLessons:
+        safeSiblingLessons.length,
+
+      lessons:
+        safeSiblingLessons,
+
+      modules:
+        modules.map(
+          (module) => ({
+            _id:
+              module._id.toString(),
+
+            courseId:
+              module.courseId,
+
+            title:
+              module.title,
+
+            description:
+              module.description,
+
+            order:
+              module.order,
+          })
+        ),
     };
 
-    return { course: safeCourse, lesson: safeLesson };
+    return {
+      course:
+        safeCourse,
+      lesson:
+        safeLesson,
+    };
   },
 
-  async listForUser(req: AuthRequest) {
-    const user = getUser(req);
+  async listForUser(
+    req: AuthRequest
+  ) {
+    const user =
+      getUser(req);
 
-    if (user.role === 'admin') {
-      const all = await Course.find().sort({ createdAt: -1 }).lean();
-      const withCounts = await Promise.all(
-        all.map(async (c) => ({
-          ...c,
-          totalLessons: await Lesson.countDocuments({ courseId: c._id.toString() }),
-        }))
+    if (
+      user.role === 'admin'
+    ) {
+      const all =
+        await Course.find()
+          .sort({
+            createdAt: -1,
+          })
+          .lean();
+
+      return Promise.all(
+        all.map(
+          async (course) => ({
+            ...course,
+            totalLessons:
+              await Lesson.countDocuments(
+                {
+                  courseId:
+                    course._id.toString(),
+                }
+              ),
+          })
+        )
       );
-      return withCounts;
     }
 
-    const memberships = await CourseMembership.find({ userId: user._id })
-      .select('courseId')
-      .lean();
-    const memberCourseIds = memberships.map((m) => m.courseId);
+    const memberships =
+      await CourseMembership.find({
+        userId:
+          user._id,
+      })
+        .select(
+          'courseId'
+        )
+        .lean();
 
-    const mine = await Course.find({
-      $or: [
-        { createdBy: user._id },
-        { _id: { $in: memberCourseIds } },
-      ],
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const memberCourseIds =
+      memberships.map(
+        (membership) =>
+          membership.courseId
+      );
 
-    const withCounts = await Promise.all(
-      mine.map(async (c) => ({
-        ...c,
-        totalLessons: await Lesson.countDocuments({ courseId: c._id.toString() }),
-      }))
+    const mine =
+      await Course.find({
+        $or: [
+          {
+            createdBy:
+              user._id,
+          },
+          {
+            _id: {
+              $in:
+                memberCourseIds,
+            },
+          },
+        ],
+      })
+        .sort({
+          createdAt: -1,
+        })
+        .lean();
+
+    return Promise.all(
+      mine.map(
+        async (course) => ({
+          ...course,
+          totalLessons:
+            await Lesson.countDocuments(
+              {
+                courseId:
+                  course._id.toString(),
+              }
+            ),
+        })
+      )
     );
-    return withCounts;
   },
 
-  async getFullForEditor(req: AuthRequest, slug: string) {
-    const { course, role } = await resolveCourseAndRole(req, slug);
+  async getFullForEditor(
+    req: AuthRequest,
+    slug: string
+  ) {
+    const {
+      course,
+      role,
+    } =
+      await resolveCourseAndRole(
+        req,
+        slug
+      );
 
-    if (!permissions.canAccessCourse(role)) {
-      throw new ApiError(403, 'You do not have access to this course');
+    if (
+      !permissions.canAccessCourse(
+        role
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'You do not have access to this course'
+      );
     }
 
-    const [lessons, modules, members] = await Promise.all([
-      Lesson.find({ courseId: course._id.toString() })
-        .sort({ order: 1 })
-        .lean(),
-      Module.find({ courseId: course._id.toString() })
-        .sort({ order: 1 })
-        .lean(),
-      courseMembershipService.listForCourse(course._id.toString()),
-    ]);
+    const [
+      lessons,
+      modules,
+      members,
+      sections,
+      curriculumItems,
+    ] =
+      await Promise.all([
+        Lesson.find({
+          courseId:
+            course._id.toString(),
+        })
+          .sort({
+            order: 1,
+          })
+          .lean(),
 
-    const courseObj = course.toObject();
+        Module.find({
+          courseId:
+            course._id.toString(),
+        })
+          .sort({
+            order: 1,
+          })
+          .lean(),
+
+        courseMembershipService.listForCourse(
+          course._id.toString()
+        ),
+
+        Section.find({
+          courseId:
+            course._id.toString(),
+        })
+          .sort({
+            order: 1,
+          })
+          .lean(),
+
+        CurriculumItem.find({
+          courseId:
+            course._id.toString(),
+        })
+          .sort({
+            order: 1,
+          })
+          .lean(),
+      ]);
+
+    const courseObj =
+      course.toObject();
 
     return {
       ...courseObj,
-      lessons: lessons.map((l) => ({
-        ...l,
-        steps: l.steps ?? [],
-        tutorialChallenges: l.tutorialChallenges ?? [],
-      })),
-      modules: modules.map((m) => ({
-        _id: m._id.toString(),
-        courseId: m.courseId,
-        title: m.title,
-        description: m.description,
-        order: m.order,
-      })),
+
+      lessons:
+        lessons.map(
+          (lesson) => ({
+            ...lesson,
+            steps:
+              lesson.steps ??
+              [],
+            tutorialChallenges:
+              lesson.tutorialChallenges ??
+              [],
+          })
+        ),
+
+      modules:
+        modules.map(
+          (module) => ({
+            _id:
+              module._id.toString(),
+
+            courseId:
+              module.courseId,
+
+            title:
+              module.title,
+
+            description:
+              module.description,
+
+            order:
+              module.order,
+          })
+        ),
+
+      sections:
+        sections.map(
+          (section) => ({
+            _id:
+              section._id.toString(),
+
+            courseId:
+              section.courseId,
+
+            moduleId:
+              section.moduleId,
+
+            title:
+              section.title,
+
+            description:
+              section.description,
+
+            order:
+              section.order,
+
+            published:
+              section.published,
+          })
+        ),
+
+      curriculumItems:
+        curriculumItems.map(
+          (item) => ({
+            _id:
+              item._id.toString(),
+
+            courseId:
+              item.courseId,
+
+            moduleId:
+              item.moduleId,
+
+            sectionId:
+              item.sectionId,
+
+            type:
+              item.type,
+
+            referenceId:
+              item.referenceId,
+
+            title:
+              item.title,
+
+            description:
+              item.description,
+
+            order:
+              item.order,
+
+            isRequired:
+              item.isRequired,
+
+            published:
+              item.published,
+
+            estimatedMinutes:
+              item.estimatedMinutes,
+          })
+        ),
+
       members,
-      myRole: role,
+
+      myRole:
+        role,
+
       permissions: {
-        canEditContent: permissions.canEditContent(role),
-        canManageCourse: permissions.canManageCourse(role),
-        canManageTeam: permissions.canManageTeam(role),
-        canViewStudents: permissions.canViewStudents(role),
-        canManageClasses: permissions.canManageClasses(role),
+        canEditContent:
+          permissions.canEditContent(
+            role
+          ),
+
+        canManageCourse:
+          permissions.canManageCourse(
+            role
+          ),
+
+        canManageTeam:
+          permissions.canManageTeam(
+            role
+          ),
+
+        canViewStudents:
+          permissions.canViewStudents(
+            role
+          ),
+
+        canManageClasses:
+          permissions.canManageClasses(
+            role
+          ),
       },
     };
   },
 
-  async createCourse(req: AuthRequest, input: CourseInput) {
-    const user = getUser(req);
+  async createCourse(
+    req: AuthRequest,
+    input: CourseInput
+  ) {
+    const user =
+      getUser(req);
 
-    if (user.role !== 'admin') {
-      throw new ApiError(403, 'Only admins can create courses');
+    if (
+      user.role !== 'admin'
+    ) {
+      throw new ApiError(
+        403,
+        'Only admins can create courses'
+      );
     }
 
-    const exists = await Course.findOne({ slug: input.slug }).lean();
-    if (exists) throw new ApiError(409, 'Slug already exists');
+    const exists =
+      await Course.findOne({
+        slug:
+          input.slug,
+      }).lean();
 
-    const created = await Course.create({
-      ...input,
-      totalLessons: 0,
-      createdBy: user._id,
-      published: false,
-      isFree: true,
-    });
+    if (exists) {
+      throw new ApiError(
+        409,
+        'Slug already exists'
+      );
+    }
+
+    const created =
+      await Course.create({
+        title:
+          input.title,
+
+        slug:
+          input.slug,
+
+        description:
+          input.description,
+
+        language:
+          input.language,
+
+        learningType:
+          input.learningType ??
+          'programming',
+
+        courseType:
+          input.courseType ??
+          'general',
+
+        thumbnail:
+          input.thumbnail,
+
+        totalLessons: 0,
+
+        createdBy:
+          user._id,
+
+        published: false,
+
+        isFree: true,
+      });
 
     await courseMembershipService.upsert({
-      userId: user._id,
-      courseId: created._id.toString(),
-      role: 'lead',
-      addedBy: user._id,
+      userId:
+        user._id,
+
+      courseId:
+        created._id.toString(),
+
+      role:
+        'lead',
+
+      addedBy:
+        user._id,
     });
 
     return created.toObject();
   },
 
-  async updateCourse(req: AuthRequest, slug: string, patch: Partial<CourseInput>) {
-    const { course, role } = await resolveCourseAndRole(req, slug);
+  async updateCourse(
+    req: AuthRequest,
+    slug: string,
+    patch: Partial<CourseInput>
+  ) {
+    const {
+      course,
+      role,
+    } =
+      await resolveCourseAndRole(
+        req,
+        slug
+      );
 
-    if (!permissions.canManageCourse(role)) {
-      throw new ApiError(403, 'Only the course lead can edit course details');
+    if (
+      !permissions.canManageCourse(
+        role
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'Only the course lead can edit course details'
+      );
     }
 
-    if (patch.slug && patch.slug !== slug) {
-      const collision = await Course.findOne({ slug: patch.slug }).lean();
-      if (collision) throw new ApiError(409, 'Slug already exists');
+    if (
+      patch.slug &&
+      patch.slug !== slug
+    ) {
+      const collision =
+        await Course.findOne({
+          slug:
+            patch.slug,
+        }).lean();
+
+      if (collision) {
+        throw new ApiError(
+          409,
+          'Slug already exists'
+        );
+      }
     }
 
-    Object.assign(course, patch);
+    if (
+      patch.learningType &&
+      ![
+        'programming',
+        'web-development',
+      ].includes(
+        patch.learningType
+      )
+    ) {
+      throw new ApiError(
+        400,
+        'Invalid course learning type'
+      );
+    }
+
+    if (
+      patch.learningType ===
+        'programming' &&
+      course.learningType ===
+        'web-development'
+    ) {
+      const projectItems =
+        await CurriculumItem.countDocuments(
+          {
+            courseId:
+              course._id.toString(),
+
+            type:
+              'project',
+          }
+        );
+
+      if (
+        projectItems > 0
+      ) {
+        throw new ApiError(
+          400,
+          'A course containing project activities cannot be changed from web-development to programming'
+        );
+      }
+    }
+
+    Object.assign(
+      course,
+      patch
+    );
+
     await course.save();
+
     return course.toObject();
   },
 
-  async setPublished(req: AuthRequest, slug: string, published: boolean) {
-    const { course, role } = await resolveCourseAndRole(req, slug);
+  async setPublished(
+    req: AuthRequest,
+    slug: string,
+    published: boolean
+  ) {
+    const {
+      course,
+      role,
+    } =
+      await resolveCourseAndRole(
+        req,
+        slug
+      );
 
-    if (!permissions.canManageCourse(role)) {
-      throw new ApiError(403, 'Only the course lead can publish this course');
+    if (
+      !permissions.canManageCourse(
+        role
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'Only the course lead can publish this course'
+      );
     }
 
-    course.published = published;
+    course.published =
+      published;
+
     await course.save();
+
     return course.toObject();
   },
 
-  async deleteCourse(req: AuthRequest, slug: string) {
-    const { course, role } = await resolveCourseAndRole(req, slug);
+  async deleteCourse(
+    req: AuthRequest,
+    slug: string
+  ) {
+    const {
+      course,
+      role,
+    } =
+      await resolveCourseAndRole(
+        req,
+        slug
+      );
 
-    if (!permissions.canManageCourse(role)) {
-      throw new ApiError(403, 'Only the course lead can delete this course');
+    if (
+      !permissions.canManageCourse(
+        role
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'Only the course lead can delete this course'
+      );
     }
 
-    const courseId = course._id.toString();
+    const courseId =
+      course._id.toString();
 
     await Promise.all([
-      Lesson.deleteMany({ courseId }),
-      Module.deleteMany({ courseId }),
-      Progress.deleteMany({ courseId }),
-      CourseMembership.deleteMany({ courseId }),
-      Course.deleteOne({ _id: course._id }),
+      CurriculumItem.deleteMany({
+        courseId,
+      }),
+
+      Section.deleteMany({
+        courseId,
+      }),
+
+      Lesson.deleteMany({
+        courseId,
+      }),
+
+      Module.deleteMany({
+        courseId,
+      }),
+
+      Progress.deleteMany({
+        courseId,
+      }),
+
+      CourseMembership.deleteMany({
+        courseId,
+      }),
+
+      Course.deleteOne({
+        _id:
+          course._id,
+      }),
     ]);
 
-    return { ok: true };
+    return {
+      ok: true,
+    };
   },
 
-  async createLesson(req: AuthRequest, courseSlug: string, input: LessonInput) {
-    const { course, role } = await resolveCourseAndRole(req, courseSlug);
+  async createLesson(
+    req: AuthRequest,
+    courseSlug: string,
+    input: LessonInput
+  ) {
+    const {
+      course,
+      role,
+    } =
+      await resolveCourseAndRole(
+        req,
+        courseSlug
+      );
 
-    if (!permissions.canEditContent(role)) {
-      throw new ApiError(403, 'You do not have permission to edit this course');
+    if (
+      !permissions.canEditContent(
+        role
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'You do not have permission to edit this course'
+      );
     }
 
-    const courseId = course._id.toString();
+    const courseId =
+      course._id.toString();
 
     if (input.moduleId) {
-      await assertModuleBelongsToCourse(input.moduleId, courseId);
+      await assertModuleBelongsToCourse(
+        input.moduleId,
+        courseId
+      );
     }
 
-    const existing = await Lesson.findOne({
-      courseId,
-      slug: input.slug,
-    }).lean();
-    if (existing) throw new ApiError(409, 'Lesson slug already exists in this course');
+    const existing =
+      await Lesson.findOne({
+        courseId,
+        slug:
+          input.slug,
+      }).lean();
 
-    const testCases = (input.testCases ?? []).map((tc, i) =>
-      normalizeTestCase(tc, i)
+    if (existing) {
+      throw new ApiError(
+        409,
+        'Lesson slug already exists in this course'
+      );
+    }
+
+    const testCases =
+      (
+        input.testCases ??
+        []
+      ).map(
+        (testCase, index) =>
+          normalizeTestCase(
+            testCase,
+            index
+          )
+      );
+
+    const steps =
+      normalizeSteps(
+        input.language,
+        input.steps
+      );
+
+    const tutorialChallenges =
+      normalizeTutorialChallenges(
+        input.tutorialChallenges
+      );
+
+    const created =
+      await Lesson.create({
+        ...input,
+
+        courseId,
+
+        starterFiles:
+          normalizeStarterFiles(
+            course.language,
+            input.starterFiles
+          ),
+
+        webChecks:
+          normalizeWebChecks(
+            input.webChecks
+          ),
+
+        testCases,
+
+        steps,
+
+        tutorialChallenges,
+
+        functionName:
+          input.functionName ??
+          'solve',
+
+        outputMode:
+          input.outputMode ??
+          'print',
+      });
+
+    const count =
+      await Lesson.countDocuments({
+        courseId,
+      });
+
+    await Course.updateOne(
+      {
+        _id:
+          course._id,
+      },
+      {
+        totalLessons:
+          count,
+      }
     );
-
-    const steps = normalizeSteps(input.language, input.steps);
-    const tutorialChallenges = normalizeTutorialChallenges(
-      input.tutorialChallenges
-    );
-
-    const created = await Lesson.create({
-      ...input,
-      courseId,
-      starterFiles: normalizeStarterFiles(course.language, input.starterFiles),
-      webChecks: normalizeWebChecks(input.webChecks),
-      testCases,
-      steps,
-      tutorialChallenges,
-      functionName: input.functionName ?? 'solve',
-      outputMode: input.outputMode ?? 'print',
-    });
-
-    const count = await Lesson.countDocuments({ courseId });
-    await Course.updateOne({ _id: course._id }, { totalLessons: count });
 
     return created.toObject();
   },
@@ -581,171 +1472,435 @@ export const courseService = {
     lessonSlug: string,
     patch: Partial<LessonInput>
   ) {
-    const { course, role } = await resolveCourseAndRole(req, courseSlug);
+    const {
+      course,
+      role,
+    } =
+      await resolveCourseAndRole(
+        req,
+        courseSlug
+      );
 
-    if (!permissions.canEditContent(role)) {
-      throw new ApiError(403, 'You do not have permission to edit this course');
+    if (
+      !permissions.canEditContent(
+        role
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'You do not have permission to edit this course'
+      );
     }
 
-    const courseId = course._id.toString();
+    const courseId =
+      course._id.toString();
 
-    if (patch.moduleId !== undefined) {
-      await assertModuleBelongsToCourse(patch.moduleId, courseId);
+    if (
+      patch.moduleId !==
+      undefined
+    ) {
+      await assertModuleBelongsToCourse(
+        patch.moduleId,
+        courseId
+      );
     }
 
-    if (patch.slug && patch.slug !== lessonSlug) {
-      const collision = await Lesson.findOne({
-        courseId,
-        slug: patch.slug,
-      }).lean();
+    if (
+      patch.slug &&
+      patch.slug !==
+        lessonSlug
+    ) {
+      const collision =
+        await Lesson.findOne({
+          courseId,
+          slug:
+            patch.slug,
+        }).lean();
+
       if (collision) {
-        throw new ApiError(409, 'Another lesson with this slug already exists');
+        throw new ApiError(
+          409,
+          'Another lesson with this slug already exists'
+        );
       }
     }
 
-    const update: Record<string, unknown> = { ...patch };
+    const update: Record<
+      string,
+      unknown
+    > = {
+      ...patch,
+    };
 
-    if (patch.starterFiles || patch.language) {
-      update.starterFiles = normalizeStarterFiles(
-        patch.language ?? course.language,
-        patch.starterFiles
+    if (
+      patch.starterFiles ||
+      patch.language
+    ) {
+      update.starterFiles =
+        normalizeStarterFiles(
+          patch.language ??
+            course.language,
+          patch.starterFiles
+        );
+    }
+
+    if (
+      patch.webChecks
+    ) {
+      update.webChecks =
+        normalizeWebChecks(
+          patch.webChecks
+        );
+    }
+
+    if (
+      patch.testCases
+    ) {
+      update.testCases =
+        patch.testCases.map(
+          (
+            testCase,
+            index
+          ) =>
+            normalizeTestCase(
+              testCase,
+              index
+            )
+        );
+    }
+
+    if (
+      patch.steps
+    ) {
+      update.steps =
+        normalizeSteps(
+          patch.language ??
+            course.language,
+          patch.steps
+        );
+    }
+
+    if (
+      patch.tutorialChallenges
+    ) {
+      update.tutorialChallenges =
+        normalizeTutorialChallenges(
+          patch.tutorialChallenges
+        );
+    }
+
+    const updated =
+      await Lesson.findOneAndUpdate(
+        {
+          courseId,
+          slug:
+            lessonSlug,
+        },
+        update,
+        {
+          new: true,
+          runValidators: true,
+        }
+      ).lean();
+
+    if (!updated) {
+      throw new ApiError(
+        404,
+        'Lesson not found'
       );
     }
 
-    if (patch.webChecks) {
-      update.webChecks = normalizeWebChecks(patch.webChecks);
-    }
-
-    if (patch.testCases) {
-      update.testCases = patch.testCases.map((tc, i) =>
-        normalizeTestCase(tc, i)
-      );
-    }
-
-    if (patch.steps) {
-      update.steps = normalizeSteps(
-        patch.language ?? course.language,
-        patch.steps
-      );
-    }
-
-    if (patch.tutorialChallenges) {
-      update.tutorialChallenges = normalizeTutorialChallenges(
-        patch.tutorialChallenges
-      );
-    }
-
-    const updated = await Lesson.findOneAndUpdate(
-      { courseId, slug: lessonSlug },
-      update,
-      { new: true, runValidators: true }
-    ).lean();
-    if (!updated) throw new ApiError(404, 'Lesson not found');
     return updated;
   },
 
-  async deleteLesson(req: AuthRequest, courseSlug: string, lessonSlug: string) {
-    const { course, role } = await resolveCourseAndRole(req, courseSlug);
+  async deleteLesson(
+    req: AuthRequest,
+    courseSlug: string,
+    lessonSlug: string
+  ) {
+    const {
+      course,
+      role,
+    } =
+      await resolveCourseAndRole(
+        req,
+        courseSlug
+      );
 
-    if (!permissions.canEditContent(role)) {
-      throw new ApiError(403, 'You do not have permission to edit this course');
+    if (
+      !permissions.canEditContent(
+        role
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'You do not have permission to edit this course'
+      );
     }
 
-    const courseId = course._id.toString();
+    const courseId =
+      course._id.toString();
+
+    const lesson =
+      await Lesson.findOne({
+        courseId,
+        slug:
+          lessonSlug,
+      })
+        .select('_id')
+        .lean();
+
+    if (!lesson) {
+      throw new ApiError(
+        404,
+        'Lesson not found'
+      );
+    }
+
+    await CurriculumItem.deleteMany({
+      courseId,
+      referenceId:
+        lesson._id.toString(),
+    });
 
     await Lesson.deleteOne({
-      courseId,
-      slug: lessonSlug,
+      _id:
+        lesson._id,
     });
-    const count = await Lesson.countDocuments({ courseId });
-    await Course.updateOne({ _id: course._id }, { totalLessons: count });
 
-    return { ok: true };
+    const count =
+      await Lesson.countDocuments({
+        courseId,
+      });
+
+    await Course.updateOne(
+      {
+        _id:
+          course._id,
+      },
+      {
+        totalLessons:
+          count,
+      }
+    );
+
+    return {
+      ok: true,
+    };
   },
 
-  async listTeam(req: AuthRequest, slug: string) {
-    const { course, role } = await resolveCourseAndRole(req, slug);
+  async listTeam(
+    req: AuthRequest,
+    slug: string
+  ) {
+    const {
+      course,
+      role,
+    } =
+      await resolveCourseAndRole(
+        req,
+        slug
+      );
 
-    if (!permissions.canAccessCourse(role)) {
-      throw new ApiError(403, 'You do not have access to this course');
+    if (
+      !permissions.canAccessCourse(
+        role
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'You do not have access to this course'
+      );
     }
 
-    return courseMembershipService.listForCourse(course._id.toString());
+    return courseMembershipService.listForCourse(
+      course._id.toString()
+    );
   },
 
   async addTeamMember(
     req: AuthRequest,
     slug: string,
     memberUserId: string,
-    role: 'lead' | 'course_author' | 'problem_author' | 'class_coordinator' | 'ta' | 'viewer'
+    role:
+      | 'lead'
+      | 'course_author'
+      | 'problem_author'
+      | 'class_coordinator'
+      | 'ta'
+      | 'viewer'
   ) {
-    const { course, role: callerRole } = await resolveCourseAndRole(req, slug);
+    const {
+      course,
+      role:
+        callerRole,
+    } =
+      await resolveCourseAndRole(
+        req,
+        slug
+      );
 
-    if (!permissions.canManageTeam(callerRole)) {
-      throw new ApiError(403, 'Only the course lead can manage the team');
+    if (
+      !permissions.canManageTeam(
+        callerRole
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'Only the course lead can manage the team'
+      );
     }
 
-    if (memberUserId === course.createdBy) {
-      throw new ApiError(400, 'This user is the course creator (already lead)');
+    if (
+      memberUserId ===
+      course.createdBy
+    ) {
+      throw new ApiError(
+        400,
+        'This user is the course creator (already lead)'
+      );
     }
 
-    const existing = await CourseMembership.findOne({
-      userId: memberUserId,
-      courseId: course._id.toString(),
-    }).lean();
+    const existing =
+      await CourseMembership.findOne({
+        userId:
+          memberUserId,
+
+        courseId:
+          course._id.toString(),
+      }).lean();
+
     if (existing) {
-      throw new ApiError(409, 'User is already on this team');
+      throw new ApiError(
+        409,
+        'User is already on this team'
+      );
     }
 
-    const user = getUser(req);
+    const user =
+      getUser(req);
+
     await courseMembershipService.upsert({
-      userId: memberUserId,
-      courseId: course._id.toString(),
+      userId:
+        memberUserId,
+
+      courseId:
+        course._id.toString(),
+
       role,
-      addedBy: user._id,
+
+      addedBy:
+        user._id,
     });
 
-    return courseMembershipService.listForCourse(course._id.toString());
+    return courseMembershipService.listForCourse(
+      course._id.toString()
+    );
   },
 
   async updateTeamMemberRole(
     req: AuthRequest,
     slug: string,
     memberUserId: string,
-    role: 'lead' | 'course_author' | 'problem_author' | 'class_coordinator' | 'ta' | 'viewer'
+    role:
+      | 'lead'
+      | 'course_author'
+      | 'problem_author'
+      | 'class_coordinator'
+      | 'ta'
+      | 'viewer'
   ) {
-    const { course, role: callerRole } = await resolveCourseAndRole(req, slug);
+    const {
+      course,
+      role:
+        callerRole,
+    } =
+      await resolveCourseAndRole(
+        req,
+        slug
+      );
 
-    if (!permissions.canManageTeam(callerRole)) {
-      throw new ApiError(403, 'Only the course lead can manage the team');
+    if (
+      !permissions.canManageTeam(
+        callerRole
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'Only the course lead can manage the team'
+      );
     }
 
-    const member = await CourseMembership.findOne({
-      userId: memberUserId,
-      courseId: course._id.toString(),
-    });
-    if (!member) throw new ApiError(404, 'User is not on this team');
+    const member =
+      await CourseMembership.findOne({
+        userId:
+          memberUserId,
 
-    const user = getUser(req);
+        courseId:
+          course._id.toString(),
+      });
+
+    if (!member) {
+      throw new ApiError(
+        404,
+        'User is not on this team'
+      );
+    }
+
+    const user =
+      getUser(req);
+
     await courseMembershipService.upsert({
-      userId: memberUserId,
-      courseId: course._id.toString(),
+      userId:
+        memberUserId,
+
+      courseId:
+        course._id.toString(),
+
       role,
-      addedBy: user._id,
+
+      addedBy:
+        user._id,
     });
 
-    return courseMembershipService.listForCourse(course._id.toString());
+    return courseMembershipService.listForCourse(
+      course._id.toString()
+    );
   },
 
-  async removeTeamMember(req: AuthRequest, slug: string, memberUserId: string) {
-    const { course, role: callerRole } = await resolveCourseAndRole(req, slug);
+  async removeTeamMember(
+    req: AuthRequest,
+    slug: string,
+    memberUserId: string
+  ) {
+    const {
+      course,
+      role:
+        callerRole,
+    } =
+      await resolveCourseAndRole(
+        req,
+        slug
+      );
 
-    if (!permissions.canManageTeam(callerRole)) {
-      throw new ApiError(403, 'Only the course lead can manage the team');
+    if (
+      !permissions.canManageTeam(
+        callerRole
+      )
+    ) {
+      throw new ApiError(
+        403,
+        'Only the course lead can manage the team'
+      );
     }
 
-    await courseMembershipService.remove(memberUserId, course._id.toString());
+    await courseMembershipService.remove(
+      memberUserId,
+      course._id.toString()
+    );
 
-    return courseMembershipService.listForCourse(course._id.toString());
+    return courseMembershipService.listForCourse(
+      course._id.toString()
+    );
   },
 };

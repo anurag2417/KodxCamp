@@ -2,13 +2,30 @@ import type { GlobalPermission, CourseTeamRole } from './permissions.js';
 import type { ITutorialChallenge } from './tutorial.js';
 
 export const COURSE_LANGUAGES = [
-  'html-css', 'javascript', 'typescript', 'python', 'ruby', 'java',
-  'sql', 'react', 'tailwind', 'dsa-python', 'dsa-javascript',
+  'html-css',
+  'javascript',
+  'typescript',
+  'python',
+  'ruby',
+  'java',
+  'sql',
+  'react',
+  'tailwind',
+  'dsa-python',
+  'dsa-javascript',
 ] as const;
 
 export type CourseLanguage = (typeof COURSE_LANGUAGES)[number];
 
-export type CourseBadge = 'LIVE' | 'NEW' | 'POPULAR' | 'STARTING SOON';
+export type CourseLearningType =
+  | 'programming'
+  | 'web-development';
+
+export type CourseBadge =
+  | 'LIVE'
+  | 'NEW'
+  | 'POPULAR'
+  | 'STARTING SOON';
 
 export interface ICourseFeature {
   icon?: string;
@@ -82,6 +99,7 @@ export interface ILesson {
   slug: string;
   order: number;
   content: string;
+  contentType: string;
   starterCode: string;
   starterFiles?: Record<string, string>;
   webChecks?: {
@@ -90,16 +108,12 @@ export interface ILesson {
     requiredJs: string[];
   };
   solution: string;
+  problemSlug?: string;
   functionName: string;
   outputMode: 'return' | 'print';
   language: CourseLanguage;
   testCases: ITestCase[];
   steps: IWebLessonStep[];
-  /**
-   * FreeCodeCamp-style guided exercises. Usually empty. When
-   * non-empty, the lesson shows a challenge strip above the editor
-   * and the student works through them in order.
-   */
   tutorialChallenges: ITutorialChallenge[];
   createdAt: Date;
   updatedAt: Date;
@@ -110,11 +124,33 @@ export interface ICourse {
   title: string;
   slug: string;
   description: string;
+
   language: CourseLanguage;
+
+  /**
+   * Determines which student learning engine is used.
+   *
+   * programming:
+   *   CodeChef-style learning workspace.
+   *
+   * web-development:
+   *   FreeCodeCamp-style step/lab/project experience.
+   */
+  learningType: CourseLearningType;
+
+  /**
+   * Kept for backward compatibility with existing course records
+   * and existing admin APIs.
+   */
+  courseType?: string;
+
   thumbnail?: string;
+
   totalLessons: number;
+
   createdBy: string;
   published: boolean;
+
   price?: number;
   originalPrice?: number;
   isFree: boolean;
@@ -127,10 +163,25 @@ export interface ICourse {
   sellingPoints?: ICourseSellingPoint[];
   sellingHeadline?: string;
   learningOutcomes?: string[];
+
+  /**
+   * Legacy marketing curriculum data.
+   *
+   * This is not the source of truth for the actual learning
+   * hierarchy anymore.
+   *
+   * The actual curriculum is:
+   *
+   * Course → Module → Section → CurriculumItem
+   */
   curriculum?: ICourseCurriculumModule[];
+
   projects?: ICourseProject[];
+
   instructor?: ICourseInstructor;
+
   certificateIncluded?: boolean;
+
   faq?: ICourseFaqItem[];
 
   createdAt: Date;
@@ -161,4 +212,7 @@ export interface IStudentEnrollment {
   updatedAt: Date;
 }
 
-export type { GlobalPermission, CourseTeamRole };
+export type {
+  GlobalPermission,
+  CourseTeamRole,
+};

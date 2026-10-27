@@ -38,25 +38,44 @@ export const ClassDetail: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [durationSec, setDurationSec] = useState(0);
 
-  // Track last-sent watch position so we don't spam the server
+  // Track the last-sent watch position so we don't spam the server.
   const lastSentRef = useRef(0);
 
-  // Save on unmount via sendBeacon (survives unload)
+  // Track the recording's total duration so the unmount beacon can
+  // send the correct `durationSec`. Kept in a ref because the unmount
+  // effect has empty deps and would otherwise close over a stale
+  // `cls` value from the first render.
+  const recordingDurationRef = useRef(0);
+  useEffect(() => {
+    recordingDurationRef.current = cls?.recording?.durationSec ?? 0;
+  }, [cls?.recording?.durationSec]);
+
+  // Save on unmount via sendBeacon (survives unload).
+  //
+  // NOTE: `durationSec` MUST be the recording's total duration, not
+  // the watched seconds. The server uses it to compute the 90%
+  // completion threshold; passing watched time as duration causes
+  // every navigation-away to mark the recording as complete.
   useEffect(() => {
     return () => {
-      const e = enrollment;
-      if (!e || lastSentRef.current <= 0) return;
+      const watched = lastSentRef.current;
+      const duration = recordingDurationRef.current;
+      if (watched <= 0) return;
+      if (duration <= 0) return; // nothing to report against
+      if (!slug) return;
+
       const url = `${API_ORIGIN}/api/classes/${slug}/watch`;
       const body = JSON.stringify({
-        watchedSeconds: lastSentRef.current,
-        durationSec: e.watchedSeconds ?? 0,
+        watchedSeconds: watched,
+        durationSec: duration,
       });
       if (navigator.sendBeacon) {
         const blob = new Blob([body], { type: 'application/json' });
         navigator.sendBeacon(url, blob);
       }
     };
-  }, [enrollment, slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 
   if (loading) {
     return (
@@ -113,7 +132,7 @@ export const ClassDetail: React.FC = () => {
   };
 
   const handleJoin = () => {
-    // Open meeting synchronously so popup blockers allow it
+    // Open meeting synchronously so popup blockers allow it.
     if (cls.meetLink) {
       window.open(cls.meetLink, '_blank', 'noopener,noreferrer');
     }
@@ -269,6 +288,9 @@ export const ClassDetail: React.FC = () => {
                 v.preload = 'metadata';
                 v.onloadedmetadata = () => {
                   setDurationSec(Math.floor(v.duration) || 0);
+                  URL.revokeObjectURL(url);
+                };
+                v.onerror = () => {
                   URL.revokeObjectURL(url);
                 };
                 v.src = url;

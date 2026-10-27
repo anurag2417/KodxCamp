@@ -81,6 +81,7 @@ export interface ApiLessonSummary {
   language: string;
   problemSlug?: string;
   moduleId?: string;
+  curriculumItemId?: string;
 }
 
 export interface ApiLessonTestCase {
@@ -110,6 +111,7 @@ export interface ApiLessonFull {
   _id: string;
   courseId: string;
   moduleId?: string;
+  curriculumItemId?: string;
   title: string;
   slug: string;
   order: number;

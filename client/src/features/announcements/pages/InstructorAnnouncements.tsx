@@ -12,26 +12,15 @@ import { instructorApi } from '@/features/instructor/api';
 import { Card } from '@/shared/components/ui/Card';
 import { Button } from '@/shared/components/ui/Button';
 import { Spinner } from '@/shared/components/ui/Spinner';
-import { useToast } from '@/shared/hooks/useToast';
+import { useStableToast } from '@/shared/hooks/useStableToast';
 
 interface PickOption {
   id: string;
   label: string;
 }
 
-/**
- * The instructor announcement composer + history page.
- *
- * The composer needs a list of pickable targets (courses,
- * cohorts, etc.) that the caller can post to. We build those from
- * the caller's own memberships — the same lists that power the
- * instructor dashboard — and pass them to the composer as props.
- *
- * The page is admin/instructor-only, enforced by
- * `InstructorGuard` at the route level.
- */
 export const InstructorAnnouncements: React.FC = () => {
-  const toast = useToast();
+  const toast = useStableToast();
   const { announcements, loading, error, reload } = useMyAnnouncements();
   const createMutation = useCreateAnnouncement();
   const deleteMutation = useDeleteAnnouncement();
@@ -52,8 +41,7 @@ export const InstructorAnnouncements: React.FC = () => {
 
       setCourses(coursesRes.map((c) => ({ id: c._id, label: c.title })));
       setCohorts(cohortsRes.map((c) => ({ id: c._id, label: c.name })));
-      // Roadmaps and classes: instructor-side listings don't exist
-      // yet. Leave empty — the composer hides them.
+      // Roadmaps and classes: instructor-side listings don't exist yet.
       setRoadmaps([]);
       setClasses([]);
     } catch {
@@ -61,7 +49,9 @@ export const InstructorAnnouncements: React.FC = () => {
     } finally {
       setLoadingTargets(false);
     }
-  }, [toast]);
+    // `toast` is a stable ref — intentionally omitted from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     void loadTargets();
@@ -126,7 +116,6 @@ export const InstructorAnnouncements: React.FC = () => {
         </Button>
       </div>
 
-      {/* Composer */}
       <Card className="mb-6 p-6">
         {loadingTargets ? (
           <div className="flex justify-center py-8">
@@ -150,7 +139,6 @@ export const InstructorAnnouncements: React.FC = () => {
         )}
       </Card>
 
-      {/* History */}
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-text-secondary">
           Your announcements

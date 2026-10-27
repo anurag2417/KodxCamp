@@ -1,6 +1,13 @@
-import mongoose, { Schema, type Document } from 'mongoose';
+import mongoose, {
+  Schema,
+  type Document,
+} from 'mongoose';
 
-type CourseLanguage = string;
+export type CourseLanguage = string;
+
+export type CourseLearningType =
+  | 'programming'
+  | 'web-development';
 
 export interface CourseFeature {
   icon?: string;
@@ -48,11 +55,36 @@ export interface CourseDocument extends Document {
   title: string;
   slug: string;
   description: string;
+
   language: CourseLanguage;
+
+  /**
+   * Determines the student learning engine.
+   *
+   * programming:
+   *   CodeChef-style activity workspace.
+   *
+   * web-development:
+   *   FreeCodeCamp-style step/lab/project workspace.
+   */
+  learningType: CourseLearningType;
+
+  /**
+   * Legacy field.
+   *
+   * Kept temporarily so existing records and older admin
+   * functionality do not immediately break.
+   *
+   * New code should use `learningType`.
+   */
   courseType: string;
+
   thumbnail?: string;
+
   totalLessons: number;
+
   createdBy: string;
+
   published: boolean;
 
   // Pricing
@@ -60,123 +92,375 @@ export interface CourseDocument extends Document {
   originalPrice?: number;
   isFree: boolean;
 
-  // Display (all optional, all additive)
+  // Marketing / display fields
   tagline?: string;
   tags?: string[];
-  badge?: 'LIVE' | 'NEW' | 'POPULAR' | 'STARTING SOON';
+
+  badge?:
+    | 'LIVE'
+    | 'NEW'
+    | 'POPULAR'
+    | 'STARTING SOON';
+
   heroVideoUrl?: string;
+
   features?: CourseFeature[];
+
   sellingPoints?: CourseSellingPoint[];
+
   sellingHeadline?: string;
+
   learningOutcomes?: string[];
+
+  /**
+   * Legacy marketing curriculum data.
+   *
+   * This is no longer the source of truth for the actual
+   * student curriculum.
+   *
+   * Actual learning hierarchy:
+   *
+   * Course
+   *   → Module
+   *     → Section
+   *       → CurriculumItem
+   */
   curriculum?: CourseCurriculumModule[];
+
+  /**
+   * Legacy course project display metadata.
+   *
+   * Actual project placement in the learning sequence is now
+   * handled by CurriculumItem.
+   */
   projects?: CourseProject[];
+
   instructor?: CourseInstructor;
+
   certificateIncluded?: boolean;
+
   faq?: CourseFaqItem[];
 
   createdAt: Date;
   updatedAt: Date;
 }
 
-const featureSchema = new Schema<CourseFeature>(
-  {
-    icon: { type: String },
-    label: { type: String, required: true },
-  },
-  { _id: false }
-);
+const featureSchema =
+  new Schema<CourseFeature>(
+    {
+      icon: {
+        type: String,
+      },
 
-const sellingPointSchema = new Schema<CourseSellingPoint>(
-  {
-    icon: { type: String },
-    title: { type: String, required: true },
-    subtitle: { type: String },
-  },
-  { _id: false }
-);
-
-const curriculumModuleSchema = new Schema<CourseCurriculumModule>(
-  {
-    title: { type: String, required: true },
-    lessons: { type: Number, required: true, min: 0 },
-    duration: { type: String },
-    items: { type: [String], default: [] },
-  },
-  { _id: false }
-);
-
-const instructorLinkSchema = new Schema<CourseInstructorLink>(
-  {
-    label: { type: String, required: true },
-    url: { type: String, required: true },
-  },
-  { _id: false }
-);
-
-const instructorSchema = new Schema<CourseInstructor>(
-  {
-    name: { type: String, required: true },
-    role: { type: String },
-    bio: { type: String },
-    avatar: { type: String },
-    links: { type: [instructorLinkSchema], default: [] },
-  },
-  { _id: false }
-);
-
-const faqItemSchema = new Schema<CourseFaqItem>(
-  {
-    question: { type: String, required: true },
-    answer: { type: String, required: true },
-  },
-  { _id: false }
-);
-
-const projectSchema = new Schema<CourseProject>(
-  {
-    title: { type: String, required: true },
-    subtitle: { type: String },
-    image: { type: String },
-  },
-  { _id: false }
-);
-
-const courseSchema = new Schema<CourseDocument>(
-  {
-    title: { type: String, required: true },
-    slug: { type: String, required: true, unique: true, index: true },
-    description: { type: String, required: true },
-    language: { type: String, required: true },
-    courseType: { type: String, default: 'general', trim: true },
-    thumbnail: { type: String },
-    totalLessons: { type: Number, default: 0 },
-    createdBy: { type: String, required: true, index: true },
-    published: { type: Boolean, default: false, index: true },
-
-    price: { type: Number, min: 0, default: undefined },
-    originalPrice: { type: Number, min: 0, default: undefined },
-    isFree: { type: Boolean, default: true, index: true },
-
-    tagline: { type: String, trim: true },
-    tags: { type: [String], default: [] },
-    badge: {
-      type: String,
-      enum: ['LIVE', 'NEW', 'POPULAR', 'STARTING SOON'],
-      default: undefined,
+      label: {
+        type: String,
+        required: true,
+      },
     },
-    heroVideoUrl: { type: String },
-    features: { type: [featureSchema], default: [] },
-    sellingPoints: { type: [sellingPointSchema], default: [] },
-    sellingHeadline: { type: String },
-    learningOutcomes: { type: [String], default: [] },
-    curriculum: { type: [curriculumModuleSchema], default: [] },
-    projects: { type: [projectSchema], default: [] },
-    instructor: { type: instructorSchema, default: undefined },
-    certificateIncluded: { type: Boolean, default: false },
-    faq: { type: [faqItemSchema], default: [] },
-  },
-  { timestamps: true }
-);
+    {
+      _id: false,
+    }
+  );
 
-export const Course = mongoose.model<CourseDocument>('Course', courseSchema);
+const sellingPointSchema =
+  new Schema<CourseSellingPoint>(
+    {
+      icon: {
+        type: String,
+      },
+
+      title: {
+        type: String,
+        required: true,
+      },
+
+      subtitle: {
+        type: String,
+      },
+    },
+    {
+      _id: false,
+    }
+  );
+
+const curriculumModuleSchema =
+  new Schema<CourseCurriculumModule>(
+    {
+      title: {
+        type: String,
+        required: true,
+      },
+
+      lessons: {
+        type: Number,
+        required: true,
+        min: 0,
+      },
+
+      duration: {
+        type: String,
+      },
+
+      items: {
+        type: [String],
+        default: [],
+      },
+    },
+    {
+      _id: false,
+    }
+  );
+
+const instructorLinkSchema =
+  new Schema<CourseInstructorLink>(
+    {
+      label: {
+        type: String,
+        required: true,
+      },
+
+      url: {
+        type: String,
+        required: true,
+      },
+    },
+    {
+      _id: false,
+    }
+  );
+
+const instructorSchema =
+  new Schema<CourseInstructor>(
+    {
+      name: {
+        type: String,
+        required: true,
+      },
+
+      role: {
+        type: String,
+      },
+
+      bio: {
+        type: String,
+      },
+
+      avatar: {
+        type: String,
+      },
+
+      links: {
+        type: [instructorLinkSchema],
+        default: [],
+      },
+    },
+    {
+      _id: false,
+    }
+  );
+
+const faqItemSchema =
+  new Schema<CourseFaqItem>(
+    {
+      question: {
+        type: String,
+        required: true,
+      },
+
+      answer: {
+        type: String,
+        required: true,
+      },
+    },
+    {
+      _id: false,
+    }
+  );
+
+const projectSchema =
+  new Schema<CourseProject>(
+    {
+      title: {
+        type: String,
+        required: true,
+      },
+
+      subtitle: {
+        type: String,
+      },
+
+      image: {
+        type: String,
+      },
+    },
+    {
+      _id: false,
+    }
+  );
+
+const courseSchema =
+  new Schema<CourseDocument>(
+    {
+      title: {
+        type: String,
+        required: true,
+      },
+
+      slug: {
+        type: String,
+        required: true,
+        unique: true,
+        index: true,
+      },
+
+      description: {
+        type: String,
+        required: true,
+      },
+
+      language: {
+        type: String,
+        required: true,
+      },
+
+      /**
+       * New canonical course learning domain.
+       */
+      learningType: {
+        type: String,
+        enum: [
+          'programming',
+          'web-development',
+        ],
+        default: 'programming',
+        required: true,
+        index: true,
+      },
+
+      /**
+       * Legacy field retained for compatibility.
+       */
+      courseType: {
+        type: String,
+        default: 'general',
+        trim: true,
+      },
+
+      thumbnail: {
+        type: String,
+      },
+
+      totalLessons: {
+        type: Number,
+        default: 0,
+      },
+
+      createdBy: {
+        type: String,
+        required: true,
+        index: true,
+      },
+
+      published: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+
+      price: {
+        type: Number,
+        min: 0,
+        default: undefined,
+      },
+
+      originalPrice: {
+        type: Number,
+        min: 0,
+        default: undefined,
+      },
+
+      isFree: {
+        type: Boolean,
+        default: true,
+        index: true,
+      },
+
+      tagline: {
+        type: String,
+        trim: true,
+      },
+
+      tags: {
+        type: [String],
+        default: [],
+      },
+
+      badge: {
+        type: String,
+        enum: [
+          'LIVE',
+          'NEW',
+          'POPULAR',
+          'STARTING SOON',
+        ],
+        default: undefined,
+      },
+
+      heroVideoUrl: {
+        type: String,
+      },
+
+      features: {
+        type: [featureSchema],
+        default: [],
+      },
+
+      sellingPoints: {
+        type: [sellingPointSchema],
+        default: [],
+      },
+
+      sellingHeadline: {
+        type: String,
+      },
+
+      learningOutcomes: {
+        type: [String],
+        default: [],
+      },
+
+      curriculum: {
+        type: [curriculumModuleSchema],
+        default: [],
+      },
+
+      projects: {
+        type: [projectSchema],
+        default: [],
+      },
+
+      instructor: {
+        type: instructorSchema,
+        default: undefined,
+      },
+
+      certificateIncluded: {
+        type: Boolean,
+        default: false,
+      },
+
+      faq: {
+        type: [faqItemSchema],
+        default: [],
+      },
+    },
+    {
+      timestamps: true,
+    }
+  );
+
+export const Course =
+  mongoose.model<CourseDocument>(
+    'Course',
+    courseSchema
+  );

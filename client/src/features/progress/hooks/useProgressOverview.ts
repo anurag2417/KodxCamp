@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
+
 import {
   progressApi,
-  type ApiOverview,
+  type ApiActivity,
   type ApiCourseProgress,
   type ApiDifficulty,
   type ApiHeatmapDay,
+  type ApiOverview,
   type ApiWeeklyXp,
-  type ApiActivity,
 } from '@/features/progress/api';
+
 import { queryKeys } from '@/shared/lib/queryKeys';
 
 interface Bundle {
@@ -41,7 +43,15 @@ export function useProgressOverview() {
           progressApi.heatmap(365),
           progressApi.recentActivity(),
         ]);
-      return { overview, courses, difficulty, weekly, heatmap, activity };
+
+      return {
+        overview,
+        courses,
+        difficulty,
+        weekly,
+        heatmap,
+        activity,
+      };
     },
   });
 

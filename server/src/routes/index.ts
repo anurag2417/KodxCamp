@@ -16,6 +16,8 @@ import announcementRoutes from './announcement.routes.js';
 import mediaRoutes from './media.routes.js';
 import notificationRoutes from './notification.routes.js';
 import { csrfMiddleware } from '../middleware/csrf.middleware.js';
+import curriculumRoutes from './curriculum.routes.js';
+import activityProgressRoutes from './activityProgress.routes.js';
 
 const router = Router();
 
@@ -30,8 +32,11 @@ router.get('/health', (_req, res) => {
 router.use(csrfMiddleware);
 
 router.use('/auth', authRoutes);
+
 router.use('/courses', courseRoutes);
+router.use('/curriculum', curriculumRoutes);
 router.use('/roadmaps', roadmapRoutes);
+
 router.use('/instructor', instructorRoutes);
 router.use('/progress', progressRoutes);
 router.use('/problems', problemRoutes);
@@ -45,5 +50,7 @@ router.use('/payments', paymentRoutes);
 router.use('/announcements', announcementRoutes);
 router.use('/media', mediaRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/activity-progress', activityProgressRoutes);
+
 
 export default router;

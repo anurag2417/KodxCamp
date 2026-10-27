@@ -11,13 +11,14 @@ import type {
   ApiLessonSummary,
   ApiCourseModule,
 } from '@/features/courses/api';
+import type { ApiCourseActivityProgress } from '@/features/progress/api';
 import { cn } from '@/shared/lib/utils';
 
 interface Props {
   courseSlug: string;
   lessons: ApiLessonSummary[] | undefined;
   modules: ApiCourseModule[] | undefined;
-  completedLessons: string[];
+  activityProgress: ApiCourseActivityProgress[];
   currentLessonId: string;
 }
 
@@ -32,13 +33,16 @@ interface Group {
 
 function computeModuleState(
   lessons: ApiLessonSummary[],
-  completedLessons: string[],
+  completedCurriculumItemIds: Set<string>,
   currentLessonId: string
 ): ModuleState {
   if (lessons.length === 0) return 'not_started';
 
-  const completed = new Set(completedLessons);
-  const completedCount = lessons.filter((l) => completed.has(l._id)).length;
+  const completedCount = lessons.filter(
+    (lesson) =>
+      lesson.curriculumItemId &&
+      completedCurriculumItemIds.has(lesson.curriculumItemId)
+  ).length;
   const currentInModule = lessons.some((l) => l._id === currentLessonId);
 
   if (completedCount === lessons.length) return 'completed';
@@ -50,7 +54,7 @@ export const LessonSidebar: React.FC<Props> = ({
   courseSlug,
   lessons,
   modules,
-  completedLessons,
+  activityProgress,
   currentLessonId,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -74,7 +78,11 @@ export const LessonSidebar: React.FC<Props> = ({
    * "Ungrouped" section (only if there are lessons in it).
    */
   const groups: Group[] = useMemo(() => {
-    const completed = new Set(completedLessons);
+    const completedCurriculumItemIds = new Set(
+      activityProgress
+        .filter((item) => item.status === 'completed')
+        .map((item) => item.curriculumItemId)
+    );
 
     const byModule = new Map<string, ApiLessonSummary[]>();
     const ungrouped: ApiLessonSummary[] = [];
@@ -96,7 +104,11 @@ export const LessonSidebar: React.FC<Props> = ({
       return {
         module: m,
         lessons: lessonList,
-        state: computeModuleState(lessonList, completedLessons, currentLessonId),
+        state: computeModuleState(
+          lessonList,
+          completedCurriculumItemIds,
+          currentLessonId
+        ),
       };
     });
 
@@ -106,14 +118,14 @@ export const LessonSidebar: React.FC<Props> = ({
         lessons: ungrouped.sort((a, b) => a.order - b.order),
         state: computeModuleState(
           ungrouped,
-          completedLessons,
+          completedCurriculumItemIds,
           currentLessonId
         ),
       });
     }
 
     return result;
-  }, [safeModules, safeLessons, completedLessons, currentLessonId]);
+  }, [safeModules, safeLessons, activityProgress, currentLessonId]);
 
   /**
    * Default expansion state for a module:
@@ -244,7 +256,17 @@ export const LessonSidebar: React.FC<Props> = ({
                           key={l._id}
                           courseSlug={courseSlug}
                           lesson={l}
-                          isCompleted={completedLessons.includes(l._id)}
+                          isCompleted={
+                            Boolean(
+                              l.curriculumItemId &&
+                                activityProgress.some(
+                                  (item) =>
+                                    item.curriculumItemId ===
+                                      l.curriculumItemId &&
+                                    item.status === 'completed'
+                                )
+                            )
+                          }
                           isActive={l._id === currentLessonId}
                         />
                       ))}
